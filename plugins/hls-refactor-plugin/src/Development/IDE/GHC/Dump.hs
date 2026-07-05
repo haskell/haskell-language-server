@@ -7,7 +7,7 @@ import           Development.IDE.GHC.Compat            hiding (LocatedA,
 import           Development.IDE.GHC.Compat.ExactPrint (ExactPrint, exactPrint)
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
-import           GHC.Hs                                hiding (AnnLet)
+import           GHC.Hs
 import           GHC.Hs.Dump
 import           GHC.Plugins                           hiding (AnnLet)
 import           Prelude                               hiding ((<>))

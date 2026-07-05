@@ -119,6 +119,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.export.globalOn": {
+        "default": true,
+        "description": "Enables export plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.fourmolu.config.external": {
         "default": false,
         "markdownDescription": "Call out to an external \"fourmolu\" executable, rather than using the bundled library.",
@@ -1026,7 +1032,7 @@
         "type": "string"
     },
     "haskell.plugin.semanticTokens.globalOn": {
-        "default": false,
+        "default": true,
         "description": "Enables semanticTokens plugin",
         "scope": "resource",
         "type": "boolean"

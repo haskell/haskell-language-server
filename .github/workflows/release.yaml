@@ -31,34 +31,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-linux-ubuntu2204-9141
         path: ./
@@ -71,7 +71,7 @@ jobs:
       with:
         args: bash .github/scripts/bindist.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-aarch64-linux-ubuntu2204
@@ -106,34 +106,34 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-aarch64-mac-9141
         path: ./
@@ -153,7 +153,7 @@ jobs:
         bash .github/scripts/bindist.sh
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-aarch64-apple-darwin
@@ -187,34 +187,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb10-9141
         path: ./
@@ -223,7 +223,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb10
@@ -257,34 +257,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb11-9141
         path: ./
@@ -293,7 +293,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb11
@@ -327,34 +327,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb12-9141
         path: ./
@@ -363,7 +363,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb12
@@ -397,34 +397,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-deb13-9141
         path: ./
@@ -433,7 +433,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-deb13
@@ -467,34 +467,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora33-9141
         path: ./
@@ -503,7 +503,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-fedora33
@@ -537,34 +537,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-fedora40-9141
         path: ./
@@ -573,7 +573,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-fedora40
@@ -607,34 +607,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint202-9141
         path: ./
@@ -643,7 +643,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint202
@@ -677,34 +677,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint213-9141
         path: ./
@@ -713,7 +713,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint213
@@ -747,34 +747,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-mint222-9141
         path: ./
@@ -783,7 +783,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-mint222
@@ -817,34 +817,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2004-9141
         path: ./
@@ -853,7 +853,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2004
@@ -887,34 +887,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2204-9141
         path: ./
@@ -923,7 +923,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2204
@@ -957,34 +957,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-ubuntu2404-9141
         path: ./
@@ -993,7 +993,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-ubuntu2404
@@ -1027,34 +1027,34 @@ jobs:
     - maerwald
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-linux-unknown-9141
         path: ./
@@ -1063,7 +1063,7 @@ jobs:
       with:
         stage: BINDIST
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-linux-unknown
@@ -1095,34 +1095,34 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-967
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-984
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-9103
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-9122
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-9124
         path: ./
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-mac-9141
         path: ./
@@ -1136,7 +1136,7 @@ jobs:
         bash .github/scripts/bindist.sh
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-apple-darwin
@@ -1167,34 +1167,34 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-967
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-984
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-9103
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-9122
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-9124
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: artifacts-build-x86_64-windows-9141
         path: ./out
@@ -1209,7 +1209,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/bindist.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: bindist-x86_64-mingw64
@@ -1235,7 +1235,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.10.3
       name: Build aarch64-linux binaries
@@ -1249,7 +1249,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9103
@@ -1272,7 +1272,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.2
       name: Build aarch64-linux binaries
@@ -1286,7 +1286,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9122
@@ -1309,7 +1309,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.4
       name: Build aarch64-linux binaries
@@ -1323,7 +1323,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9124
@@ -1346,7 +1346,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.14.1
       name: Build aarch64-linux binaries
@@ -1360,7 +1360,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-9141
@@ -1383,7 +1383,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.6.7
       name: Build aarch64-linux binaries
@@ -1397,7 +1397,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-967
@@ -1420,7 +1420,7 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.8.4
       name: Build aarch64-linux binaries
@@ -1434,7 +1434,7 @@ jobs:
       with:
         args: bash .github/scripts/tar.sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-linux-ubuntu2204-984
@@ -1460,7 +1460,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.10.3
       name: Run build
@@ -1472,7 +1472,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9103
@@ -1498,7 +1498,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.2
       name: Run build
@@ -1510,7 +1510,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9122
@@ -1536,7 +1536,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.4
       name: Run build
@@ -1548,7 +1548,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9124
@@ -1574,7 +1574,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.14.1
       name: Run build
@@ -1586,7 +1586,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-9141
@@ -1612,7 +1612,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.6.7
       name: Run build
@@ -1624,7 +1624,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-967
@@ -1650,7 +1650,7 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.8.4
       name: Run build
@@ -1662,7 +1662,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-aarch64-mac-984
@@ -1685,14 +1685,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9103
@@ -1715,14 +1715,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9122
@@ -1745,14 +1745,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9124
@@ -1775,14 +1775,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-9141
@@ -1805,14 +1805,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-967
@@ -1835,14 +1835,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-deb10
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb10-984
@@ -1865,14 +1865,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9103
@@ -1895,14 +1895,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9122
@@ -1925,14 +1925,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9124
@@ -1955,14 +1955,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-9141
@@ -1985,14 +1985,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-967
@@ -2015,14 +2015,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-deb11
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb11-984
@@ -2045,14 +2045,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9103
@@ -2075,14 +2075,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9122
@@ -2105,14 +2105,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9124
@@ -2135,14 +2135,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-9141
@@ -2165,14 +2165,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-967
@@ -2195,14 +2195,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-deb12
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb12-984
@@ -2225,14 +2225,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9103
@@ -2255,14 +2255,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9122
@@ -2285,14 +2285,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9124
@@ -2315,14 +2315,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-9141
@@ -2345,14 +2345,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-967
@@ -2375,14 +2375,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-deb13
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-deb13-984
@@ -2405,14 +2405,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9103
@@ -2435,14 +2435,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9122
@@ -2465,14 +2465,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9124
@@ -2495,14 +2495,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-9141
@@ -2525,14 +2525,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-967
@@ -2555,14 +2555,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-fedora33
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora33-984
@@ -2585,14 +2585,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9103
@@ -2615,14 +2615,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9122
@@ -2645,14 +2645,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9124
@@ -2675,14 +2675,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-9141
@@ -2705,14 +2705,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-967
@@ -2735,14 +2735,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-fedora40
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-fedora40-984
@@ -2765,14 +2765,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9103
@@ -2795,14 +2795,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9122
@@ -2825,14 +2825,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9124
@@ -2855,14 +2855,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-9141
@@ -2885,14 +2885,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-967
@@ -2915,14 +2915,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-mint202
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint202-984
@@ -2945,14 +2945,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9103
@@ -2975,14 +2975,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9122
@@ -3005,14 +3005,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9124
@@ -3035,14 +3035,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-9141
@@ -3065,14 +3065,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-967
@@ -3095,14 +3095,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-mint213
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint213-984
@@ -3125,14 +3125,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9103
@@ -3155,14 +3155,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9122
@@ -3185,14 +3185,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9124
@@ -3215,14 +3215,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-9141
@@ -3245,14 +3245,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-967
@@ -3275,14 +3275,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-mint222
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-mint222-984
@@ -3305,14 +3305,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9103
@@ -3335,14 +3335,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9122
@@ -3365,14 +3365,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9124
@@ -3395,14 +3395,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-9141
@@ -3425,14 +3425,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-967
@@ -3455,14 +3455,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2004
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2004-984
@@ -3485,14 +3485,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9103
@@ -3515,14 +3515,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9122
@@ -3545,14 +3545,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9124
@@ -3575,14 +3575,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-9141
@@ -3605,14 +3605,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-967
@@ -3635,14 +3635,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2204
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2204-984
@@ -3665,14 +3665,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9103
@@ -3695,14 +3695,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9122
@@ -3725,14 +3725,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9124
@@ -3755,14 +3755,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-9141
@@ -3785,14 +3785,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-967
@@ -3815,14 +3815,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-ubuntu2404
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-ubuntu2404-984
@@ -3845,14 +3845,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.10.3
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.10.3
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9103
@@ -3875,14 +3875,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.2
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.12.2
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9122
@@ -3905,14 +3905,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.12.4
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.12.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9124
@@ -3935,14 +3935,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.14.1
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.14.1
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-9141
@@ -3965,14 +3965,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.6.7
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.6.7
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-967
@@ -3995,14 +3995,14 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Build 9.8.4
       uses: ./.github/actions/bindist-actions/action-unknown
       with:
         stage: BUILD
         version: 9.8.4
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-linux-unknown-984
@@ -4025,7 +4025,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.10.3
       name: Run build
@@ -4035,7 +4035,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9103
@@ -4058,7 +4058,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.2
       name: Run build
@@ -4068,7 +4068,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9122
@@ -4091,7 +4091,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.4
       name: Run build
@@ -4101,7 +4101,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9124
@@ -4124,7 +4124,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.14.1
       name: Run build
@@ -4134,7 +4134,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-9141
@@ -4157,7 +4157,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.6.7
       name: Run build
@@ -4167,7 +4167,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-967
@@ -4190,7 +4190,7 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.8.4
       name: Run build
@@ -4200,7 +4200,7 @@ jobs:
         tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
       shell: sh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-mac-984
@@ -4222,7 +4222,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.10.3
       name: Run build
@@ -4233,7 +4233,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9103
@@ -4255,7 +4255,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.2
       name: Run build
@@ -4266,7 +4266,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9122
@@ -4288,7 +4288,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.12.4
       name: Run build
@@ -4299,7 +4299,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9124
@@ -4321,7 +4321,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.14.1
       name: Run build
@@ -4332,7 +4332,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-9141
@@ -4354,7 +4354,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.6.7
       name: Run build
@@ -4365,7 +4365,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-967
@@ -4387,7 +4387,7 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - env:
         GHC_VERSION: 9.8.4
       name: Run build
@@ -4398,7 +4398,7 @@ jobs:
         C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
       shell: pwsh
     - name: Upload artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         if-no-files-found: error
         name: artifacts-build-x86_64-windows-984
@@ -4428,89 +4428,89 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-apple-darwin
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-aarch64-apple-darwin
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-mingw64
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-aarch64-linux-ubuntu2204
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb10
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb11
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb12
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb13
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2004
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2204
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2404
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint202
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint213
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint222
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-fedora33
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-fedora40
         path: ./out
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-unknown
         path: ./out
@@ -4552,9 +4552,9 @@ jobs:
     - ubuntu-22.04-arm
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-aarch64-linux-ubuntu2204
         path: ./out
@@ -4584,9 +4584,9 @@ jobs:
     - ARM64
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-aarch64-apple-darwin
         path: ./out
@@ -4620,9 +4620,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb10
         path: ./out
@@ -4649,9 +4649,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb11
         path: ./out
@@ -4678,9 +4678,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb12
         path: ./out
@@ -4707,9 +4707,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-deb13
         path: ./out
@@ -4736,9 +4736,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-fedora33
         path: ./out
@@ -4765,9 +4765,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-fedora40
         path: ./out
@@ -4794,9 +4794,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint202
         path: ./out
@@ -4823,9 +4823,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint213
         path: ./out
@@ -4852,9 +4852,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-mint222
         path: ./out
@@ -4881,9 +4881,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2004
         path: ./out
@@ -4910,9 +4910,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2204
         path: ./out
@@ -4939,9 +4939,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-ubuntu2404
         path: ./out
@@ -4968,9 +4968,9 @@ jobs:
     - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-linux-unknown
         path: ./out
@@ -4997,9 +4997,9 @@ jobs:
     - macOS-15-intel
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-apple-darwin
         path: ./out
@@ -5026,9 +5026,9 @@ jobs:
     - windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: bindist-x86_64-mingw64
         path: ./out

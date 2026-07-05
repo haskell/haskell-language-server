@@ -38,19 +38,7 @@ mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
 
 semanticTokensPlugin :: Test.Hls.PluginTestDescriptor SemanticLog
-semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor enabledSemanticDescriptor "SemanticTokens"
-  where
-    enabledSemanticDescriptor recorder plId =
-      let semanticDescriptor = Ide.Plugin.SemanticTokens.descriptor recorder plId
-       in semanticDescriptor
-            { pluginConfigDescriptor =
-                (pluginConfigDescriptor semanticDescriptor)
-                  { configInitialGenericConfig =
-                      (configInitialGenericConfig (pluginConfigDescriptor semanticDescriptor))
-                        { plcGlobalOn = True
-                        }
-                  }
-            }
+semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor Ide.Plugin.SemanticTokens.descriptor "SemanticTokens"
 
 -- if 9_10 and after we change the directory to the testdata/before_9_10 directory
 -- if 9_10 and after we change the directory to the testdata/after_9_10 directory

@@ -119,6 +119,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.export.globalOn": {
+        "default": true,
+        "description": "Enables export plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.gadt.globalOn": {
         "default": true,
         "description": "Enables gadt plugin",
@@ -1008,7 +1014,7 @@
         "type": "string"
     },
     "haskell.plugin.semanticTokens.globalOn": {
-        "default": false,
+        "default": true,
         "description": "Enables semanticTokens plugin",
         "scope": "resource",
         "type": "boolean"

@@ -97,6 +97,10 @@ import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
 import qualified Ide.Plugin.Notes                  as Notes
 #endif
 
+#if hls_export
+import qualified Ide.Plugin.Export                 as Export
+#endif
+
 -- formatters
 
 #if hls_fourmolu
@@ -240,5 +244,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_notes
       let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_export
+      let pId = "export" in Export.descriptor pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")

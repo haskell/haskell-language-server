@@ -19,6 +19,7 @@ import           Development.IDE                  hiding (line)
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
 import           Development.IDE.Core.Shake       (toKnownFiles)
 import qualified Development.IDE.Core.Shake       as Shake
+import           Development.IDE.Core.Text        (lineAt)
 import           Development.IDE.Graph.Classes    (Hashable, NFData)
 import           GHC.Generics                     (Generic)
 import           Ide.Plugin.Error                 (PluginError (..))
@@ -109,8 +110,7 @@ getNote nfp state (Position l c) = do
     contents <-
         err "Error getting file contents"
         =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
-    line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
-        (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
+    line <- err "Line not found in file" (lineAt (fromIntegral l) contents)
     pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
   where
     atPos c arr = case arr A.! 0 of
@@ -290,7 +290,7 @@ hoverNote state _ params
           let lineText =
                 case mbRope of
                   Nothing   -> ""
-                  Just rope -> fromMaybe "" $ listToMaybe $ drop (fromIntegral line) $ Rope.lines rope
+                  Just rope -> fromMaybe "" $ lineAt (fromIntegral line) rope
 
               mbRange = findNoteRange lineText note line
 
@@ -391,8 +391,4 @@ noteSnippet =
 
 getLinePrefix :: Rope.Rope -> Position -> Text
 getLinePrefix rope (Position line col) =
-  case Rope.splitAtLine (fromIntegral line) rope of
-    (_, rest) ->
-      case Rope.lines rest of
-        (l:_) -> T.take (fromIntegral col) l
-        _     -> ""
+  maybe "" (T.take (fromIntegral col)) (lineAt (fromIntegral line) rope)

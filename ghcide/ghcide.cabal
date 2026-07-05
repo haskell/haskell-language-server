@@ -142,6 +142,7 @@ library
     Development.IDE.Core.RuleTypes
     Development.IDE.Core.Service
     Development.IDE.Core.Shake
+    Development.IDE.Core.Text
     Development.IDE.Core.Tracing
     Development.IDE.Core.UseStale
     Development.IDE.Core.WorkerThread

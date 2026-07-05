@@ -26,7 +26,7 @@ import           Language.LSP.Protocol.Types
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if MIN_VERSION_ghc(9,6,0) && !MIN_VERSION_ghc(9,9,0)
-import           Development.IDE.GHC.ExactPrint            (epl)
+import           Development.IDE.GHC.ExactPrint.Annotation (epl)
 import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
 

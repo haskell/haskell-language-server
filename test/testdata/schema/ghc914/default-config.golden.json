@@ -55,6 +55,9 @@
         "explicit-fixity": {
             "globalOn": true
         },
+        "export": {
+            "globalOn": true
+        },
         "gadt": {
             "globalOn": true
         },
@@ -134,7 +137,7 @@
                 "typeVariableToken": "typeParameter",
                 "variableToken": "variable"
             },
-            "globalOn": false
+            "globalOn": true
         },
         "signatureHelp": {
             "globalOn": true

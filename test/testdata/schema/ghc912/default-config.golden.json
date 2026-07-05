@@ -55,6 +55,9 @@
         "explicit-fixity": {
             "globalOn": true
         },
+        "export": {
+            "globalOn": true
+        },
         "fourmolu": {
             "config": {
                 "external": false,
@@ -152,7 +155,7 @@
                 "typeVariableToken": "typeParameter",
                 "variableToken": "variable"
             },
-            "globalOn": false
+            "globalOn": true
         },
         "signatureHelp": {
             "globalOn": true

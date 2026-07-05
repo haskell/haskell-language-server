@@ -22,7 +22,7 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       # Need the repo checked out in order to read the file
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
@@ -56,10 +56,10 @@ jobs:
     name: stackage-${{ matrix.lts }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Setup GHC and Stack
-        uses: haskell-actions/setup@v2.10.3
+        uses: haskell-actions/setup@v2.11
         with:
           ghc-version: ${{ matrix.ghc }}
           enable-stack: true
@@ -67,7 +67,7 @@ jobs:
 
       - name: Restore ~/.stack cache
         id: stack-cache-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ~/.stack
           key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}
@@ -86,7 +86,7 @@ jobs:
       - name: Save ~/.stack cache
         # save cache when pushed to master
         if: github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ~/.stack
           key: stack-${{ runner.os }}-${{ matrix.stack-yaml }}-${{ hashFiles(matrix.stack-yaml) }}

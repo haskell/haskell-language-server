@@ -6,6 +6,7 @@ data MyRec = MyRec
   { foo :: Int
   , bar :: Int
   , baz :: Char
+  , (><) :: Int
   }
 
 convertMe :: () -> MyRec
@@ -13,4 +14,5 @@ convertMe _ =
   let a = 3
       b = 5
       c = 'a'
-  in MyRec { foo = a, bar = b, baz = c }
+      d = 8
+  in MyRec { foo = a, bar = b, baz = c, (><) = d }
