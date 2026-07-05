@@ -136,11 +136,6 @@ import           GHC.Tc.Types.Constraint                           (ctl_env)
 import           GHC.Tc.Types.CtLocEnv                             (getCtLocEnvLoc)
 #endif
 
-#if MIN_VERSION_ghc(9,9,0)
-import           GHC.Tc.Errors.Types                               (ShadowedNameProvenance (..),
-                                                                    UnusedImportName (..),
-                                                                    UnusedImportReason (..))
-#endif
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                               (AnnsModule (am_where),
                                                                     EpToken (..),
@@ -617,7 +612,6 @@ suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} F
       []     -> (txt, [_range])
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
-
 unnecessaryExportModule :: TcRnMessage -> Maybe T.Text
 unnecessaryExportModule (TcRnDupeModuleExport (ModuleName mod))       = Just $ T.pack $ "Module " <> unpackFS mod
 unnecessaryExportModule (TcRnExportedModNotImported (ModuleName mod)) = Just $ T.pack $ "Module " <> unpackFS mod
