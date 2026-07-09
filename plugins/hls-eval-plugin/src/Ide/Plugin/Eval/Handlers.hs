@@ -594,7 +594,7 @@ needsQuickCheck :: [(Section, EvalExpr)] -> Bool
 needsQuickCheck = any (isProperty . snd)
 
 hasQuickCheck :: DynFlags -> Bool
-hasQuickCheck df = hasPackage df "QuickCheck"
+hasQuickCheck df = any (hasPackage df) ["QuickCheck", "QckChck"]
 
 singleLine :: String -> [Text]
 singleLine s = [T.pack s]
