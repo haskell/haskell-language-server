@@ -1374,15 +1374,13 @@ flag fourmolu
   manual:      True
 
 common fourmolu
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if flag(fourmolu) && !impl(ghc >= 9.14)
+  if flag(fourmolu)
     build-depends: haskell-language-server:hls-fourmolu-plugin
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
   import:           defaults, pedantic, warnings
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(fourmolu) || impl(ghc >= 9.14)
+  if !flag(fourmolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
@@ -1402,8 +1400,7 @@ library hls-fourmolu-plugin
 
 test-suite hls-fourmolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  -- fourmolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(fourmolu) || impl(ghc >= 9.14)
+  if !flag(fourmolu)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
@@ -1435,15 +1432,13 @@ flag ormolu
   manual:      True
 
 common ormolu
-  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if flag(ormolu) && !impl(ghc >= 9.14)
+  if flag(ormolu)
     build-depends: haskell-language-server:hls-ormolu-plugin
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
   import:           defaults, pedantic, warnings
-  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(ormolu) || impl(ghc >= 9.14)
+  if !flag(ormolu)
     buildable: False
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
@@ -1463,8 +1458,7 @@ library hls-ormolu-plugin
 
 test-suite hls-ormolu-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  -- ormolu depends on ghc-lib-parser which doesn't support GHC 9.14
-  if !flag(ormolu) || impl(ghc >= 9.14)
+  if !flag(ormolu)
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
