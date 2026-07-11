@@ -58,6 +58,12 @@
         "export": {
             "globalOn": true
         },
+        "fourmolu": {
+            "config": {
+                "external": false,
+                "path": "fourmolu"
+            }
+        },
         "gadt": {
             "globalOn": true
         },
@@ -98,6 +104,11 @@
         "notes": {
             "completionOn": true,
             "hoverOn": true
+        },
+        "ormolu": {
+            "config": {
+                "external": false
+            }
         },
         "overloaded-record-dot": {
             "globalOn": true
