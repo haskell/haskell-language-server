@@ -230,9 +230,9 @@ runCpp env0 filename mbContents = withTempDir $ \dir -> do
                     | Just y <- stripPrefix "# " x
                     , "___GHCIDE_MAGIC___" `isInfixOf` y
                     , let num = takeWhile (not . isSpace) y
-                    -- important to use /, and never \ for paths, even on Windows, since then C escapes them
-                    -- and GHC gets all confused
-                        = "# " <> num <> " \"" <> map (\z -> if isPathSeparator z then '/' else z) filename <> "\""
+                    -- Backslashes must be escaped for GHC's line pragma parser.
+                    -- 'show' quotes and escapes them while preserving the native path in SrcSpans.
+                        = "# " <> num <> " " <> show filename
                     | otherwise = x
             Util.stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 

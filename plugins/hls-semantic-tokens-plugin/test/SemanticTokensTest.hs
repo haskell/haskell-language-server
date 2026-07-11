@@ -214,7 +214,15 @@ semanticTokensFullDeltaTests =
 semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup "other semantic Token test"
-    [ testCase "module import test" $ do
+    [ testCase "CPP source has semantic tokens" $ do
+        let content = Text.unlines ["{-# LANGUAGE CPP #-}", "module Cpp where", "value = 1"]
+        let fs = mkFs $ directFile "Cpp.hs" content
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin fs $ do
+          doc <- openDoc "Cpp.hs" "haskell"
+          void waitForBuildQueue
+          result <- docSemanticTokensString def doc
+          liftIO $ assertBool result $ "TVariable \"value\"" `T.isInfixOf` result,
+      testCase "module import test" $ do
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
