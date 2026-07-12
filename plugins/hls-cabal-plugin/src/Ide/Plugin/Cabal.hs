@@ -14,7 +14,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                     (lift)
 import           Control.Monad.Trans.Except                    (ExceptT)
 import           Control.Monad.Trans.Maybe                     (runMaybeT)
-import           Data.Foldable                                 (foldl')
 import           Data.HashMap.Strict                           (HashMap)
 import qualified Data.List                                     as List
 import qualified Data.Map.Strict                               as Map
@@ -319,7 +318,7 @@ cabalAddModuleCodeAction recorder state plId (CodeActionParams _ _ (TextDocument
 renameModulesHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState LSP.Method_WorkspaceWillRenameFiles
 renameModulesHandler recorder ideState _plId (RenameFilesParams renames) = do
   renamedEdits <- traverse (renameModuleHelper recorder ideState) renames
-  pure $ InL $ foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) renamedEdits
+  pure $ InL $ List.foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) renamedEdits
 
 renameModuleHelper :: Recorder (WithPriority Log) -> IdeState -> FileRename -> ExceptT PluginError (HandlerM Config) WorkspaceEdit
 renameModuleHelper recorder ideState (FileRename oldUri newUri) = do

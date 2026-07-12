@@ -1,38 +1,90 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module Workspace (
-
+  cabalWorkspaceTests,
 ) where
 
-import Control.Lens ((^.), (^?))
-import Data.Maybe qualified as Maybe
-import Data.Text qualified as T
-import Data.Text.Encoding qualified as T
-import Distribution.PackageDescription (PackageDescription)
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
-import Distribution.Pretty qualified as Pretty
-import Distribution.Types.ComponentName (ComponentName)
-import Ide.Plugin.Cabal.Parse (parseCabalFileContents)
-import Language.LSP.Protocol.Lens qualified as L
-import Test.Hls
+import           Control.Lens                                  ((^.))
+import           Data.Maybe                                    (fromJust)
+import           Data.String                                   (IsString (fromString))
+import qualified Data.Text.Encoding                            as T
+import           Distribution.PackageDescription               (ComponentName (..),
+                                                                LibraryName (..),
+                                                                PackageDescription,
+                                                                benchmarkModules,
+                                                                exeModules,
+                                                                explicitLibModules,
+                                                                foreignLibModules,
+                                                                getComponent,
+                                                                showComponentName,
+                                                                testModules)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import           Distribution.Types.Component                  (Component (..))
+import           Ide.Plugin.Cabal.Parse                        (parseCabalFileContents)
+import qualified Language.LSP.Protocol.Lens                    as L
+import qualified System.FilePath                               as FP
+import           Test.Hls
+import           Utils
 
 cabalWorkspaceTests :: TestTree
 cabalWorkspaceTests =
   testGroup
     "Workspace"
-    []
+    [ cabalRenameTests
+    ]
+
+cabalRenameTests :: TestTree
+cabalRenameTests =
+  testGroup
+    "Rename"
+    [ runHaskellTestCaseSession "Rename in named library" "rename" $ do
+        let newName = "NewHaskell.hs"
+        pd <- generateWorkspaceFileRenameTestSession "rename.cabal" "LibLib.hs" newName
+        checkModuleRenamedIn pd (FP.dropExtension newName) $ CLibName $ LSubLibName "lib"
+    , runHaskellTestCaseSession "Rename in executable" "rename" $ do
+        let newName = "ChangesModule.hs"
+        pd <- generateWorkspaceFileRenameTestSession "rename.cabal" "Exe.hs" newName
+        checkModuleRenamedIn pd (FP.dropExtension newName) $ CExeName "exe"
+    , runHaskellTestCaseSession "Rename in main library" "rename" $ do
+        let newName = "OtherNewHaskell.hs"
+        pd <- generateWorkspaceFileRenameTestSession "rename.cabal" "lib/MainLib.hs" newName
+        checkModuleRenamedIn pd (FP.dropExtension newName) $ CLibName LMainLibName
+    , runHaskellTestCaseSession "Rename in benchmark" "rename" $ do
+        let newName = "NewHaskell2.hs"
+        pd <- generateWorkspaceFileRenameTestSession "rename.cabal" "Bench.hs" newName
+        checkModuleRenamedIn pd (FP.dropExtension newName) $ CBenchName "bench"
+    , runHaskellTestCaseSession "Rename in test-suite" "rename" $ do
+        let newName = "NewHaskell.hs"
+        pd <- generateWorkspaceFileRenameTestSession "rename.cabal" "Test.hs" newName
+        checkModuleRenamedIn pd (FP.dropExtension newName) $ CTestName "test"
+    ]
  where
-  generateWorkspaceFileRenameTestSession :: FilePath -> FilePath -> ComponentName -> Session PackageDescription
-  generateWorkspaceFileRenameTestSession cabalFile haskellFile compName = do
+  generateWorkspaceFileRenameTestSession :: FilePath -> FilePath -> FilePath -> Session PackageDescription
+  generateWorkspaceFileRenameTestSession cabalFile haskellFile newFileName = do
     haskellDoc <- openDoc haskellFile "haskell"
     cabalDoc <- openDoc cabalFile "cabal"
     _ <- waitForDiagnosticsFrom haskellDoc
-    cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions haskellDoc
-    let selectedCas = filter (\ca -> (T.pack $ "Add to " <> Pretty.prettyShow compName <> " ") `T.isPrefixOf` (ca ^. L.title)) cas
-    mapM_ executeCodeAction $ selectedCas
-    _ <- skipManyTill anyMessage $ getDocumentEdit cabalDoc -- Wait for the changes in cabal file
+    let haskellDir = FP.takeDirectory $ fromJust $ uriToFilePath (haskellDoc ^. L.uri)
+        newId = mkTId $ haskellDir FP.</> newFileName
+    _ <- renameFile haskellDoc newId
     contents <- documentContents cabalDoc
     case parseCabalFileContents $ T.encodeUtf8 contents of
       (_, Right gpd) -> pure $ flattenPackageDescription gpd
       _ -> liftIO $ assertFailure "could not parse cabal file to gpd"
+
+  mkTId :: String -> TextDocumentIdentifier
+  mkTId s = TextDocumentIdentifier $ filePathToUri s
+
+  checkModuleRenamedIn :: PackageDescription -> String -> ComponentName -> Session ()
+  checkModuleRenamedIn pd newModName compName = do
+    let comp = getComponent pd compName
+        compModules = case comp of
+          CLib lib     -> explicitLibModules lib
+          CFLib fLib   -> foreignLibModules fLib
+          CExe exe     -> exeModules exe
+          CTest test   -> testModules test
+          CBench bench -> benchmarkModules bench
+        -- todo maybe check that old name is gone
+        testDescription = newModName <> " was renamed in " <> showComponentName compName
+    liftIO $ assertBool testDescription $ fromString newModName `elem` compModules
