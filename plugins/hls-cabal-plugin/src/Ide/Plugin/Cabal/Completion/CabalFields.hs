@@ -205,12 +205,12 @@ getModulesNames fields = map swap $ groupSort rawModuleTargetPairs
         name = mkUnqualComponentName $ T.unpack $ T.decodeUtf8 nameBs
       in
         case secName of
-          "library" -> Just $ CLibName $ LSubLibName name
-          "test-suite" -> Just $ CTestName name
-          "benchmark" -> Just $ CBenchName name
-          "executable" -> Just $ CExeName name
+          "library"         -> Just $ CLibName $ LSubLibName name
+          "test-suite"      -> Just $ CTestName name
+          "benchmark"       -> Just $ CBenchName name
+          "executable"      -> Just $ CExeName name
           "foreign-library" -> Just $ CFLibName name
-          _ -> Nothing
+          _                 -> Nothing
     getArgsName _ _                          = Nothing -- Can be only a main library, that has no name
                                                      -- since it's impossible to have multiple names for a build target
 

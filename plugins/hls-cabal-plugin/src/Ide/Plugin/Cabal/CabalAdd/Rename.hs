@@ -22,7 +22,7 @@ import qualified Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Development.IDE.Core.FileStore                (getUriContents,
                                                                 getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils              (runActionE,
-                                                                useWithStaleE)
+                                                                useE)
 import qualified Development.IDE.Core.Shake                    as Shake
 import           Development.IDE.Types.Location                (toNormalizedUri)
 import qualified Distribution.Client.Add                       as Add
@@ -58,8 +58,10 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogDidRename oldFp newFp -> "Received rename info from:" <+> pretty oldFp <+> "to:" <+> pretty newFp
-    CabalRenameLog oldModulePath newModulePath -> "Executing rename of module from" <+> pretty oldModulePath <+> "to" <+> pretty newModulePath <+> "in cabal file."
+    LogDidRename oldFp newFp ->
+      "Received rename info from:" <+> pretty oldFp <+> "to:" <+> pretty newFp
+    CabalRenameLog oldModulePath newModulePath ->
+      "Executing rename of module from" <+> pretty oldModulePath <+> "to" <+> pretty newModulePath <+> "in cabal file."
 
 --------------------------------------------
 -- Rename module in cabal file
@@ -91,10 +93,10 @@ renameHandler recorder _ caps oldHaskellFilePath newHaskellFilePath cabalFilePat
           getVersionedTextDoc $
             TextDocumentIdentifier (filePathToUri cabalFilePath)
     content <- case mContent of
-      Just content -> pure content
-      Nothing      -> liftIO $ Rope.fromText <$> Text.readFile cabalFilePath
-    (fields, _) <- useWithStaleE ParseCabalFields nfp
-    (gpd, _) <- useWithStaleE ParseCabalFile nfp
+      Just content -> pure $ Rope.toText content
+      Nothing      -> liftIO $ Text.readFile cabalFilePath
+    fields <- useE ParseCabalFields nfp
+    gpd <- useE ParseCabalFile nfp
     pure (content, fields, gpd, verTxtDocId)
   cabalFileEdit <-
     applyModuleRenameToCabalFile
@@ -103,7 +105,7 @@ renameHandler recorder _ caps oldHaskellFilePath newHaskellFilePath cabalFilePat
       oldHaskellFilePath
       newHaskellFilePath
       cabalFilePath
-      (T.encodeUtf8 $ Rope.toText $ contents)
+      (T.encodeUtf8 contents)
       fields
       gpd
   pure cabalFileEdit
@@ -113,7 +115,7 @@ renameHandler recorder _ caps oldHaskellFilePath newHaskellFilePath cabalFilePat
 Replaces the module name corresponding to the old file path with the
 module name corresponding to the new file path in the given cabal file.
 Fails if the cabal file cannot be parsed, the file paths cannot be parsed to module names
-or no occurence of the module can be found in the cabal file.
+or no occurrence of the module can be found in the cabal file.
 -}
 applyModuleRenameToCabalFile ::
   forall m.
@@ -174,10 +176,11 @@ findFieldForModule modulePath compName pd buildInfo =
           LSubLibName _ ->
             concat $ Maybe.concatMapM (getExposedModulesForLib compName) $ subLibraries pd
       _ -> []
+    otherMods = otherModules buildInfo
    in
-    findInExposedModules exposedMods <|> findInOtherModules (otherModules buildInfo)
+    findInExposedModules exposedMods <|> findInOtherModules otherMods
  where
-  moduleName = Cabal.fromString (T.unpack modulePath)
+  moduleName = Cabal.fromString $ T.unpack modulePath
 
   findInOtherModules mods =
     Add.OtherModules <$ findInModules mods
@@ -190,11 +193,9 @@ findFieldForModule modulePath compName pd buildInfo =
 
   getExposedModulesForLib :: ComponentName -> Library -> Maybe [Cabal.ModuleName]
   getExposedModulesForLib compName lib =
-    case libName lib of
-      LSubLibName lName ->
-        case componentNameString compName of
-          Just unqualCompName -> if lName == unqualCompName then Just $ exposedModules lib else Nothing
-          _ -> Nothing
+    case (libName lib, componentNameString compName) of
+      (LSubLibName lName, Just unqualCompName)
+        | lName == unqualCompName -> Just $ exposedModules lib
       _ -> Nothing
 
 ---------------------------------------------------------
@@ -238,5 +239,5 @@ The path will be relative to one of the subdirectories, in case the module is co
 If no module path can be resolved, throws a PluginError.
 -}
 toRelativeModulePathE :: (Applicative m) => [FilePath] -> FilePath -> FilePath -> ExceptT PluginError m T.Text
-toRelativeModulePathE sourceDirs cabalFilePath oldHaskellFilePath =
-  maybeToExceptT PluginStaleResolve $ hoistMaybe $ mkRelativeModulePathM sourceDirs cabalFilePath oldHaskellFilePath
+toRelativeModulePathE sourceDirs cabalFilePath haskellFilePath =
+  maybeToExceptT PluginStaleResolve $ hoistMaybe $ mkRelativeModulePathM sourceDirs cabalFilePath haskellFilePath
