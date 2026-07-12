@@ -14,7 +14,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class                     (lift)
 import           Control.Monad.Trans.Except                    (ExceptT)
 import           Control.Monad.Trans.Maybe                     (runMaybeT)
-import           Data.Foldable                                 (foldl')
 import           Data.HashMap.Strict                           (HashMap)
 import qualified Data.List                                     as List
 import qualified Data.Map.Strict                               as Map
