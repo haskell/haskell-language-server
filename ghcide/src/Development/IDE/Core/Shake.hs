@@ -7,6 +7,7 @@
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ImplicitParams        #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -86,6 +87,9 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
+#if MIN_VERSION_ghc(9,10,0)
+import Control.Exception.Context ( displayExceptionContext )
+#endif
 import           Control.Lens                           ((%~), (&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -1285,7 +1289,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1329,6 +1333,26 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+
+    prettyRuleAbortedByException key file e = T.pack $ unlines $
+        [ "Rule execution aborted due to exception"
+        , ""
+        , "Rule: " <> show key
+        , "Target: " <> fromNormalizedFilePath file
+        , "Message: " <> show e
+        ] <>
+        [ unlines
+            [ "Context:"
+            , ctx
+            ]
+        | Just ctx <- [displayExcContext e]
+        ]
+
+displayExcContext :: SomeException -> Maybe String
+displayExcContext (SomeException _) =
+    case displayExceptionContext ?exceptionContext of
+      "" -> Nothing
+      dc -> Just dc
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
