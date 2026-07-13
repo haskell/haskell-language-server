@@ -513,7 +513,37 @@ projectCompletionTests =
         compls <- getCompletions doc (Position 2 12)
         let item = head compls
         liftIO $ do
-          item ^. L.label @?= "anidentifier"
+          item ^. L.label @?= "anidentifier",
+      testSessionEmptyWithCradle "refresh completions after changing an import alias"
+                  "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}" $ do
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "module A (anidentifier) where"
+            , "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where"
+            , "import A as CM"
+            , "before = CM."
+            ]
+        _ <- waitForDiagnostics
+        before <- getCompletions doc (Position 2 12)
+
+        changeDoc doc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ T.unlines
+            [ "module B where"
+            , "import A as C"
+            , "after = C."
+            , "stale = CM."
+            ]]
+        void $ waitForTypecheck doc
+        after <- getCompletions doc (Position 2 10)
+        stale <- getCompletions doc (Position 3 11)
+
+        liftIO $ do
+          listToMaybe (map (^. L.label) before) @?= Just "anidentifier"
+          listToMaybe (map (^. L.label) after) @?= Just "anidentifier"
+          assertBool "the old alias is still treated as an active import alias" $
+            listToMaybe (map (^. L.label) stale) /= Just "anidentifier"
     ]
 
 completionDocTests :: [TestTree]
