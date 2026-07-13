@@ -12,16 +12,21 @@ import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
+import           Data.Maybe                      (isJust)
 import           Data.Proxy                      (Proxy (..))
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult (..))
+import           Development.IDE.Session         (HlsReadyPayload (..),
+                                                  HlsStatus (..),
+                                                  hlsStatusNotificationMethod)
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
-                                                  waitForAction)
+                                                  waitForAction,
+                                                  waitForCustomMessage)
 import           Development.IDE.Types.Location
 import           GHC.TypeLits                    (symbolVal)
 import           Ide.Types                       (Config (..),
@@ -34,6 +39,7 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
+import           System.Directory                (removeFile)
 import           System.FilePath
 import           Test.Hls                        (TestConfig (..), def,
                                                   runSessionWithTestConfig,
@@ -48,6 +54,8 @@ import           Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
+    ,testGroup "info" [explicitCradleInfo, implicitCradleInfo]
+    ,testGroup "status" [hlsStatusLifecycle]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "regression.batch" batchLoadRegressionTests
@@ -87,6 +95,11 @@ retryFailedCradle = testWithDummyPluginEmpty' "retry failed" $ \dir -> do
   liftIO $ atomicFileWriteString hiePath hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
+  status <- waitForHlsStatus (T.pack "error")
+  liftIO $ assertBool "status file should match the opened file" $
+    maybe False (`equalFilePath` aPath) (hlsStatusFile status)
+  liftIO $ assertBool "error status should include a payload" $
+    isJust (hlsStatusPayload status)
   WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "Test assumption failed: cradle should error out" `assertBool` not ideResultSuccess
 
@@ -107,6 +120,66 @@ cradleLoadedMessage = satisfy $ \case
 
 cradleLoadedMethod :: String
 cradleLoadedMethod = "ghcide/cradle/loaded"
+
+-- | Waits for the ready payload emitted when setup finishes.
+waitForReadyPayload :: Session HlsReadyPayload
+waitForReadyPayload = do
+  status <- waitForHlsStatus (T.pack "ready")
+  case hlsStatusPayload status of
+    Just payload
+      | A.Success readyPayload <- A.fromJSON payload -> pure readyPayload
+    _ -> liftIO $ assertFailure "ready status did not include ready payload"
+
+-- | Waits for a specific HLS status notification.
+waitForHlsStatus :: T.Text -> Session HlsStatus
+waitForHlsStatus expectedStatus =
+  waitForCustomMessage hlsStatusNotificationMethod $ \value ->
+    case A.fromJSON value of
+      A.Success status | hlsStatusStatus status == expectedStatus -> Just status
+      _                                                           -> Nothing
+
+-- | Checks that HLS reports the coarse setup lifecycle clients need for UI state.
+hlsStatusLifecycle :: TestTree
+hlsStatusLifecycle =
+  testCase "setup lifecycle" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    started <- waitForHlsStatus (T.pack "started")
+    liftIO $ hlsStatusFile started @?= Nothing
+    liftIO $ assertBool "root dir should match the workspace fixture" $
+      maybe False (`equalFilePath` dir) (hlsStatusRootDir started)
+    let mainPath = dir </> "a/src/Main.hs"
+    _ <- openDoc mainPath "haskell"
+    loading <- waitForHlsStatus (T.pack "loading")
+    liftIO $ assertBool "loading file should match the opened file" $
+      maybe False (`equalFilePath` mainPath) (hlsStatusFile loading)
+    ready <- waitForHlsStatus (T.pack "ready")
+    liftIO $ assertBool "ready file should match the opened file" $
+      maybe False (`equalFilePath` mainPath) (hlsStatusFile ready)
+    liftIO $ assertBool "ready status should include ready payload" $
+      hlsStatusPayload ready /= Nothing
+
+-- | Checks that explicit cradle setup is reported to clients.
+explicitCradleInfo :: TestTree
+explicitCradleInfo =
+  testCase "explicit cradle info" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    let mainPath = dir </> "a/src/Main.hs"
+    _ <- openDoc mainPath "haskell"
+    readyPayload <- waitForReadyPayload
+    liftIO $ hlsReadyPayloadInferred readyPayload @?= False
+    liftIO $ assertBool "GHC version should be reported" $
+      not $ null $ hlsReadyPayloadGhcVersion readyPayload
+
+-- | Checks that implicit cradle inference is reported to clients.
+implicitCradleInfo :: TestTree
+implicitCradleInfo =
+  testCase "implicit cradle info" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    let hieYamlPath = dir </> "hie.yaml"
+        mainPath = dir </> "a/src/Main.hs"
+    liftIO $ removeFile hieYamlPath
+    _ <- openDoc mainPath "haskell"
+    readyPayload <- waitForReadyPayload
+    liftIO $ hlsReadyPayloadInferred readyPayload @?= True
+    liftIO $ assertBool "GHC version should be reported" $
+      not $ null $ hlsReadyPayloadGhcVersion readyPayload
 
 ignoreFatalWarning :: TestTree
 ignoreFatalWarning = testCase "ignore-fatal-warning" $ runWithExtraFiles "ignore-fatal" $ \dir -> do
