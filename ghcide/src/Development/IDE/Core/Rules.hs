@@ -62,7 +62,7 @@ import           Control.Concurrent.STM.Stats                 (atomically)
 import           Control.Concurrent.STM.TVar
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Exception                            (evaluate)
+import           Control.Exception                            (evaluate, ErrorCall (..))
 import           Control.Exception.Safe
 import           Control.Lens                                 ((%~), (&), (.~))
 import           Control.Monad.Extra
@@ -181,6 +181,10 @@ import           System.Info.Extra                            (isWindows)
 
 import qualified Data.IntMap                                  as IM
 import           GHC.Fingerprint
+import GHC.Unit.Module.ModIface
+import GHC.Driver.Plugins
+import GHC.Driver.Env (hsc_plugins)
+import Debug.Trace
 
 data Log
   = LogShake Shake.Log
@@ -704,8 +708,9 @@ typeCheckRuleDefinition hsc pm fp = do
            { getLinkables = unliftIO unlift . uses_ GetLinkable
            , getModuleGraph = unliftIO unlift $ useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph fp
            }
+  hsc_env <- setFileCacheHook hsc
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc dets pm
+    typecheckModule defer hsc_env dets pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
@@ -860,10 +865,16 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
             , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
-            , regenerate = regenerateHiFile session f ms
+            , regenerate = \env -> regenerateHiFile env f ms
             }
-      hsc_env' <- setFileCacheHook (hscEnv session)
-      r <- loadInterface hsc_env' ms linkableType recompInfo
+      let env = hscEnv session
+      let
+        withFileHookCache session old_iface = case old_iface of
+            Nothing -> pure session
+            Just iface -> do
+                deps <- computeFileCacheBasedOnUsage (fromMaybe [] $ mi_usages iface)
+                pure $! setFileCacheHook' session deps
+      r <- loadInterface env withFileHookCache ms linkableType recompInfo
       case r of
         (diags, Nothing) -> return (Nothing, (diags, Nothing))
         (diags, Just x) -> do
@@ -962,9 +973,10 @@ getModSummaryRule displayTHWarning recorder = do
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
 generateCore runSimplifier file = do
     packageState <- hscEnv <$> use_ GhcSessionDeps file
-    hsc' <- setFileCacheHook packageState
     tm <- use_ TypeCheck file
-    liftIO $ compileModule runSimplifier hsc' (tmrModSummary tm) (tmrTypechecked tm)
+    (needed_links, needed_pkgs) <- liftIO $ readIORef (tcg_th_needed_deps $ tmrTypechecked tm)
+    hsc_with_hooks <- setFileCacheHook' packageState <$> computeFileCacheBasedOnLinkable (hsc_plugins packageState) needed_links needed_pkgs
+    liftIO $ compileModule runSimplifier hsc_with_hooks (tmrModSummary tm) (tmrTypechecked tm)
 
 generateCoreRule :: Recorder (WithPriority Log) -> Rules ()
 generateCoreRule recorder =
@@ -979,15 +991,17 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       tmr <- use_ TypeCheck f
       linkableType <- getLinkableType f
       hsc <- hscEnv <$> use_ GhcSessionDeps f
-      hsc' <- setFileCacheHook hsc
+
+      (needed_links, needed_pkgs) <- liftIO $ readIORef (tcg_th_needed_deps $ tmrTypechecked tmr)
+      hsc_with_hooks <- setFileCacheHook' hsc <$> computeFileCacheBasedOnLinkable (hsc_plugins hsc) needed_links needed_pkgs
       let compile = fmap ([],) $ use GenerateCore f
       se <- getShakeExtras
-      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc' linkableType compile tmr
+      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc_with_hooks linkableType compile tmr
       let fp = hiFileFingerPrint <$> mbHiFile
       hiDiags <- case mbHiFile of
         Just hiFile
           | OnDisk <- status
-          , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc' hiFile
+          , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc_with_hooks hiFile
         _ -> pure []
       return (fp, (diags++hiDiags, mbHiFile))
     NotFOI -> do
@@ -1011,23 +1025,65 @@ incrementRebuildCount = do
   count <- getRebuildCountVar <$> getIdeGlobalAction
   liftIO $ atomically $ modifyTVar' count (+1)
 
+computeFileCacheBasedOnUsage :: [Usage] -> Action (HM.HashMap NormalizedFilePath Fingerprint)
+computeFileCacheBasedOnUsage usages = do
+  let fpOf = \ case
+        UsageFile{usg_file_path} -> Just $ toNormalizedFilePath' $ Util.unpackFS usg_file_path
+        _ -> Nothing
+
+      fileDeps = mapMaybe fpOf usages
+  deps <- uses_ GetFileHash fileDeps
+  pure $ HM.fromList $ zip fileDeps deps
+
+computeFileCacheBasedOnLinkable :: Plugins -> [Linkable] -> PkgsLoaded -> Action (HM.HashMap NormalizedFilePath Fingerprint)
+computeFileCacheBasedOnLinkable plugins linkable th_pkgs_needed = do
+  let
+    fileDeps = concatMap (mapMaybe (fmap toNormalizedFilePath' . linkablePartPath) . toList . linkableParts) (linkable ++ plugins_links_needed)
+    (plugins_links_needed, plugin_pkgs_needed) = loadedPluginDeps plugins
+    lib_specs = concatMap loaded_pkg_hs_objs $ eltsUDFM (plusUDFM th_pkgs_needed plugin_pkgs_needed) -- TODO possibly record loaded_pkg_non_hs_objs as well
+    libDeps = map toNormalizedFilePath' (lib_spec_nfps lib_specs)
+  deps <- uses_ GetFileHash fileDeps
+  libs <- uses_ GetFileHash libDeps
+  traceShowM  (fileDeps ++ libDeps)
+  pure $ HM.fromList $ zip fileDeps deps ++ zip libDeps libs
+  where
+    lib_spec_nfps lib_specs = concatMap (\ case
+      Objects os -> os
+      Archive fn -> [fn]
+      DLLPath fn -> [fn]
+      _ -> []) lib_specs
+
+setFileCacheHook' :: HscEnv -> HM.HashMap NormalizedFilePath Fingerprint -> HscEnv
+setFileCacheHook' old_hsc_env _files = do
+#if MIN_VERSION_ghc(9,11,0)
+  old_hsc_env
+    { hsc_FC =
+      (hsc_FC old_hsc_env)
+        { lookupFileCache = \ fp ->
+            case _files HM.!? toNormalizedFilePath' fp of
+              Nothing -> throwIO $ ErrorCall $ "lookupFileCache: file not found '" <> fp <> "'. Known keys: " <> show (map fromNormalizedFilePath $ HM.keys _files)
+              Just value -> pure $! value
+        }
+    }
+#else
+  old_hsc_env
+#endif
+
 setFileCacheHook :: HscEnv -> Action HscEnv
 setFileCacheHook old_hsc_env = do
 #if MIN_VERSION_ghc(9,11,0)
   unlift <- askUnliftIO
   return $ old_hsc_env { hsc_FC = (hsc_FC old_hsc_env) { lookupFileCache = unliftIO unlift . use_ GetFileHash . toNormalizedFilePath'  } }
 #else
-  return old_hsc_env
+  old_hsc_env
 #endif
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
 -- `.hie` and `.o` file (if needed) were also successfully written
-regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
-regenerateHiFile sess f ms compNeeded = do
-    hsc <- setFileCacheHook (hscEnv sess)
+regenerateHiFile :: HscEnv -> NormalizedFilePath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile hsc f ms compNeeded = do
     opt <- getIdeOptions
-
     -- By default, we parse with `-haddock` unless 'OptHaddockParse' is overwritten.
     (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
     case mb_pm of
@@ -1040,12 +1096,15 @@ regenerateHiFile sess f ms compNeeded = do
               Nothing -> pure (diags', Nothing)
               Just tmr -> do
 
-                let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
+                (needed_links, needed_pkgs) <- liftIO $ readIORef (tcg_th_needed_deps $ tmrTypechecked tmr)
+                hsc_with_hooks <- setFileCacheHook' hsc <$> computeFileCacheBasedOnLinkable (hsc_plugins hsc) needed_links needed_pkgs
+
+                let compile = liftIO $ compileModule (RunSimplifier True) hsc_with_hooks (pm_mod_summary pm) $ tmrTypechecked tmr
 
                 se <- getShakeExtras
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
+                (diags'', !res) <- writeCoreFileIfNeeded se hsc_with_hooks compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -1055,15 +1114,15 @@ regenerateHiFile sess f ms compNeeded = do
                     -- ensure that we always have a up2date .hie file if we have
                     -- a .hi file
                     se' <- getShakeExtras
-                    (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
+                    (gDiags, masts) <- liftIO $ generateHieAsts hsc_with_hooks tmr
                     source <- getSourceFileSource f
                     wDiags <- forM masts $ \asts ->
-                      liftIO $ writeAndIndexHieFile hsc se' (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
+                      liftIO $ writeAndIndexHieFile hsc_with_hooks se' (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
 
                     -- We don't write the `.hi` file if there are deferred errors, since we won't get
                     -- accurate diagnostics next time if we do
                     hiDiags <- if not $ tmrDeferredError tmr
-                               then liftIO $ writeHiFile se' hsc hiFile
+                               then liftIO $ writeHiFile se' hsc_with_hooks hiFile
                                else pure []
 
                     pure (hiDiags <> gDiags <> concat wDiags)
