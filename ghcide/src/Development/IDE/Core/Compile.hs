@@ -23,7 +23,6 @@ module Development.IDE.Core.Compile
   , indexHieFile
   , writeHiFile
   , getModSummaryFromImports
-  , computeImportsFingerprint
   , loadHieFile
   , loadInterface
   , RecompilationInfo(..)
@@ -1319,10 +1318,6 @@ getModSummaryFromImports env fp mContents = do
                                          , ml_obj_file
                                          , ml_dyn_obj_file
                                          , ml_hie_file]
-
--- | Fingerprint the full parsed import declarations, including aliases and import lists.
-computeImportsFingerprint :: [LImportDecl GhcPs] -> Util.Fingerprint
-computeImportsFingerprint = Util.fingerprintString . T.unpack . printOutputable
 
 -- | Parse only the module header
 parseHeader

@@ -953,7 +953,7 @@ getModSummaryRule displayTHWarning recorder = do
                 let ms = msrModSummary {
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
-                    fp = fingerprintToBS $ Util.fingerprintFingerprints [msrFingerprint, computeImportsFingerprint msrImports]
+                    fp = fingerprintToBS msrFingerprint
                 return (Just fp, Just res{msrModSummary = ms})
             Nothing -> return (Nothing, Nothing)
 
