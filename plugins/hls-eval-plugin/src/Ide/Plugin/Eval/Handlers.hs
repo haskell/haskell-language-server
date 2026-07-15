@@ -81,6 +81,7 @@ import qualified Development.IDE.GHC.Compat.Core              as Compat (Interac
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
+import           Development.IDE.Session.Ghc                  (disableOptimisation)
 
 import           Data.List.Extra                              (unsnoc)
 import           Development.IDE.Core.PluginUtils
@@ -303,6 +304,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
                    . flip xopt_unset  LangExt.MonomorphismRestriction
                    . flip gopt_set    Opt_ImplicitImportQualified
                    . flip gopt_unset  Opt_DiagnosticsShowCaret
+                   . disableOptimisation
                    . setBackend ghciBackend
                    $ (ms_hspp_opts ms) {
                         useColor = Never

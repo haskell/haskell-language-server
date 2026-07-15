@@ -215,6 +215,7 @@ tests =
         Right keys <- getLastBuildKeys
         let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
         liftIO $ ifaceKeys @?= []
+    , goldenWithEval "Works with OPTIONS_GHC -O1" "TGHCOptionO1" "hs"
   ]
   where
     knownBrokenInWindowsBeforeGHC912 msg =
