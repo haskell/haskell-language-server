@@ -128,7 +128,7 @@ getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
-    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
+    ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys (\(HiePath p) -> HiePath . mkFastString . fromNormalizedFilePath . toNormalizedFilePath' $ unpackFS p) $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
