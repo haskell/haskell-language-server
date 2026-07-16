@@ -1216,7 +1216,8 @@ getModSummaryFromImports env fp mContents = do
 
         msrImports = implicit_imports ++ imps
 
-        rn_pkg_qual = renameRawPkgQual (hsc_unit_env ppEnv)
+        unitEnv = hsc_unit_env ppEnv
+        rn_pkg_qual = renameRawPkgQual unitEnv
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
 #if MIN_VERSION_ghc(9,13,0)
         -- In GHC 9.13+, ms_srcimps is just [Located ModuleName] and ms_textual_imps includes ImportLevel
@@ -1277,33 +1278,30 @@ getModSummaryFromImports env fp mContents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts unitEnv msrImports msrModSummary
     msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
     return ModSummaryResult{..}
     where
-        -- Compute a fingerprint from the contents of `ModSummary`,
+        -- Compute a fingerprint from the `msrImports` and the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields
-        computeFingerprint opts ModSummary{..} = do
+        computeFingerprint opts unitEnv msrImports ModSummary{..} = do
             fingerPrintImports <- fingerprintFromPut $ do
                   put $ Util.uniq $ moduleNameFS $ moduleName ms_mod
-#if MIN_VERSION_ghc(9,13,0)
-                  -- In GHC 9.13+, ms_srcimps is [Located ModuleName] and ms_textual_imps is [(ImportLevel, PkgQual, Located ModuleName)]
-                  forM_ ms_srcimps $ \m -> do
-                    put $ Util.uniq $ moduleNameFS $ unLoc m
-                  forM_ ms_textual_imps $ \(_lvl, mb_p, m) -> do
-                    put $ Util.uniq $ moduleNameFS $ unLoc m
-                    case mb_p of
-                      G.NoPkgQual    -> pure ()
-                      G.ThisPkg uid  -> put $ getKey $ getUnique uid
-                      G.OtherPkg uid -> put $ getKey $ getUnique uid
-#else
-                  forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
-                    put $ Util.uniq $ moduleNameFS $ unLoc m
-                    case mb_p of
-                      G.NoPkgQual    -> pure ()
-                      G.ThisPkg uid  -> put $ getKey $ getUnique uid
-                      G.OtherPkg uid -> put $ getKey $ getUnique uid
-#endif
+
+                  forM_ msrImports $ \(L _ decl) -> do
+                      let modName = unLoc $ ideclName decl
+                          pkgQual = renameRawPkgQual unitEnv modName (ideclPkgQual decl)
+
+                      put $ Util.uniq $ moduleNameFS modName
+                      put $ ideclSource decl == IsBoot
+
+                      case pkgQual of
+                          G.NoPkgQual    -> pure ()
+                          G.ThisPkg uid  -> put $ getKey $ getUnique uid
+                          G.OtherPkg uid -> put $ getKey $ getUnique uid
+
+                      put $ Util.uniq . moduleNameFS . unLoc <$> ideclAs decl
+
             return $! Util.fingerprintFingerprints $
                     [ Util.fingerprintString fp
                     , fingerPrintImports
