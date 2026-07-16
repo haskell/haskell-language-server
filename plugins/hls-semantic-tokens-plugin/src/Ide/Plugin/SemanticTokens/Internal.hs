@@ -34,6 +34,7 @@ import           Development.IDE                          (Action,
                                                            WithPriority,
                                                            cmapWithPrio, define,
                                                            fromNormalizedFilePath,
+                                                           toNormalizedFilePath',
                                                            hieKind)
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
