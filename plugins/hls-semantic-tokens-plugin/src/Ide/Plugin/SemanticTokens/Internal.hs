@@ -129,6 +129,10 @@ getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
+    -- On Windows, 'nfp' contains escaped backslashes \\\\. For files that use
+    -- the CPP extension, 'hieAst' contains forward slashes '/', because the C
+    -- preprocessor conflicts with backslashes. We need to "renormalize" it, 
+    -- so both paths have uniform separators
     ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys (\(HiePath p) -> HiePath . mkFastString . fromNormalizedFilePath . toNormalizedFilePath' $ unpackFS p) $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
