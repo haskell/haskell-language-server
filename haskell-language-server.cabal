@@ -35,6 +35,7 @@ extra-source-files:
   ghcide-test/data/**/*.cabal
   ghcide-test/data/**/*.hs
   ghcide-test/data/**/*.hs-boot
+  ghcide-test/data/**/*.myPP
   ghcide-test/data/**/*.project
   ghcide-test/data/**/*.yaml
 
@@ -2176,6 +2177,7 @@ test-suite ghcide-tests
     ResolveTests
     RootUriTests
     SafeTests
+    SetupHooksTests
     SymlinkTests
     THTests
     UnitTests

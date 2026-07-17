@@ -1,0 +1,2 @@
+genVal :: Int
+genVal = 42

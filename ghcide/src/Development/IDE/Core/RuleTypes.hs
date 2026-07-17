@@ -547,8 +547,21 @@ instance NFData   AddWatchedFile
 -- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
 type instance RuleResult GhcSessionIO = IdeGhcSession
 
+-- | An absolute glob pattern to be registered as an LSP @FileSystemWatcher@.
+newtype GlobPattern = GlobPattern { getGlobPattern :: FilePath }
+  deriving (Show, Eq, Ord)
+
+-- | The dependencies of a loaded cradle component.
+data CradleDeps = CradleDeps
+  { cradleFileDeps :: ![FilePath]
+  -- ^ File paths that, when modified, should trigger a session reload.
+  , cradleGlobDeps :: ![GlobPattern]
+  -- ^ Glob patterns to register as LSP @FileSystemWatcher@ globs so that
+  -- newly created or deleted matching files also trigger a reload.
+  }
+
 data IdeGhcSession = IdeGhcSession
-  { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
+  { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, CradleDeps)
   -- ^ Returns the Ghc session and the cradle dependencies
   , sessionVersion :: !Int
   -- ^ Used as Shake key, versions must be unique and not reused
