@@ -576,23 +576,26 @@ handleSingleFileProcessingError state hieYaml file diags extraDepFiles = liftIO 
 -- If the current file is in error loading files, we fallback to single loading mode (empty set)
 -- Otherwise, we remove error files from pending files and also exclude the current file
 --
--- Only files that belong to the same cradle as the current file (i.e. resolve
--- to the same @hie.yaml@) are returned. Handing files owned by a different
--- cradle to a multi-component load makes the build tool fail wholesale — e.g.
--- cabal cannot map the foreign files to any component of this cradle — which
--- poisons the load of the current file.
-getExtraFilesToLoad :: SessionState -> Maybe FilePath -> FilePath -> SessionM [FilePath]
+-- Only files already known to belong to the same cradle as the current file are
+-- returned. Handing files owned by a different cradle to a multi-component load
+-- makes the build tool fail wholesale — e.g. cabal cannot map the foreign files
+-- to any component of this cradle — which poisons the load of the current file.
+getExtraFilesToLoad :: SessionState -> Maybe FilePath -> FilePath -> IO [FilePath]
 getExtraFilesToLoad state hieYaml cfp = do
-  pendingFiles <- liftIO $ getPendingFiles state
-  errorFiles <- liftIO $ readVar (failedFiles state)
-  old_files <- liftIO $ readVar (loadedFiles state)
+  pendingFiles <- getPendingFiles state
+  errorFiles <- readVar (failedFiles state)
+  old_files <- readVar (loadedFiles state)
   -- if the file is in error loading files, we fall back to single loading mode
   let candidates =
         if cfp `Set.member` errorFiles
           then Set.empty
           -- remove error files from pending files since error loading need to load one by one
           else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
-  filterM (fmap (== hieYaml) . findHieYamlForTarget (filesMap state)) (Set.toList candidates)
+  filterM ownedByThisCradle (Set.toList candidates)
+  where
+    ownedByThisCradle file = do
+      owner <- atomically $ STM.lookup (toNormalizedFilePath' file) (filesMap state)
+      pure $ owner == Just hieYaml
 
 -- | We allow users to specify a loading strategy.
 -- Check whether this config was changed since the last time we have loaded
@@ -1027,7 +1030,7 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
                 <> " (for " <> T.pack lfpLog <> ")"
 
   sessionPref <- asks (sessionLoading . sessionClientConfig)
-  extraToLoads <- getExtraFilesToLoad sessionState hieYaml cfp
+  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState hieYaml cfp
   -- Start loading the file!
   eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
     withTrace "Load cradle" $ \addTag -> do
