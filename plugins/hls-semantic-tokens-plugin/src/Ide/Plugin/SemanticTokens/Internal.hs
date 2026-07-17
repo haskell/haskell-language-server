@@ -34,8 +34,8 @@ import           Development.IDE                          (Action,
                                                            WithPriority,
                                                            cmapWithPrio, define,
                                                            fromNormalizedFilePath,
-                                                           toNormalizedFilePath',
-                                                           hieKind)
+                                                           hieKind,
+                                                           toNormalizedFilePath')
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
 import           Development.IDE.Core.Rules               (toIdeResult)
@@ -44,7 +44,8 @@ import           Development.IDE.Core.Shake               (ShakeExtras (..),
                                                            getShakeExtras,
                                                            getVirtualFile)
 import           Development.IDE.GHC.Compat               hiding (Warning)
-import           Development.IDE.GHC.Compat.Util          (mkFastString, unpackFS)
+import           Development.IDE.GHC.Compat.Util          (mkFastString,
+                                                           unpackFS)
 import           GHC.Iface.Ext.Types                      (HieASTs (getAsts),
                                                            pattern HiePath)
 import           Ide.Logger                               (logWith)
@@ -131,9 +132,10 @@ getSemanticTokensRule recorder =
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
     -- On Windows, 'nfp' contains escaped backslashes \\\\. For files that use
     -- the CPP extension, 'hieAst' contains forward slashes '/', because the C
-    -- preprocessor conflicts with backslashes. We need to "renormalize" it, 
+    -- preprocessor conflicts with backslashes. We need to "renormalize" it,
     -- so both paths have uniform separators
-    ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys (\(HiePath p) -> HiePath . mkFastString . fromNormalizedFilePath . toNormalizedFilePath' $ unpackFS p) $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
+    let renormalize = \(HiePath p) -> HiePath . mkFastString . fromNormalizedFilePath . toNormalizedFilePath' . unpackFS $ p
+    ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys renormalize $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
