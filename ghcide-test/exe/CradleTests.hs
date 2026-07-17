@@ -51,6 +51,7 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "regression.batch" batchLoadRegressionTests
+    ,testGroup "cross-cradle" [crossCradleBatchIsolationTest]
     ,testGroup "multi"   (multiTests "multi")
     ,testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
@@ -395,6 +396,23 @@ regressionNoStaleOutcomesOnRestart dir = do
   changeDoc bdoc
     [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
   assertTypeCheckSuccess bdoc "B should not keep stale failure after cradle restart"
+
+-- | Files loaded by one cradle must not be handed to another cradle's
+-- multi-component load. Here @standalone/Standalone.hs@ is owned by a direct
+-- cradle; once it is loaded, opening @a/A.hs@ (owned by the root cabal cradle)
+-- used to batch the standalone file into @cabal repl@, which cannot map it to
+-- any component and fails wholesale, poisoning the load of A.
+crossCradleBatchIsolationTest :: TestTree
+crossCradleBatchIsolationTest =
+  testCase "direct-cradle-file-does-not-poison-cabal-load" $
+    runWithExtraFilesMultiComponent "cross-cradle" $ \dir -> do
+      let standalonePath = dir </> "standalone/Standalone.hs"
+          aPath = dir </> "a/A.hs"
+      sdoc <- openDoc standalonePath "haskell"
+      assertTypeCheckSuccess sdoc "standalone file (direct cradle) should typecheck"
+      adoc <- openDoc aPath "haskell"
+      assertTypeCheckSuccess adoc
+        "cabal-cradle file should typecheck after a direct-cradle file was loaded"
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: FilePath -> TestTree

@@ -394,6 +394,8 @@ getHieDbLoc dir = do
 -- - The loader processes files from 'pendingFiles', attempting to load them in batches.
 -- - (SBL1) If a file is already in 'failedFiles', it is loaded individually (single-file mode).
 -- - (SBL2) Otherwise, the loader tries to load as many files as possible together (batch mode).
+--   Only files owned by the same cradle (the same @hie.yaml@) as the file being
+--   loaded are batched together; see 'getExtraFilesToLoad'.
 --
 -- On success:
 --   - (SBL3) All successfully loaded files are removed from 'pendingFiles' and 'failedFiles',
@@ -573,18 +575,24 @@ handleSingleFileProcessingError state hieYaml file diags extraDepFiles = liftIO 
 --
 -- If the current file is in error loading files, we fallback to single loading mode (empty set)
 -- Otherwise, we remove error files from pending files and also exclude the current file
-getExtraFilesToLoad :: SessionState -> FilePath -> IO [FilePath]
-getExtraFilesToLoad state cfp = do
-  pendingFiles <- getPendingFiles state
-  errorFiles <- readVar (failedFiles state)
-  old_files <- readVar (loadedFiles state)
+--
+-- Only files that belong to the same cradle as the current file (i.e. resolve
+-- to the same @hie.yaml@) are returned. Handing files owned by a different
+-- cradle to a multi-component load makes the build tool fail wholesale — e.g.
+-- cabal cannot map the foreign files to any component of this cradle — which
+-- poisons the load of the current file.
+getExtraFilesToLoad :: SessionState -> Maybe FilePath -> FilePath -> SessionM [FilePath]
+getExtraFilesToLoad state hieYaml cfp = do
+  pendingFiles <- liftIO $ getPendingFiles state
+  errorFiles <- liftIO $ readVar (failedFiles state)
+  old_files <- liftIO $ readVar (loadedFiles state)
   -- if the file is in error loading files, we fall back to single loading mode
-  return $
-    Set.toList $
-      if cfp `Set.member` errorFiles
-        then Set.empty
-        -- remove error files from pending files since error loading need to load one by one
-        else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  let candidates =
+        if cfp `Set.member` errorFiles
+          then Set.empty
+          -- remove error files from pending files since error loading need to load one by one
+          else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  filterM (fmap (== hieYaml) . findHieYamlForTarget (filesMap state)) (Set.toList candidates)
 
 -- | We allow users to specify a loading strategy.
 -- Check whether this config was changed since the last time we have loaded
@@ -1019,7 +1027,7 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
                 <> " (for " <> T.pack lfpLog <> ")"
 
   sessionPref <- asks (sessionLoading . sessionClientConfig)
-  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState cfp
+  extraToLoads <- getExtraFilesToLoad sessionState hieYaml cfp
   -- Start loading the file!
   eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
     withTrace "Load cradle" $ \addTag -> do
