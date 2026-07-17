@@ -1,0 +1,5 @@
+# Files in this directory are not part of any cabal component; they are owned
+# by their own direct cradle, distinct from the cabal cradle at the root.
+cradle:
+  direct:
+    arguments: []
