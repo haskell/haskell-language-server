@@ -13,7 +13,10 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   hideSymbol,
   liftParseAST,
 
-  wildCardSymbol
+  wildCardSymbol,
+
+  -- * Re-exports
+  balanceCommentsList,
 ) where
 
 import           Control.Monad
