@@ -882,7 +882,10 @@ runSessionWithTestConfig TestConfig{..} session =
                 -- Keep interface files and the hiedb under this test's cache
                 -- directory instead of the shared 'XDG_CACHE_HOME'.
                 , argsGetHieDbLoc = getHieDbLocIn cacheDir
-                , argsSessionLoadingOptions = argsSessionLoadingOptions { getCacheDirs = getCacheDirsIn cacheDir }
+                , argsSessionLoadingOptions = argsSessionLoadingOptions
+                  { getCacheDirs = \prefix mFirstHash opts ->
+                      pure $ getCacheDirsIn cacheDir  prefix mFirstHash opts
+                  }
                 }
 
 -- | Wait for the next progress begin step

@@ -455,9 +455,9 @@ getCacheDirsDefault prefix mFirstHash opts = do
 
 -- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
 -- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
-getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> IO CacheDirs
+getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
 getCacheDirsIn base prefix mFirstHash opts =
-    pure $ cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
+    cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
 
 -- | The per-component cache folder under @base@. See 'getCacheDirsDefault'.
 cacheDirsUnder :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
