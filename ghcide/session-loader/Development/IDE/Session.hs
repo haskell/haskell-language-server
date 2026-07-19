@@ -532,6 +532,11 @@ insertFileMapping :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM
 insertFileMapping state hieYaml ncfp =
   STM.insert hieYaml ncfp (filesMap state)
 
+-- | Same as 'insertFileMapping', but never overwrites an existing value.
+insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMappingIfMissing state hieYaml ncfp =
+  STM.focus (Focus.alter (<|> Just hieYaml)) ncfp (filesMap state)
+
 -- | Remove a file from the pending file set
 removeFromPending :: SessionState -> FilePath -> STM ()
 removeFromPending state file =
@@ -704,14 +709,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     let absolutePathsCradleDeps (eq, deps) = (eq, fmap toAbsolutePath $ Map.keys deps)
     returnWithVersion $ \file -> do
       let absFile = toAbsolutePath file
-      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
+      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
 -- submit a request to the getOptionsLoop to get the options for the file
 -- and wait until the options are available
-lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
-lookupOrWaitCache recorder sessionState absFile = do
+lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> (FilePath -> IO (Maybe FilePath)) -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
+lookupOrWaitCache recorder sessionState cradleLoc absFile = do
   let ncfp = toNormalizedFilePath' absFile
   cacheResult <- maybeM
     (return Nothing)
@@ -729,8 +734,14 @@ lookupOrWaitCache recorder sessionState absFile = do
     Just r -> return r
     Nothing -> do
       -- if not ok, we need to reload the session
-      atomically $ addToPending sessionState absFile
-      lookupOrWaitCache recorder sessionState absFile
+      hieYaml <- cradleLoc absFile
+      atomically $ do
+        -- Insert the mapping into filesMap so the cradle is known up-front.
+        -- This ensures we are able to batch requests belonging to the same
+        -- cradle.
+        insertFileMappingIfMissing sessionState hieYaml ncfp
+        addToPending sessionState absFile
+      lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
 checkInCache sessionState ncfp = runMaybeT $ do
