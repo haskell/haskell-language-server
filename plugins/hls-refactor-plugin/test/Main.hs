@@ -1097,10 +1097,17 @@ removeImportTests = testGroup "remove import actions"
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
+#if !MIN_VERSION_tasty(1,5,4)
+-- tasty 1.5.4 renamed 'sequentialTestGroup' to 'dependentTestGroup'; supply the
+-- new name on the older tasty that stackage LTS snapshots still ship.
+dependentTestGroup :: TestName -> DependencyType -> [TestTree] -> TestTree
+dependentTestGroup = sequentialTestGroup
+#endif
+
 extendImportTests :: TestTree
-extendImportTests = testGroup "extend import actions"
-  [ testGroup "with checkAll" $ tests True
-  , testGroup "without checkAll" $ tests False
+extendImportTests = dependentTestGroup "extend import actions" AllFinish
+  [ dependentTestGroup "with checkAll" AllFinish $ tests True
+  , dependentTestGroup "without checkAll" AllFinish $ tests False
   ]
   where
     tests overrideCheckProject =
@@ -2167,10 +2174,12 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
 
 suggestHideShadowTests :: TestTree
 suggestHideShadowTests =
-  testGroup
+  dependentTestGroup
     "suggest hide shadow"
-    [ testGroup
+    AllFinish
+    [ dependentTestGroup
         "single"
+        AllFinish
         [ testOneCodeAction
             "hide unused"
             "Hide on from Data.Function"
@@ -2237,8 +2246,9 @@ suggestHideShadowTests =
             , "f on = on"
             ]
         ]
-    , testGroup
+    , dependentTestGroup
         "multi"
+        AllFinish
         [ testOneCodeAction
             "hide from B"
             "Hide ++ from B"

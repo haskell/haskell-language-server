@@ -242,7 +242,7 @@ linkToTests =
         { testPluginDescriptor = dummyPlugin
         , testDirLocation = Right (mkIdeTestFs [copyDir "hover"])
         , testConfigCaps = lspTestCaps
-        , testShiftRoot = True
+        , testCwdHandling = NoCwdShift
         , testLspConfig = lspConf
         }
     hoverCheck pos fp expects = do

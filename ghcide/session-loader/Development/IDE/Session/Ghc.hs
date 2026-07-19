@@ -253,7 +253,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
     where
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
-          args <- liftIO $ expandResponse [f]
+          args <- liftIO $ expandResponse [rebaseResponseFile compRoot f]
           -- The reponse files may contain arguments like "+RTS",
           -- and hie-bios doesn't expand the response files of @-unit@ arguments.
           -- Thus, we need to do the stripping here.
@@ -295,6 +295,13 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
               dflags''
         return (HomeUnitConfig dflags''' targets mHash)
+
+-- | Rebase a relative @file response-file arg onto the component root, since
+-- 'expandResponse' would otherwise resolve it against the process CWD.
+rebaseResponseFile :: FilePath -> String -> String
+rebaseResponseFile root arg = case arg of
+  '@' : path -> '@' : toAbsolute root path
+  _          -> arg
 
 addComponentInfo ::
   MonadUnliftIO m =>
@@ -450,9 +457,20 @@ setCacheDirs recorder CacheDirs{..} dflags = do
 -- keeping the path short and clean.
 getCacheDirsDefault :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
 getCacheDirsDefault prefix mFirstHash opts = do
-    dir <- Just <$> getXdgDirectory XdgCache (cacheDir </> prefix' ++ "-" ++ opts_hash)
-    return $ CacheDirs dir dir dir
+    base <- getXdgDirectory XdgCache cacheDir
+    pure $ cacheDirsUnder base prefix mFirstHash opts
+
+-- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
+-- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
+getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> IO CacheDirs
+getCacheDirsIn base prefix mFirstHash opts =
+    pure $ cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
+
+-- | The per-component cache folder under @base@, see Note [Avoiding bad interface files].
+cacheDirsUnder :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
+cacheDirsUnder base prefix mFirstHash opts = CacheDirs dir dir dir
     where
+        dir = Just (base </> prefix' ++ "-" ++ opts_hash)
         -- Create a unique folder per set of different GHC options.
         prefix' = if isJust mFirstHash then "main" else prefix
         basectx = case mFirstHash of

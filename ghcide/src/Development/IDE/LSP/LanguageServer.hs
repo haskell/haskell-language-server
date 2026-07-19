@@ -112,6 +112,8 @@ data ServerLifecycleContext config = ServerLifecycleContext
     -- ^ Logger for recording server events and diagnostics
   , ctxDefaultRoot :: FilePath
     -- ^ Default root directory for the workspace, see Note [Root Directory]
+  , ctxDisableInitialCwdShift :: Bool
+    -- ^ Skip the init-time setCurrentDirectory so in-process test servers can run in parallel, see Note [Root Directory]
   , ctxGetHieDbLoc :: FilePath -> IO FilePath
     -- ^ Function to determine the HIE database location for a given root path
   , ctxGetIdeState :: LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState
@@ -191,12 +193,13 @@ setupLSP ::
      forall config.
      Recorder (WithPriority Log)
   -> FilePath -- ^ root directory, see Note [Root Directory]
+  -> Bool -- ^ disable the initial setCurrentDirectory to the rootUri (for parallel in-process tests)
   -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> FilePath -> WithHieDb -> ThreadQueue -> IO IdeState)
   -> MVar ()
   -> IO (Setup config (ServerM config) IdeState)
-setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar = do
+setupLSP recorder defaultRoot disableInitialCwdShift getHieDbLoc userHandlers getIdeState clientMsgVar = do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
   clientMsgChan :: Chan ReactorMessage <- newChan
@@ -254,6 +257,7 @@ setupLSP recorder defaultRoot getHieDbLoc userHandlers getIdeState clientMsgVar 
   let lifecycleCtx = ServerLifecycleContext
         { ctxRecorder = recorder
         , ctxDefaultRoot = defaultRoot
+        , ctxDisableInitialCwdShift = disableInitialCwdShift
         , ctxGetHieDbLoc = getHieDbLoc
         , ctxGetIdeState = getIdeState
         , ctxUntilReactorStopSignal = untilReactorStopSignal
@@ -285,7 +289,11 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
       untilReactorStopSignal = ctxUntilReactorStopSignal lifecycleCtx
       lifetimeConfirm = ctxConfirmReactorShutdown lifecycleCtx
     root <- case LSP.resRootPath env of
-      Just lspRoot | lspRoot /= defaultRoot -> setCurrentDirectory lspRoot >> return lspRoot
+      -- Skip the CWD shift under the test harness so in-process servers can run
+      -- in parallel. See Note [Root Directory].
+      Just lspRoot | lspRoot /= defaultRoot -> do
+        unless (ctxDisableInitialCwdShift lifecycleCtx) $ setCurrentDirectory lspRoot
+        return lspRoot
       _ -> pure defaultRoot
     dbLoc <- ctxGetHieDbLoc lifecycleCtx root
     let initConfig = parseConfiguration params

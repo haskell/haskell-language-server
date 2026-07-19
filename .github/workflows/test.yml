@@ -110,7 +110,8 @@ jobs:
           os: ${{ runner.os }}
 
       - name: Build
-        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} all
+        # --semaphore (GHC -jsem) needs GHC >= 9.8, so skip it on 9.6.
+        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} --jobs ${{ matrix.ghc != '9.6' && '--semaphore' || '' }} all
 
       - name: Set test options
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
@@ -118,6 +119,13 @@ jobs:
         # same package.
         run: |
           cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
+
+      - if: matrix.os == 'windows-latest'
+        name: Run tests serially on Windows
+        # Windows runners are too slow to parallelise: concurrent in-process
+        # sessions starve each other into lsp-test message timeouts. Serialise
+        # the tests only -- builds keep their numProcessors/2 capabilities.
+        run: echo "GHCIDE_TEST_TASTY_THREADS=1" >> "$GITHUB_ENV"
 
       - if: matrix.test
         name: Test hls-graph
