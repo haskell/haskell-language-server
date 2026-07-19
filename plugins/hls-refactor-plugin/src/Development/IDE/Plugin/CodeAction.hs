@@ -156,7 +156,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
     let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    allDiags <- atomically  $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
+    allDiags <- atomically $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       textContents = fmap Rope.toText contents
@@ -303,6 +303,9 @@ liftEither :: Monad m => Either e a -> MaybeT m a
 liftEither (Left _)  = mzero
 liftEither (Right x) = return x
 
+tcMessageFd :: FileDiagnostic -> Maybe TcRnMessage
+tcMessageFd fd = fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+
 -------------------------------------------------------------------------------------------------
 
 findSigOfDecl :: p ~ GhcPass p0 => (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
@@ -385,13 +388,13 @@ findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
 suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> FileDiagnostic -> [(T.Text, [Either TextEdit Rewrite])]
-suggestHideShadow ps fileContents mTcM mHar FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range=_range,_message=_message}}
-  | Just (TcRnShadowedName occname (ShadowedNameProvenanceGlobal gres)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage,
-    identifier <- printOutputable $ occname,
-    imps <- [(printOutputable $ importSpecModule mod,importSpecLoc mod) | GRE{ gre_imp = iss } <- gres,mod <- iss],
+suggestHideShadow ps fileContents mTcM mHar fd@FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
+  | Just (TcRnShadowedName occname (ShadowedNameProvenanceGlobal gres)) <- tcMessageFd fd ,
+    identifier <- printOutputable occname,
+    imps <- [(printOutputable $ importSpecModule modl,importSpecLoc modl) | GRE{ gre_imp = iss } <- gres,modl <- iss],
     result@(_:_) <- nubOrdBy (compare `on` fst) $ imps >>= uncurry (suggests identifier),
-    hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
-     (result <> [hideAll])
+    hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result)
+    = result <> [hideAll]
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = ps
@@ -476,15 +479,15 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
           _                -> [binding]
 #else
 suggestRemoveRedundantImport _ contents
-  FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range}}
-    | Just (TcRnUnusedImport impDecl (UnusedImportSome names)) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+  fd@FileDiagnostic{fdLspDiagnostic=Diagnostic{_range}}
+    | Just (TcRnUnusedImport impDecl (UnusedImportSome names)) <- tcMessageFd fd
       , Just c <- contents
       , let bindings = names >>= bindingsInImp
       , ranges <- map (rangesForBindingImport impDecl . T.unpack) bindings
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
       = [( "Remove " <> T.intercalate ", " (pprBinding <$> names) <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
-    | Just (TcRnUnusedImport _ UnusedImportNone) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage =
+    | Just (TcRnUnusedImport _ UnusedImportNone) <- tcMessageFd fd =
       [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
     where
@@ -597,14 +600,14 @@ caRemoveInvalidExports m contents allDiags contextRange uri
         _changeAnnotations = Nothing
 
 suggestRemoveRedundantExport :: ParsedModule -> FileDiagnostic -> Maybe (T.Text, [Range])
-suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{..}}
-    | mod <-  fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage >>= unnecessaryExportModule
+suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} fd@FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
+    | modl <-  (tcMessageFd fd) >>= unnecessaryExportModule
   , msg <- unifySpaces _message
   , Just export <- hsmodExports
   , Just exportRange <- getLocatedRange export
   , exports <- unLoc export
   , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
-                         <|>  (,[_range]) <$> mod
+                         <|>  (,[_range]) <$> modl
   , subRange _range exportRange
     = Just ("Remove ‘" <> removeFromExport <> "’ from export", ranges)
   where
@@ -612,6 +615,7 @@ suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} F
       []     -> (txt, [_range])
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
+
 unnecessaryExportModule :: TcRnMessage -> Maybe T.Text
 unnecessaryExportModule (TcRnDupeModuleExport (ModuleName mod))       = Just $ T.pack $ "Module " <> unpackFS mod
 unnecessaryExportModule (TcRnExportedModNotImported (ModuleName mod)) = Just $ T.pack $ "Module " <> unpackFS mod
@@ -757,8 +761,8 @@ suggestDeleteUnusedBinding
 
 unusedName :: FileDiagnostic -> Maybe T.Text
 #if MIN_VERSION_ghc(9,7,0)
-unusedName FileDiagnostic{fdStructuredMessage} = do
-  (TcRnUnusedName name _reason) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+unusedName fd = do
+  (TcRnUnusedName name _reason) <- tcMessageFd fd
   return $ printOutputable name
 #else
 unusedName FileDiagnostic{fdLspDiagnostic=Diagnostic{_message}} = do
@@ -812,12 +816,12 @@ getLocatedRange = srcSpanToRange . getLoc
 
 suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> FileDiagnostic -> [(T.Text, [TextEdit])]
 #if MIN_VERSION_ghc(9,7,0)
-suggestAddTypeAnnotationToSatisfyConstraints _ FileDiagnostic{fdStructuredMessage,fdLspDiagnostic=Diagnostic{_range,_message}}
-    | Just (TcRnWarnDefaulting cts _ typ ) <- fdStructuredMessage ^?  _SomeStructuredMessage. msgEnvelopeErrorL . _TcRnMessage
+suggestAddTypeAnnotationToSatisfyConstraints _ fd@FileDiagnostic{fdLspDiagnostic=Diagnostic{_range,_message}}
+    | Just (TcRnWarnDefaulting cts _ typ ) <- (tcMessageFd fd)
     , ((lit,ct):_) <- [(lit , x) |   x <- cts, LiteralOrigin lit <- [ctOrigin x]]
     , typ <- printOutputable typ
     , lit <- printOutputable lit
-    = codeEdit (realSrcSpanToRange$ getCtLocEnvLoc $ ctl_env $ ctLoc ct) typ lit (makeAnnotatedLit typ lit)
+    = codeEdit (realSrcSpanToRange $ getCtLocEnvLoc $ ctl_env $ ctLoc ct) typ lit (makeAnnotatedLit typ lit)
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
