@@ -450,9 +450,20 @@ setCacheDirs recorder CacheDirs{..} dflags = do
 -- keeping the path short and clean.
 getCacheDirsDefault :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
 getCacheDirsDefault prefix mFirstHash opts = do
-    dir <- Just <$> getXdgDirectory XdgCache (cacheDir </> prefix' ++ "-" ++ opts_hash)
-    return $ CacheDirs dir dir dir
+    base <- getXdgDirectory XdgCache cacheDir
+    pure $ cacheDirsUnder base prefix mFirstHash opts
+
+-- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
+-- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
+getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
+getCacheDirsIn base prefix mFirstHash opts =
+    cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
+
+-- | The per-component cache folder under @base@. See 'getCacheDirsDefault'.
+cacheDirsUnder :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
+cacheDirsUnder base prefix mFirstHash opts = CacheDirs dir dir dir
     where
+        dir = Just (base </> prefix' ++ "-" ++ opts_hash)
         -- Create a unique folder per set of different GHC options.
         prefix' = if isJust mFirstHash then "main" else prefix
         basectx = case mFirstHash of

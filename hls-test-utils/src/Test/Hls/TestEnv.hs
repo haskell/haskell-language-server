@@ -7,13 +7,18 @@ module Test.Hls.TestEnv
   , LspTimeout(..)
   , hlsTestOptions
   , wrapCliTestOptions
+  , getTestRootDir
   ) where
 
 import           Control.Monad      (guard)
 import           Data.Data          (Proxy (..))
 import           Data.Foldable      (traverse_)
 import           Data.Maybe         (catMaybes)
+import           System.Directory   (createDirectoryIfMissing,
+                                     getTemporaryDirectory, makeAbsolute,
+                                     removePathForcibly)
 import           System.Environment (lookupEnv, setEnv, unsetEnv)
+import           System.FilePath    ((</>))
 import           Test.Tasty         (TestTree, askOption, withResource)
 import           Test.Tasty.Options (IsOption (defaultValue, optionCLParser, optionHelp, optionName, parseValue),
                                      OptionDescription (..), flagCLParser,
@@ -92,7 +97,37 @@ wrapCliTestOptions tree =
             , ("HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP", "1") <$ guard harnessNoTestdirCleanup
             , ("LSP_TIMEOUT",) . show                      <$> timeout
             ]
-    in withResource (setOverrides overrides) restoreEnvs (const tree)
+    in withRunEnv overrides tree
+
+-- | Root directory for all test files. Honours 'HLS_TEST_ROOTDIR', else the
+-- system temp directory.
+getTestRootDir :: IO FilePath
+getTestRootDir = do
+  mRootDir <- lookupEnv "HLS_TEST_ROOTDIR"
+  makeAbsolute =<< case mRootDir of
+    Just rootDir -> pure rootDir
+    Nothing      -> (</> "hls-test-root") <$> getTemporaryDirectory
+
+-- | Apply the per-run environment around the wrapped tests, then restore it and
+-- drop the hie-bios cache.
+--
+-- NB: Needs to be applied once, before any test thread starts, because mutating
+-- the process environment is inherently thread-unsafe.
+withRunEnv :: [(String, String)] -> TestTree -> TestTree
+withRunEnv overrides tree = withResource acquire release (const tree)
+  where
+    acquire = do
+      saved <- setOverrides overrides
+      hieBiosCacheDir <- (</> "hie-bios") <$> getTestRootDir
+      createDirectoryIfMissing True hieBiosCacheDir
+      -- TODO: Until the following PR is merged, tests cannot run concurrently
+      -- using this single directory: https://github.com/haskell/hie-bios/pull/520
+      savedHieBios <- setOverrides [("HIE_BIOS_CACHE_DIR", hieBiosCacheDir)]
+      pure (saved ++ savedHieBios, hieBiosCacheDir)
+
+    release (saved, hieBiosCacheDir) = do
+      restoreEnvs saved
+      removePathForcibly hieBiosCacheDir
 
 setOverrides :: [(String, String)] -> IO [(String, Maybe String)]
 setOverrides = traverse $ \(k, v) -> do

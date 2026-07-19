@@ -9,6 +9,7 @@ module Development.IDE.Session
   ,loadSessionWithOptions
   ,getInitialGhcLibDirDefault
   ,getHieDbLoc
+  ,getHieDbLocIn
   ,retryOnSqliteBusy
   ,retryOnException
   ,SessionLoaderPendingBarrierVar(..)
@@ -380,11 +381,17 @@ runWithDb recorder fp = ContT $ \k -> do
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
+  cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
+  getHieDbLocIn cDir dir
+
+-- | Like 'getHieDbLoc', but roots the database under @base@ instead of
+-- @XDG_CACHE_HOME@.
+getHieDbLocIn :: FilePath -> FilePath -> IO FilePath
+getHieDbLocIn base dir = do
   let db = intercalate "-" [dirHash, takeBaseName dir, Compat.ghcVersionStr, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
-  cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
-  createDirectoryIfMissing True cDir
-  pure (cDir </> db)
+  createDirectoryIfMissing True base
+  pure (base </> db)
 
 -- Note [SessionState and batch load]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
