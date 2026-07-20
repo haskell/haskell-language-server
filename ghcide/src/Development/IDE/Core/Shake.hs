@@ -126,6 +126,7 @@ import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
+import           Development.IDE.Core.RuleInput        (IsInput, RuleInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
@@ -530,6 +531,7 @@ mappingForVersion _ _ _ = pure zeroMapping
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
   , Shake.ShakeValue k
+  , IsInput (RuleInput k)
   , Show v
   , Typeable v
   , NFData v
