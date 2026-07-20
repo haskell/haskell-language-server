@@ -1,4 +1,4 @@
-cabal-version:      3.4
+cabal-version:      3.14
 category:           Development
 name:               haskell-language-server
 version:            2.14.0.0
@@ -15,9 +15,10 @@ license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
 tested-with:        GHC == {9.14.1, 9.12.2, 9.10.3, 9.8.4, 9.6.7}
-extra-source-files:
+extra-doc-files:
   README.md
   ChangeLog.md
+extra-files:
   test/testdata/**/*.project
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
