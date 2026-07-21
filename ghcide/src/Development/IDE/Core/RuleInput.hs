@@ -16,13 +16,15 @@ module Development.IDE.Core.RuleInput
     , SomeHaskellInput
     , CabalInput
     , SomeFileInput
-    , NoInput
+    , NoInput(..)
     , SomeInput
     , IsInput(..)
     , fileInputFingerprint
     , isHaskellFilePath
     , isDependencyHaskellPath
+    , IsFileInput
     , someInputFilePath
+    , someInputFilePath'
     , toProjectHaskellInput
     , toNonProjectHaskellInput
     , toCabalInput
