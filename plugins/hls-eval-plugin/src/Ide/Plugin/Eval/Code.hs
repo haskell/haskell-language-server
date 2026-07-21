@@ -117,7 +117,7 @@ execStmtCaptureResult ::
 execStmtCaptureResult recorder stmt opts = do
     (result, (output, execResultE)) <-
       withCaptureResult recorder $
-        withCaptureStdHandles opts $
+        withCaptureStdHandles recorder opts $
            gStrictTry (execStmt stmt opts)
     case execResultE of
       Left exc ->
@@ -146,16 +146,19 @@ execStmtCaptureResult recorder stmt opts = do
       where
         trimmed = dropWhileEnd (== '\n') output
 
--- 'System.IO.Extra.withTempFile' is specialized to 'IO'.
+-- | Provide a fresh temporary file, removed once @k@ returns.
+-- ('System.IO.Extra.withTempFile' is specialized to 'IO'.)
+withTempFile_ :: (MonadIO m, MonadMask m) => (FilePath -> m b) -> m b
+withTempFile_ k =
+    bracket (liftIO newTempFile) (liftIO . snd) (k . fst)
+
+-- | Like 'withTempFile_', but also read the file's contents back once @k@
+-- | returns.
 withTempFile :: (MonadIO m, MonadMask m) => (FilePath -> m b) -> m (String, b)
-withTempFile k = do
-    bracket
-      (liftIO newTempFile)
-      (\(_, purgeTempFile) -> liftIO purgeTempFile)
-      (\(tempFile, _) -> do
-        r <- k tempFile
-        o <- liftIO $ readFile' tempFile
-        pure (o, r))
+withTempFile k = withTempFile_ $ \tempFile -> do
+    r <- k tempFile
+    o <- liftIO $ readFile' tempFile
+    pure (o, r)
 
 -- | Capture the value the statement evaluates to (printed by GHCi via the
 -- interactive print function) by writing it to a temporary file.
@@ -187,31 +190,74 @@ withCaptureResult recorder action = withTempFile $ \resultTemp -> do
 -- may leak. base provides no per-thread standard handles, so this is
 -- unavoidable with this approach.
 withCaptureStdHandles ::
-     ExecOptions
+     Recorder (WithPriority Log)
+  -> ExecOptions
   -> Ghc a
   -> Ghc (String, a)
-withCaptureStdHandles opts action = withTempFile $ \outputTemp -> do
+withCaptureStdHandles recorder opts action =
+    -- @outputTemp@ collects the captured @stdout@/@stderr@; its contents are the
+    -- returned 'String'. @inputTemp@ is a separate, empty file standing in for
+    -- @stdin@: redirecting from it (rather than closing @stdin@) means reads in
+    -- the evaluated code hit EOF immediately -- as if the program were run with
+    -- @< /dev/null@ -- instead of raising "handle is closed". This is portable
+    -- (no @/dev/null@/@NUL@ path) and keeps @stdin@ open so 'captureTeardown'
+    -- can restore it cleanly.
+    withTempFile  $ \outputTemp ->
+    withTempFile_ $ \inputTemp ->
+    withRedirectedStdHandles recorder opts outputTemp inputTemp action
+
+-- | Redirect the interpreted standard handles ('captureSetup') around @action@,
+-- restoring them ('captureTeardown') no matter how it terminates.
+withRedirectedStdHandles ::
+     Recorder (WithPriority Log)
+  -> ExecOptions
+  -> FilePath  -- ^ File the interpreted @stdout@/@stderr@ are written to.
+  -> FilePath  -- ^ File the interpreted @stdin@ is read from.
+  -> Ghc a
+  -> Ghc a
+withRedirectedStdHandles recorder opts outputTemp inputTemp action =
     bracket
-      (execStmt (captureSetup outputTemp) opts)
-      -- Restore the handles no matter how the statement terminated.
-      (\_ -> execStmt captureTeardown opts)
+      (execStmtCheck recorder "capture setup" (captureSetup outputTemp inputTemp) opts)
+      (\_ -> execStmtCheck recorder "capture teardown" captureTeardown opts)
       (\_ -> action)
 
--- Open a temporary file and redirect the interpreted @stdout@/@stderr@ to
--- it, saving the original handles in interactive bindings so 'captureTeardown'
--- can restore them. Bound to a tuple (rather than evaluated as a bare
--- expression) so GHCi does not pass it to the interactive print function.
-captureSetup :: FilePath -> String
+-- | Run an internal handle-redirection statement (capture setup/teardown) and
+-- log on failure.
+execStmtCheck ::
+     Recorder (WithPriority Log)
+  -> String
+  -> String
+  -> ExecOptions
+  -> Ghc ()
+execStmtCheck recorder phase stmt opts = do
+    result <- execStmt stmt opts
+    case result of
+      ExecComplete (Left err) _ ->
+        logWith recorder Log.Warning $ LogEvalCaptureStdHandles phase (show err)
+      _ -> pure ()
+
+-- | Capture setup
+--
+-- Redirect the interpreted @stdout@/@stderr@ to a temporary file.
+--
+-- Redirect @stdin@ from an (empty) @inputTemp@ file.
+--
+-- The original handles are saved in interactive bindings so 'captureTeardown'
+-- can restore them.
+captureSetup :: FilePath -> FilePath -> String
 -- Squeeze into one line (executed by GHCi).
-captureSetup outputTemp = unwords
-    [ "(__hls_captureHandle, __hls_savedStdout, __hls_savedStderr) <- do {"
-    , "  __hls_h <- System.IO.openFile", show outputTemp, "System.IO.WriteMode;"
-    , "  System.IO.hSetBuffering __hls_h System.IO.LineBuffering;"
-    , "  __hls_o <- GHC.IO.Handle.hDuplicate System.IO.stdout;"
-    , "  __hls_e <- GHC.IO.Handle.hDuplicate System.IO.stderr;"
-    , "  GHC.IO.Handle.hDuplicateTo __hls_h System.IO.stdout;"
-    , "  GHC.IO.Handle.hDuplicateTo __hls_h System.IO.stderr;"
-    , "  P.return (__hls_h, __hls_o, __hls_e);"
+captureSetup outputTemp inputTemp = unwords
+    [ "(__hls_captureOut, __hls_captureIn, __hls_stdout, __hls_stderr, __hls_stdin) <- do {"
+    , "  __hls_co <- System.IO.openFile", show outputTemp, "System.IO.WriteMode;"
+    , "  System.IO.hSetBuffering __hls_co System.IO.LineBuffering;"
+    , "  __hls_ci <- System.IO.openFile", show inputTemp, "System.IO.ReadMode;"
+    , "  __hls_so <- GHC.IO.Handle.hDuplicate System.IO.stdout;"
+    , "  __hls_se <- GHC.IO.Handle.hDuplicate System.IO.stderr;"
+    , "  __hls_si <- GHC.IO.Handle.hDuplicate System.IO.stdin;"
+    , "  GHC.IO.Handle.hDuplicateTo __hls_co System.IO.stdout;"
+    , "  GHC.IO.Handle.hDuplicateTo __hls_co System.IO.stderr;"
+    , "  GHC.IO.Handle.hDuplicateTo __hls_ci System.IO.stdin;"
+    , "  P.return (__hls_co, __hls_ci, __hls_so, __hls_se, __hls_si);"
     , "  }"
     ]
 
@@ -223,11 +269,15 @@ captureTeardown = unwords
     [ "__hls_restored <- do {"
     , "  System.IO.hFlush System.IO.stdout;"
     , "  System.IO.hFlush System.IO.stderr;"
-    , "  GHC.IO.Handle.hDuplicateTo __hls_savedStdout System.IO.stdout;"
-    , "  GHC.IO.Handle.hDuplicateTo __hls_savedStderr System.IO.stderr;"
-    , "  System.IO.hClose __hls_savedStdout;"
-    , "  System.IO.hClose __hls_savedStderr;"
-    , "  System.IO.hClose __hls_captureHandle;"
+    -- stdin is an input handle, so it has nothing to flush.
+    , "  GHC.IO.Handle.hDuplicateTo __hls_stdout System.IO.stdout;"
+    , "  GHC.IO.Handle.hDuplicateTo __hls_stderr System.IO.stderr;"
+    , "  GHC.IO.Handle.hDuplicateTo __hls_stdin  System.IO.stdin;"
+    , "  System.IO.hClose __hls_stdout;"
+    , "  System.IO.hClose __hls_stderr;"
+    , "  System.IO.hClose __hls_stdin;"
+    , "  System.IO.hClose __hls_captureOut;"
+    , "  System.IO.hClose __hls_captureIn;"
     , "  }"
     ]
 
