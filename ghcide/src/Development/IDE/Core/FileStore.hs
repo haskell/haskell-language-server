@@ -41,6 +41,9 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
+import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
+                                                               SomeFileInput,
+                                                               toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
@@ -95,7 +98,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule :: Recorder (WithPriority Log) -> (SomeFileInput -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
@@ -104,7 +107,7 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
         ShakeExtras{lspEnv} <- getShakeExtras
         case lspEnv of
             Just env -> fmap Just $ liftIO $ LSP.runLspT env $
-                registerFileWatches [fromNormalizedFilePath f]
+                registerFileWatches [fromNormalizedFilePath (inputFilePath f)]
             Nothing -> pure $ Just False
 
 
@@ -114,12 +117,13 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedFilePath
+  -> SomeFileInput
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl missingFileDiags file = do
-    let file' = fromNormalizedFilePath file
+    let srcPath = inputFilePath file
+        file' = fromNormalizedFilePath srcPath
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
-    mbVf <- getVirtualFile file
+    mbVf <- getVirtualFile srcPath
     case mbVf of
         Just (virtualFileVersion -> ver) -> do
             alwaysRerun
@@ -131,7 +135,7 @@ getModificationTimeImpl missingFileDiags file = do
                         -- but also need a dependency on IsFileOfInterest to reinstall
                         -- alwaysRerun when the file becomes VFS
                     void (use_ IsFileOfInterest file)
-                else if isInterface file
+                else if isInterface srcPath
                     then -- interface files are tracked specially using the closed world assumption
                         pure ()
                     else -- in all other cases we will need to freshly check the file system
@@ -141,21 +145,22 @@ getModificationTimeImpl missingFileDiags file = do
                 `catch` \(e :: IOException) -> do
                     let err | isDoesNotExistError e = "File does not exist: " ++ file'
                             | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                        diag = ideErrorText file (T.pack err)
+                        diag = ideErrorText srcPath (T.pack err)
                     if isDoesNotExistError e && not missingFileDiags
                         then return (Nothing, ([], Nothing))
                         else return (Nothing, ([diag], Nothing))
 
 
 getPhysicalModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
-getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetPhysicalModificationTime file ->
-    getPhysicalModificationTimeImpl file
+getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetPhysicalModificationTime input ->
+    getPhysicalModificationTimeImpl input
 
 getPhysicalModificationTimeImpl
-  :: NormalizedFilePath
+  :: SomeFileInput
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getPhysicalModificationTimeImpl file = do
-    let file' = fromNormalizedFilePath file
+    let srcPath = inputFilePath file
+        file' = fromNormalizedFilePath srcPath
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
 
     alwaysRerun
@@ -164,7 +169,7 @@ getPhysicalModificationTimeImpl file = do
         `catch` \(e :: IOException) -> do
             let err | isDoesNotExistError e = "File does not exist: " ++ file'
                     | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                diag = ideErrorText file (T.pack err)
+                diag = ideErrorText srcPath (T.pack err)
             if isDoesNotExistError e
                 then return (Nothing, ([], Nothing))
                 else return (Nothing, ([diag], Nothing))
@@ -208,13 +213,14 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedFilePath
+    :: SomeFileInput
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
+    let srcPath = inputFilePath file
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
-        mbVirtual <- getVirtualFile file
+        mbVirtual <- getVirtualFile srcPath
         pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
@@ -234,12 +240,12 @@ getFileModTimeContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
-getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents :: SomeFileInput -> Action (Maybe Rope)
 getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
 getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+    join <$> traverse (getFileContents . toSomeFileInput) (uriToNormalizedFilePath uri)
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -256,7 +262,7 @@ getVersionedTextDoc doc = do
         Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> (SomeFileInput -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
     getPhysicalModificationTimeRule recorder

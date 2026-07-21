@@ -19,11 +19,11 @@ module Development.IDE.Core.RuleInput
     , NoInput(..)
     , SomeInput
     , IsInput(..)
+    , reclassifyInput
     , fileInputFingerprint
     , isHaskellFilePath
     , isDependencyHaskellPath
-    , IsFileInput
-    , someInputFilePath
+    , IsFileInput(..)
     , someInputFilePath'
     , toProjectHaskellInput
     , toNonProjectHaskellInput
@@ -107,6 +107,11 @@ instance IsInput SomeInput where
     fromInput = Just
     inputFingerprint (SomeInput i) = inputFingerprint i
 
+-- | Reinterpret an input as another typed input when they have a compatible
+-- fingerprint.
+reclassifyInput :: (IsInput i, IsInput j) => i -> Maybe j
+reclassifyInput = fromInput . toInput
+
 -- RuleInput : NoInput
 -- | A valid Rule Input that has no file associated with it.
 data NoInput = NoInput
@@ -115,12 +120,16 @@ instance Hashable NoInput
 instance NFData NoInput
 
 instance IsInput NoInput where
+    fromInput input = case inputFingerprint input of
+        InputNoFile -> Just NoInput
+        _ -> Nothing
+    inputFingerprint :: NoInput -> InputFingerprint
     inputFingerprint _ = InputNoFile
 
 -- RuleInput : IsFileInput and SomeFileInput
 -- | A Rule Input that has some file (Haskell, cabal etc.) associated with it.
 class IsInput i => IsFileInput i where
-    fileInputPath :: i -> NormalizedFilePath
+    inputFilePath :: i -> NormalizedFilePath
 
 data SomeFileInput
     = SomeFileHaskellInput SomeHaskellInput
@@ -138,19 +147,21 @@ instance Show SomeFileInput where
 instance NFData SomeFileInput
 
 instance IsInput SomeFileInput where
+    fromInput input = toSomeFileInput <$> someInputFilePathMaybe input
     inputFingerprint = fileInputFingerprint
 instance IsFileInput SomeFileInput where
-    fileInputPath (SomeFileHaskellInput input) = fileInputPath input
-    fileInputPath (SomeFileCabalInput input) = fileInputPath input
-    fileInputPath (SomeFileNormalizedFilePath input) = fileInputPath input
+    inputFilePath (SomeFileHaskellInput input) = inputFilePath input
+    inputFilePath (SomeFileCabalInput input) = inputFilePath input
+    inputFilePath (SomeFileNormalizedFilePath input) = inputFilePath input
 instance IsInput NormalizedFilePath where
+    fromInput = someInputFilePathMaybe
     inputFingerprint = InputFile
 instance IsFileInput NormalizedFilePath where
-    fileInputPath = id
+    inputFilePath = id
 
 -- | Fingerprint a file input by its normalized file path.
 fileInputFingerprint :: IsFileInput i => i -> InputFingerprint
-fileInputFingerprint input = InputFile (fileInputPath input)
+fileInputFingerprint input = InputFile (inputFilePath input)
 
 -- RuleInput : CabalInput
 -- | Leaf Type which represents a cabal file.
@@ -160,9 +171,10 @@ instance Hashable CabalInput
 instance NFData CabalInput
 
 instance IsInput CabalInput where
+    fromInput input = someInputFilePathMaybe input >>= toCabalInput
     inputFingerprint = fileInputFingerprint
 instance IsFileInput CabalInput where
-  fileInputPath (CabalInput path) = path
+  inputFilePath (CabalInput path) = path
 
 -- RuleInput : IsHaskellInput and SomeHaskellInput
 -- | Mark an input as a validated Haskell source file input.
@@ -183,10 +195,11 @@ instance Show SomeHaskellInput where
 instance NFData SomeHaskellInput
 
 instance IsInput SomeHaskellInput where
+    fromInput input = someInputFilePathMaybe input >>= toSomeHaskellInput
     inputFingerprint = fileInputFingerprint
 instance IsFileInput SomeHaskellInput where
-  fileInputPath (SomeProjectHaskellInput input) = fileInputPath input
-  fileInputPath (SomeNonProjectHaskellInput input) = fileInputPath input
+  inputFilePath (SomeProjectHaskellInput input) = inputFilePath input
+  inputFilePath (SomeNonProjectHaskellInput input) = inputFilePath input
 
 instance IsHaskellInput SomeHaskellInput
 -- RuleInput : ProjectHaskellInput
@@ -197,9 +210,10 @@ instance Hashable ProjectHaskellInput
 instance NFData ProjectHaskellInput
 
 instance IsInput ProjectHaskellInput where
+    fromInput input = someInputFilePathMaybe input >>= toProjectHaskellInput
     inputFingerprint = fileInputFingerprint
 instance IsFileInput ProjectHaskellInput where
-  fileInputPath (ProjectHaskellInput path) = path
+  inputFilePath (ProjectHaskellInput path) = path
 
 instance IsHaskellInput ProjectHaskellInput
 -- RuleInput : NonProjectHaskellInput
@@ -210,9 +224,10 @@ instance Hashable NonProjectHaskellInput
 instance NFData NonProjectHaskellInput
 
 instance IsInput NonProjectHaskellInput where
+    fromInput input = someInputFilePathMaybe input >>= toNonProjectHaskellInput
     inputFingerprint = fileInputFingerprint
 instance IsFileInput NonProjectHaskellInput where
-  fileInputPath (NonProjectHaskellInput path) = path
+  inputFilePath (NonProjectHaskellInput path) = path
 
 instance IsHaskellInput NonProjectHaskellInput
 
@@ -233,9 +248,9 @@ isProjectHaskellInput fp = isHaskellFilePath fp && not (isDependencyHaskellPath 
 isDependencyHaskellPath :: NormalizedFilePath -> Bool
 isDependencyHaskellPath = (".hls/dependencies" `isInfixOf`) . normalise . fromNormalizedFilePath
 
--- | Returns the underlying Normalised File Path of a Typed Rules ONLY if it exists
-someInputFilePath :: SomeInput -> Maybe NormalizedFilePath
-someInputFilePath input =
+-- | Returns the underlying Normalised File Path of a Typed Rule ONLY if it exists.
+someInputFilePathMaybe :: SomeInput -> Maybe NormalizedFilePath
+someInputFilePathMaybe input =
     case inputFingerprint input of
         InputFile path -> Just path
         _ -> Nothing
