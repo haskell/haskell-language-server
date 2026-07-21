@@ -50,8 +50,11 @@ import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
                                                                    (ImplicitPrelude)
 import           Development.IDE.GHC.Compat.Error                  (TcRnMessage (..),
+                                                                    _CouldNotDeducePred,
                                                                     _TcRnMessage,
-                                                                    msgEnvelopeErrorL)
+                                                                    _TcRnSolverReport,
+                                                                    msgEnvelopeErrorL,
+                                                                    reportContentL)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
@@ -1264,9 +1267,9 @@ suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
                _                                  -> Nothing
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
-suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
-suggestConstraint df ps diag@Diagnostic {..}
-  | Just missingConstraint <- findMissingConstraint _message
+suggestConstraint :: DynFlags -> ParsedSource -> FileDiagnostic -> [(T.Text, Rewrite)]
+suggestConstraint df ps fd
+  | Just missingConstraint <- structuredMissingConstraint
   = let
 #if MIN_VERSION_ghc(9,9,0)
         parsedSource = ps
@@ -1279,22 +1282,13 @@ suggestConstraint df ps diag@Diagnostic {..}
      in codeAction diag missingConstraint
   | otherwise = []
     where
-      findMissingConstraint :: T.Text -> Maybe T.Text
-      findMissingConstraint t =
-        let -- The regex below can be tested at:
-            --   https://regex101.com/r/dfSivJ/1
-            regex = "(No instance for|Could not deduce):? (\\((.+)\\)|‘(.+)’|.+) arising from" -- a use of / a do statement
+      diag@Diagnostic{..} = fdLspDiagnostic fd
 
-            match = matchRegexUnifySpaces t regex
-
-            -- For a string like:
-            --   "Could not deduce: ?a::() arising from"
-            -- The `matchRegexUnifySpaces` function returns two empty match
-            -- groups at the end of the list. It's not clear why this is the
-            -- case, so we select the last non-empty match group.
-            getCorrectGroup = last . filter (/="")
-
-        in getCorrectGroup <$> match
+      -- The missing constraint, taken from GHC's structured solver report.
+      structuredMissingConstraint =
+        printOutputable <$>
+          (fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL
+                 . _TcRnMessage . _TcRnSolverReport . _1 . reportContentL . _CouldNotDeducePred)
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]

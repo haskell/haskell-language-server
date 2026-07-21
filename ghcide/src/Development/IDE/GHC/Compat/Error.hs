@@ -41,9 +41,11 @@ module Development.IDE.GHC.Compat.Error (
   _MismatchMessage,
   _TypeEqMismatchActual,
   _TypeEqMismatchExpected,
+  _CouldNotDeducePred,
   ) where
 
 import           Control.Lens
+import qualified Data.List.NonEmpty         as NE
 import           Development.IDE.GHC.Compat (Type)
 import           GHC.Driver.Errors.Types
 import           GHC.HsToCore.Errors.Types
@@ -127,6 +129,16 @@ _MismatchMessage :: Traversal' TcSolverReportMsg MismatchMsg
 _MismatchMessage focus (Mismatch msg t a c) = (\msg' -> Mismatch msg' t a c) <$> focus msg
 _MismatchMessage focus (CannotUnifyVariable msg a) = flip CannotUnifyVariable a <$> focus msg
 _MismatchMessage _ report = pure report
+
+-- | Focus the missing constraint predicate for a @"Could not deduce ..."@ or
+-- @"No instance for ..."@ error.
+_CouldNotDeducePred :: Fold TcSolverReportMsg Type
+_CouldNotDeducePred = folding $ \report -> case report of
+  CannotResolveInstance{cannotResolve_item = i} -> Just (errorItemPred i)
+  UnboundImplicitParams items -> Just (errorItemPred (NE.head items))
+  _ -> case report ^? _MismatchMessage of
+    Just CouldNotDeduce{cnd_wanted = w} -> Just (errorItemPred (NE.head w))
+    _                                   -> Nothing
 
 -- | Focus 'teq_mismatch_expected' from 'TypeEqMismatch'.
 _TypeEqMismatchExpected :: Traversal' MismatchMsg Type
