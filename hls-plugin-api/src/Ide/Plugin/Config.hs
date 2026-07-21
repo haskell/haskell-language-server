@@ -10,16 +10,17 @@ module Ide.Plugin.Config
     , CheckParents(..)
     ) where
 
-import           Control.Lens     (preview)
-import           Data.Aeson       hiding (Error)
-import qualified Data.Aeson       as A
-import           Data.Aeson.Lens  (_String)
-import qualified Data.Aeson.Types as A
+import           Control.Applicative
+import           Control.Lens        (preview)
+import           Data.Aeson          hiding (Error)
+import qualified Data.Aeson          as A
+import           Data.Aeson.Lens     (_String)
+import qualified Data.Aeson.Types    as A
 import           Data.Default
-import qualified Data.Map.Strict  as Map
-import           Data.Maybe       (fromMaybe)
-import qualified Data.Text        as T
-import           GHC.Exts         (toList)
+import qualified Data.Map.Strict     as Map
+import           Data.Maybe          (fromMaybe)
+import qualified Data.Text           as T
+import           GHC.Exts            (toList)
 import           Ide.Types
 
 -- ---------------------------------------------------------------------
@@ -42,11 +43,15 @@ parseConfig idePlugins defValue = A.withObject "settings" $ \o ->
     <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
     <*> o .:? "cabalFormattingProvider"                 .!= cabalFormattingProvider defValue
     <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
-    <*> o .:? "sessionLoading"                          .!= sessionLoading defValue
+    <*> loadingPref o
     <*> o .:? "linkSourceTo"                            .!= linkSourceTo defValue
     <*> o .:? "linkDocTo"                               .!=
         linkDocTo defValue
     <*> A.explicitParseFieldMaybe (parsePlugins idePlugins) o "plugin" .!= plugins defValue
+    where
+      loadingPref o =
+        (o .:? "componentsLoading"
+        <|> o .:? "sessionLoading") .!= componentsLoading defValue
 
 -- | Parse the 'PluginConfig'.
 --   Since we need to fall back to default values if we do not find one in the input,

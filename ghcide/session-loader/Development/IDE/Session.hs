@@ -72,7 +72,7 @@ import           Ide.Logger                          (Pretty (pretty),
                                                       vcat, viaShow, (<+>))
 import           Ide.Types                           (Config,
                                                       SessionLoadingPreferenceConfig (..),
-                                                      sessionLoading)
+                                                      componentsLoading)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
@@ -606,11 +606,11 @@ didSessionLoadingPreferenceConfigChange s = do
     mLoadingConfig <- liftIO $ readVar biosSessionLoadingVar
     case mLoadingConfig of
         Nothing -> do
-            liftIO $ writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+            liftIO $ writeVar biosSessionLoadingVar (Just (componentsLoading clientConfig))
             pure False
         Just loadingConfig -> do
-            liftIO $ writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
-            pure (loadingConfig /= sessionLoading clientConfig)
+            liftIO $ writeVar biosSessionLoadingVar (Just (componentsLoading clientConfig))
+            pure (loadingConfig /= componentsLoading clientConfig)
 
 newSessionState :: IO SessionState
 newSessionState = do
@@ -1025,7 +1025,7 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
   let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                 <> " (for " <> T.pack lfpLog <> ")"
 
-  sessionPref <- asks (sessionLoading . sessionClientConfig)
+  sessionPref <- asks (componentsLoading . sessionClientConfig)
   extraToLoads <- liftIO $ getExtraFilesToLoad sessionState cfp
   -- Start loading the file!
   eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
@@ -1047,7 +1047,7 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
+    cradleRes <- HieBios.getCompilerOptions (TargetWithContext file old_fps) loadStyle cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
@@ -1068,8 +1068,9 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
 
     where
         loadStyle = case loadConfig of
-            PreferSingleComponentLoading -> LoadFile
-            PreferMultiComponentLoading  -> LoadWithContext old_fps
+            PreferSingleComponentLoading   -> LoadFile
+            PreferMultiComponentLoading    -> LoadFileWithContext
+            PreferMultiWholeProjectLoading -> LoadUnitsFromCradle
 
 -- ----------------------------------------------------------------------------
 -- Utilities
