@@ -59,6 +59,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics                       (Generic)
 import           Prelude                            hiding (mod)
+import Development.IDE.Core.RuleInput (ProjectHaskellInput, IsFileInput (inputFilePath))
 
 
 -- | The imports for a given module.
@@ -163,10 +164,10 @@ data DependencyInformation =
     -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
     } deriving (Show, Generic)
 
-lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
+lookupFingerprint :: ProjectHaskellInput -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
 lookupFingerprint fileId DependencyInformation {..} depFingerprintMap =
   do
-    FilePathId cur_id <- lookupPathToId depPathIdMap fileId
+    FilePathId cur_id <- lookupPathToId depPathIdMap (inputFilePath fileId)
     IntMap.lookup cur_id depFingerprintMap
 
 newtype ShowableModule =
