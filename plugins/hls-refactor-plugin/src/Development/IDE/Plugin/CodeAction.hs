@@ -104,7 +104,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     uriToFilePath)
 import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import qualified Text.Fuzzy.Parallel                               as TFP
-import           Text.Regex.TDFA                                   ((=~), (=~~))
+import           Text.Regex.TDFA                                   ((=~~))
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 #if MIN_VERSION_ghc(9,7,0)
@@ -113,6 +113,8 @@ import           GHC.Tc.Errors.Types                               (UnusedImport
 import           GHC.Tc.Types.Constraint                           (ctLoc,
                                                                     ctOrigin)
 --import           GHC.Types.Name.Occurrence (OccName,occNameSpace)
+#else
+import           Text.Regex.TDFA                                   ((=~))
 #endif
 
 #if !MIN_VERSION_ghc(9,9,0)
