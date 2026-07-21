@@ -5,6 +5,7 @@
 
 module Development.IDE.Graph.Internal.Types where
 
+import           Control.Concurrent.Async           (Async)
 import           Control.Concurrent.STM             (STM)
 import           Control.Monad                      ((>=>))
 import           Control.Monad.Catch
@@ -16,6 +17,7 @@ import qualified Data.ByteString                    as BS
 import           Data.Dynamic
 import           Data.Foldable                      (fold)
 import qualified Data.HashMap.Strict                as Map
+import           Data.IntMap.Strict                 (IntMap)
 import           Data.IORef
 import           Data.List                          (intercalate)
 import           Data.Maybe
@@ -112,6 +114,10 @@ data Database = Database {
     databaseExtra  :: Dynamic,
     databaseRules  :: TheRules,
     databaseStep   :: !(TVar Step),
+    -- | Every in-flight rule computation, keyed by a monotonic id, drained by
+    -- 'cancelTrackedAsyncs'. See Note [Cancelling escaped rule computations]
+    -- in Development.IDE.Graph.Internal.Database.
+    databaseAsyncs :: !(TVar (Int, IntMap (Async ()))),
     databaseValues :: !(Map Key KeyDetails)
     }
 
@@ -152,7 +158,7 @@ data Result = Result {
     resultValue     :: !Value,
     resultBuilt     :: !Step, -- ^ the step when it was last recomputed
     resultChanged   :: !Step, -- ^ the step when it last changed
-    resultVisited   :: !Step, -- ^ the step when it was last looked up
+    resultVisited   :: !Step, -- ^ the step when it was last looked up or produced
     resultDeps      :: !ResultDeps,
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
     resultData      :: !BS.ByteString

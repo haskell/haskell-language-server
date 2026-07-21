@@ -5,7 +5,10 @@ module ActionSpec where
 
 import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
+import           Control.Concurrent.Async                (AsyncCancelled (..))
 import           Control.Concurrent.STM
+import           Control.Exception                       (catch, onException)
+import           Control.Monad                           (void)
 import           Control.Monad.IO.Class                  (MonadIO (..))
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
@@ -17,6 +20,7 @@ import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
 import           Example
 import qualified StmContainers.Map                       as STM
+import           System.Timeout                          (timeout)
 import           Test.Hspec
 
 
@@ -129,3 +133,58 @@ spec = do
     res `shouldBe` [[True]]
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
+
+  describe "Async registry" $ do
+    it "registers a running computation and drops it on normal completion" $ do
+      started <- C.newEmptyMVar
+      proceed <- C.newEmptyMVar :: IO (MVar ())
+      done    <- C.newEmptyMVar
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $
+        addRule $ \(Rule :: Rule ()) _old _mode -> do
+          liftIO $ C.putMVar started () >> C.takeMVar proceed
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+      forkSwallowCancel (shakeRunDatabase db [apply1 (Rule @())] >> C.putMVar done ())
+      C.takeMVar started
+      runningCount theDb `shouldReturn` 1
+      C.putMVar proceed ()
+      _ <- C.takeMVar done
+      runningCount theDb `shouldReturn` 0
+    it "cancels an in-flight computation on restart so no thread leaks" $ do
+      started   <- C.newEmptyMVar
+      proceed   <- C.newEmptyMVar :: IO (MVar ())  -- never filled, so the rule blocks here
+      cancelled <- C.newEmptyMVar
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $
+        addRule $ \(Rule :: Rule ()) _old _mode -> do
+          liftIO $ (C.putMVar started () >> C.takeMVar proceed)
+                     `onException` C.putMVar cancelled ()
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+      forkSwallowCancel (shakeRunDatabase db [apply1 (Rule @())])
+      C.takeMVar started
+      runningCount theDb `shouldReturn` 1
+      incDatabase theDb (Just [])
+      -- The rule's thread received the async exception
+      got <- timeout 5_000_000 (C.takeMVar cancelled) -- 5s
+      got `shouldBe` Just ()
+      runningCount theDb `shouldReturn` 0
+    it "drains nested in-flight computations on restart" $ do
+      started <- C.newEmptyMVar
+      proceed <- C.newEmptyMVar :: IO (MVar ())
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $ do
+        addRule $ \(Rule :: Rule ()) _old _mode -> do
+          liftIO $ C.putMVar started () >> C.takeMVar proceed
+          return $ RunResult ChangedRecomputeDiff "" () (return ())
+        addRule $ \(Rule :: Rule Bool) _old _mode -> do
+          () <- apply1 (Rule @())
+          return $ RunResult ChangedRecomputeDiff "" True (return ())
+      forkSwallowCancel (shakeRunDatabase db [apply1 (Rule @Bool)])
+      C.takeMVar started
+      -- Parent `Rule Bool` blocks on the leaf `Rule ()`.
+      n <- runningCount theDb
+      n `shouldSatisfy` (>= 2)
+      -- The drain loop reaps the whole chain, not just the roots.
+      incDatabase theDb (Just [])
+      runningCount theDb `shouldReturn` 0
+  where
+    forkSwallowCancel act = void . C.forkIO $ void act `catch` \AsyncCancelled -> pure ()
+    runningCount :: Database -> IO Int
+    runningCount theDb = length . snd <$> readTVarIO (databaseAsyncs theDb)
