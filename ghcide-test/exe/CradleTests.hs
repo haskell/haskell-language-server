@@ -51,6 +51,7 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "regression.batch" batchLoadRegressionTests
+    ,testGroup "cross-cradle" [crossCradleBatchIsolationTest]
     ,testGroup "multi"   (multiTests "multi")
     ,testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
@@ -234,6 +235,23 @@ runRegressionMultiOpenBThenAThenC dir = do
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
+-- | Several files across different components of the same cradle are all
+-- pending before the first load starts. Ensure they are submitted in the same
+-- batch.
+runRegressionInitialOpenSingleBatchLoad :: FilePath -> Session ()
+runRegressionInitialOpenSingleBatchLoad dir = do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+        cPath = dir </> "c/C.hs"
+    adoc <- openDoc aPath "haskell"
+    bdoc <- openDoc bPath "haskell"
+    cdoc <- openDoc cPath "haskell"
+    _ <- waitForBuildQueue
+    (results, loads) <- waitForTypeChecksCountingCradleLoads [adoc, bdoc, cdoc]
+    liftIO $ do
+      assertBool "A, B and C should all typecheck" (all ideResultSuccess results)
+      assertEqual "cradle loads for the initial batch of files" 1 loads
+
 sendTestRequest :: TestRequest -> Session A.Value
 sendTestRequest req = do
   let method = SMethod_CustomMethod (Proxy @"test")
@@ -242,6 +260,27 @@ sendTestRequest req = do
   case _result of
     Left err -> liftIO (assertFailure $ "test plugin request failed: " <> show err) >> pure A.Null
     Right val -> pure val
+
+-- | Like 'waitForTypeChecksBatched', but additionally count the
+-- @ghcide/cradle/loaded@ notifications the server emits while satisfying the
+-- request, i.e. how many cradle loads it took to serve all the files.
+waitForTypeChecksCountingCradleLoads :: [TextDocumentIdentifier] -> Session ([WaitForIdeRuleResult], Int)
+waitForTypeChecksCountingCradleLoads docs = do
+  let uris = map (\TextDocumentIdentifier{_uri} -> _uri) docs
+      method = SMethod_CustomMethod (Proxy @"test")
+  reqId <- sendRequest method (A.toJSON (WaitForIdeRules "TypeCheck" uris))
+  let
+    go loads = do
+      next <- skipManyTill anyMessage $
+        (Left <$> cradleLoadedMessage) <|> (Right <$> responseForId method reqId)
+      case next of
+        Left _ -> go (loads + 1)
+        Right TResponseMessage{_result} -> case _result of
+          Left err -> liftIO $ assertFailure $ "test plugin request failed: " <> show err
+          Right val -> case A.fromJSON val of
+            A.Success res -> pure (res, loads)
+            A.Error parseErr -> liftIO $ assertFailure $ "batched typecheck parse failed: " <> parseErr
+  go 0
 
 waitForTypeChecksBatched :: [TextDocumentIdentifier] -> Session [WaitForIdeRuleResult]
 waitForTypeChecksBatched docs = do
@@ -264,6 +303,8 @@ batchLoadRegressionTests =
       runWithExtraFilesMultiComponent "multi" runRegressionMultiOpenBThenA
   , testCase "m3-open-b-then-a-then-c-batch-pending-and-success" $
       runWithExtraFilesMultiComponent "multi" runRegressionMultiOpenBThenAThenC
+  , testCase "m4-initial-multi-file-open-loads-cradle-once" $
+      runWithExtraFilesMultiComponent "multi" runRegressionInitialOpenSingleBatchLoad
   , testCase "f1-batch-pending-failure-isolates-broken-file" $
       runWithExtraFilesMultiComponent "multi" regressionBatchFailureIsolatesBrokenFile
   , testCase "f2-failed-file-keeps-failing-until-cradle-fix" $
@@ -395,6 +436,23 @@ regressionNoStaleOutcomesOnRestart dir = do
   changeDoc bdoc
     [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ bSource <> "\n"]
   assertTypeCheckSuccess bdoc "B should not keep stale failure after cradle restart"
+
+-- | Files loaded by one cradle must not be handed to another cradle's
+-- multi-component load. Here @standalone/Standalone.hs@ is owned by a direct
+-- cradle; once it is loaded, opening @a/A.hs@ (owned by the root cabal cradle)
+-- used to batch the standalone file into @cabal repl@, which cannot map it to
+-- any component and fails wholesale, poisoning the load of A.
+crossCradleBatchIsolationTest :: TestTree
+crossCradleBatchIsolationTest =
+  testCase "direct-cradle-file-does-not-poison-cabal-load" $
+    runWithExtraFilesMultiComponent "cross-cradle" $ \dir -> do
+      let standalonePath = dir </> "standalone/Standalone.hs"
+          aPath = dir </> "a/A.hs"
+      sdoc <- openDoc standalonePath "haskell"
+      assertTypeCheckSuccess sdoc "standalone file (direct cradle) should typecheck"
+      adoc <- openDoc aPath "haskell"
+      assertTypeCheckSuccess adoc
+        "cabal-cradle file should typecheck after a direct-cradle file was loaded"
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: FilePath -> TestTree

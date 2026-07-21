@@ -401,6 +401,8 @@ getHieDbLocIn base dir = do
 -- - The loader processes files from 'pendingFiles', attempting to load them in batches.
 -- - (SBL1) If a file is already in 'failedFiles', it is loaded individually (single-file mode).
 -- - (SBL2) Otherwise, the loader tries to load as many files as possible together (batch mode).
+--   Only files owned by the same cradle (the same @hie.yaml@) as the file being
+--   loaded are batched together; see 'getExtraFilesToLoad'.
 --
 -- On success:
 --   - (SBL3) All successfully loaded files are removed from 'pendingFiles' and 'failedFiles',
@@ -537,6 +539,11 @@ insertFileMapping :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM
 insertFileMapping state hieYaml ncfp =
   STM.insert hieYaml ncfp (filesMap state)
 
+-- | Same as 'insertFileMapping', but never overwrites an existing value.
+insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMappingIfMissing state hieYaml ncfp =
+  STM.focus (Focus.alter (<|> Just hieYaml)) ncfp (filesMap state)
+
 -- | Remove a file from the pending file set
 removeFromPending :: SessionState -> FilePath -> STM ()
 removeFromPending state file =
@@ -580,18 +587,27 @@ handleSingleFileProcessingError state hieYaml file diags extraDepFiles = liftIO 
 --
 -- If the current file is in error loading files, we fallback to single loading mode (empty set)
 -- Otherwise, we remove error files from pending files and also exclude the current file
-getExtraFilesToLoad :: SessionState -> FilePath -> IO [FilePath]
-getExtraFilesToLoad state cfp = do
+--
+-- Only files already known to belong to the same cradle as the current file are
+-- returned. Handing files owned by a different cradle to a multi-component load
+-- makes the build tool fail wholesale — e.g. cabal cannot map the foreign files
+-- to any component of this cradle — which poisons the load of the current file.
+getExtraFilesToLoad :: SessionState -> Maybe FilePath -> FilePath -> IO [FilePath]
+getExtraFilesToLoad state hieYaml cfp = do
   pendingFiles <- getPendingFiles state
   errorFiles <- readVar (failedFiles state)
   old_files <- readVar (loadedFiles state)
   -- if the file is in error loading files, we fall back to single loading mode
-  return $
-    Set.toList $
-      if cfp `Set.member` errorFiles
-        then Set.empty
-        -- remove error files from pending files since error loading need to load one by one
-        else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  let candidates =
+        if cfp `Set.member` errorFiles
+          then Set.empty
+          -- remove error files from pending files since error loading need to load one by one
+          else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  filterM ownedByThisCradle (Set.toList candidates)
+  where
+    ownedByThisCradle file = do
+      owner <- atomically $ STM.lookup (toNormalizedFilePath' file) (filesMap state)
+      pure $ owner == Just hieYaml
 
 -- | We allow users to specify a loading strategy.
 -- Check whether this config was changed since the last time we have loaded
@@ -700,14 +716,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     let absolutePathsCradleDeps (eq, deps) = (eq, fmap toAbsolutePath $ Map.keys deps)
     returnWithVersion $ \file -> do
       let absFile = toAbsolutePath file
-      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
+      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
 -- submit a request to the getOptionsLoop to get the options for the file
 -- and wait until the options are available
-lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
-lookupOrWaitCache recorder sessionState absFile = do
+lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> (FilePath -> IO (Maybe FilePath)) -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
+lookupOrWaitCache recorder sessionState cradleLoc absFile = do
   let ncfp = toNormalizedFilePath' absFile
   cacheResult <- maybeM
     (return Nothing)
@@ -725,8 +741,14 @@ lookupOrWaitCache recorder sessionState absFile = do
     Just r -> return r
     Nothing -> do
       -- if not ok, we need to reload the session
-      atomically $ addToPending sessionState absFile
-      lookupOrWaitCache recorder sessionState absFile
+      hieYaml <- cradleLoc absFile
+      atomically $ do
+        -- Insert the mapping into filesMap so the cradle is known up-front.
+        -- This ensures we are able to batch requests belonging to the same
+        -- cradle.
+        insertFileMappingIfMissing sessionState hieYaml ncfp
+        addToPending sessionState absFile
+      lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
 checkInCache sessionState ncfp = runMaybeT $ do
@@ -1026,7 +1048,7 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
                 <> " (for " <> T.pack lfpLog <> ")"
 
   sessionPref <- asks (sessionLoading . sessionClientConfig)
-  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState cfp
+  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState hieYaml cfp
   -- Start loading the file!
   eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
     withTrace "Load cradle" $ \addTag -> do
