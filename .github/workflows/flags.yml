@@ -82,7 +82,8 @@ jobs:
           cat cabal.project.local
 
       - name: Build everything with non-default flags
-        run: cabal build all
+        # --semaphore (GHC -jsem) needs GHC >= 9.8, so skip it on 9.6.
+        run: cabal build --jobs ${{ matrix.ghc != '9.6' && '--semaphore' || '' }} all
 
   flags_post_job:
     if: always()
