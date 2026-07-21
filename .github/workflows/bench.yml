@@ -34,7 +34,7 @@ jobs:
           # also possible to add more GHCs if we perform better in the future.
           echo 'versions=["9.12", "9.14"]' >> $GITHUB_OUTPUT
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.1
+        uses: fkirc/skip-duplicate-actions@v5.3.2
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
