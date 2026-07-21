@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell, TypeApplications #-}
 {- HLINT ignore -}
 module GotoHover ( module GotoHover) where
 import Data.Text (Text, pack)
@@ -68,3 +68,5 @@ hole2 = _
 -- A comment above a type defnition with a deriving clause
 data Example = Example
   deriving (Eq)
+
+typeApplication = mapM_ @[] @IO @Float print [1, 2, 3]
