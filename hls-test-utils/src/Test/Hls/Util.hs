@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
@@ -52,7 +53,8 @@ module Test.Hls.Util
 where
 
 import           Control.Applicative.Combinators          (skipManyTill, (<|>))
-import           Control.Exception                        (catch, throwIO)
+import           Control.Exception                        (catch, throw,
+                                                           throwIO)
 import           Control.Lens                             (_Just, (&), (.~),
                                                            (?~), (^.))
 import           Control.Monad
@@ -80,7 +82,10 @@ import           Test.Tasty.ExpectedFailure               (expectFailBecause,
                                                            ignoreTestBecause)
 import           Test.Tasty.HUnit                         (assertFailure)
 
+import           Data.Foldable                            (traverse_)
 import qualified Data.List                                as List
+import qualified Data.Map                                 as Map
+import           Data.Maybe                               (fromJust)
 import           Data.String.Interpolate                  (__i)
 import qualified Data.Text.Internal.Search                as T
 import qualified Data.Text.Utf16.Rope.Mixed               as Rope
@@ -334,6 +339,66 @@ failIfSessionTimeout action = action `catch` errorHandler
     where errorHandler :: Test.SessionException -> IO a
           errorHandler e@(Test.Timeout _) = assertFailure $ show e
           errorHandler e                  = throwIO e
+
+-- ---------------------------------------------------------------------
+
+renameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session ()
+renameFile from to = do
+    res <- willRenameFile from to
+    case res of
+        InL (WorkspaceEdit (Just e) _ _) -> do
+            traverse_
+                ( \(uri, edits) ->
+                    traverse (Test.applyEdit (TextDocumentIdentifier uri)) edits
+                )
+                (Map.assocs e)
+            pure ()
+        InL (WorkspaceEdit _ (Just docChanges) _) -> do
+            traverse_
+                ( \case
+                    InL edit ->
+                        traverse_
+                            (\e -> Test.applyEdit (TextDocumentIdentifier $ edit ^. L.textDocument . L.uri) $ mkTextEdit e)
+                            (edit ^. L.edits)
+                    _ -> error "todo"
+                )
+                docChanges
+            pure ()
+        _ -> pure ()
+    didRenameFile from to
+    where
+        mkTextEdit :: TextEdit |? AnnotatedTextEdit -> TextEdit
+        mkTextEdit (InL e)   = e
+        mkTextEdit (InR ate) = TextEdit (ate ^. L.range) (ate ^. L.newText)
+
+-- | TODO
+willRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session (WorkspaceEdit |? Null)
+willRenameFile from to = do
+  rsp <- Test.request
+    SMethod_WorkspaceWillRenameFiles
+        (
+            RenameFilesParams [FileRename (docIdToText from) (docIdToText to)]
+        )
+
+  case rsp ^. L.result of
+    Right edit -> return edit
+    Left error -> throw (Test.UnexpectedResponseError (fromJust $ rsp ^. L.id) error)
+    where
+        docIdToText :: TextDocumentIdentifier -> T.Text
+        docIdToText tdi = getUri $ tdi ^. L.uri
+
+-- | TODO
+didRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session ()
+didRenameFile from to =
+    Test.sendNotification
+        SMethod_WorkspaceDidRenameFiles
+        ( RenameFilesParams
+            [FileRename (docIdToText from) (docIdToText to)
+            ]
+        )
+  where
+        docIdToText :: TextDocumentIdentifier -> T.Text
+        docIdToText tdi = getUri $ tdi ^. L.uri
 
 -- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
