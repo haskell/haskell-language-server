@@ -33,6 +33,7 @@ import           Ide.Types                     (PluginDescriptor (pluginNotifica
 import           Language.LSP.Protocol.Message as LSP
 import           Language.LSP.Server           as LSP
 import           Prettyprinter                 (Pretty (pretty), vcat, vsep)
+import Control.Exception.Backtrace
 
 data Log
   = LogIdeMain IdeMain.Log
@@ -45,6 +46,7 @@ instance Pretty Log where
 
 main :: IO ()
 main = do
+    setBacktraceMechanismState IPEBacktrace True
     stderrRecorder <- makeDefaultStderrRecorder Nothing
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things

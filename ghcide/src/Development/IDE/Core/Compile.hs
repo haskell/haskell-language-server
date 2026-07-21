@@ -1505,7 +1505,7 @@ data RecompilationInfo m
   , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
   , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
-  , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
+  , regenerate  :: HscEnv -> Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
 
 -- | Either a regular GHC linkable or a core file that
@@ -1526,11 +1526,12 @@ ml_core_file ml = ml_hi_file ml <.> "core"
 loadInterface
   :: (MonadIO m, MonadMask m)
   => HscEnv
+  -> (HscEnv -> Maybe ModIface -> m HscEnv)
   -> ModSummary
   -> Maybe LinkableType
   -> RecompilationInfo m
   -> m ([FileDiagnostic], Maybe HiFileResult)
-loadInterface session ms linkableNeeded RecompilationInfo{..} = do
+loadInterface session withFileHookCache ms linkableNeeded RecompilationInfo {old_value, get_linkable_hashes, get_module_graph, regenerate} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
         mb_old_iface = hirModIface . fst <$> old_value
 
@@ -1555,10 +1556,12 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           -- consults `mi_usages`
           Util.Succeeded iface -> return $ Just (shareUsages iface)
 
+    sessionWithHooks <- withFileHookCache sessionWithMsDynFlags old_iface
+
     -- If mb_old_iface is nothing then checkOldIface will load it for us
     -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms old_iface >>= \case
+      <- liftIO $ checkOldIface sessionWithHooks ms old_iface >>= \case
         UpToDateItem x -> pure (UpToDate, Just x)
         OutOfDateItem reason x -> pure (NeedsRecompile reason, x)
 
@@ -1566,11 +1569,11 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           setTag "Module" $ moduleNameString $ moduleName mod
           setTag "Reason" $ showReason _reason
           liftIO $ traceMarkerIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
-          regenerate linkableNeeded
+          regenerate sessionWithHooks linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-             details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
+             details <- liftIO $ mkDetailsFromIface sessionWithHooks iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps =
 #if MIN_VERSION_ghc(9,13,0)
