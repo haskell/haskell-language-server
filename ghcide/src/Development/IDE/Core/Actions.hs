@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Core.Actions
 ( getAtPoint
+, getAtPointRange
 , getDefinition
 , getTypeDefinition
 , getImplementationDefinition
@@ -10,6 +11,7 @@ module Development.IDE.Core.Actions
 , lookupMod
 ) where
 
+import           Control.Applicative                  ((<|>))
 import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
@@ -26,6 +28,9 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat           (DynFlags (..),
                                                        ms_hspp_opts)
+import           Development.IDE.GHC.Error            (rangeToRealSrcSpan,
+                                                       realSrcSpanToRange)
+import           Development.IDE.GHC.Util             (printOutputableOneLine)
 import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
@@ -46,7 +51,12 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
 
 -- | Try to get hover text for the name under point.
 getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
-getAtPoint file pos = runMaybeT $ do
+getAtPoint file pos = getAtPointRange file (Range pos pos)
+
+-- | Try to get hover text for the smallest expression enclosing the given
+-- range, e.g. the current selection.
+getAtPointRange :: NormalizedFilePath -> Range -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPointRange file (Range start end) = runMaybeT $ do
   ide <- ask
   opts <- liftIO $ getIdeOptionsIO ide
 
@@ -58,10 +68,32 @@ getAtPoint file pos = runMaybeT $ do
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
   let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
 
-  !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+  !start' <- MaybeT (return $ fromCurrentPosition mapping start)
+  !end' <- MaybeT (return $ fromCurrentPosition mapping end)
 
-  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
+  mResult <- liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
+    AtPoint.atPoint opts shakeExtras hf dkMap env (Range start' end') enabledExtensions
+
+  -- The HieAST does not record the types of many intermediate expression
+  -- nodes (e.g. applications), so a non-empty selection often lands on a
+  -- node without any hover information. In that case, recover the type of
+  -- the enclosing expression from the typechecked source.
+  let emptyHover = maybe True (all T.null . snd) mResult
+  if start == end || not emptyHover
+    then hoistMaybe mResult
+    else exprTypeAtRange file (Range start end) <|> hoistMaybe mResult
+
+-- | Hover information with the type of the smallest expression enclosing the
+-- given range, computed from the typechecked source.
+exprTypeAtRange :: NormalizedFilePath -> Range -> MaybeT IdeAction (Maybe Range, [T.Text])
+exprTypeAtRange file (Range start end) = do
+  (tmr, mapping) <- useWithStaleFastMT TypeCheck file
+  !start' <- MaybeT (return $ fromCurrentPosition mapping start)
+  !end' <- MaybeT (return $ fromCurrentPosition mapping end)
+  let sp = rangeToRealSrcSpan file (Range start' end')
+  (exprSpan, exprTy) <- hoistMaybe $ AtPoint.exprTypeAtSpan sp (tmrTypechecked tmr)
+  let typeSig = "\n```haskell\n_ :: " <> printOutputableOneLine exprTy <> "\n```\n"
+  pure (toCurrentRange mapping (realSrcSpanToRange exprSpan), [typeSig])
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.
