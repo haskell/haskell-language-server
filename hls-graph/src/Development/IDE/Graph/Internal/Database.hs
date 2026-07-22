@@ -8,7 +8,9 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
+module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge,
+    -- * Exposed for testing. See Note [Closing escaped rule computations].
+    registerAsyncs, cleanupAsync) where
 
 import           Prelude                              hiding (unzip)
 

@@ -5,13 +5,18 @@ module ActionSpec where
 
 import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
+import           Control.Concurrent.Async                (async, poll)
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class                  (MonadIO (..))
+import           Data.IORef                              (newIORef, readIORef)
+import           Data.Maybe                              (isJust, isNothing)
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase,
                                                           shakeRunDatabaseForKeys)
-import           Development.IDE.Graph.Internal.Database (build, incDatabase)
+import           Development.IDE.Graph.Internal.Database (build, cleanupAsync,
+                                                          incDatabase,
+                                                          registerAsyncs)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
@@ -129,3 +134,18 @@ spec = do
     res `shouldBe` [[True]]
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
+
+  describe "Closing escaped rule computations" $ do
+    it "tracks an async registered while the scope is open" $ do
+      scope <- newIORef (Just [])
+      a <- async $ C.threadDelay maxBound
+      registerAsyncs scope [a] `shouldReturn` True
+    it "refuses to register into a closed scope and cancels the late async" $ do
+      scope <- newIORef (Just [])
+      cleanupAsync scope
+      readIORef scope >>= \m -> isNothing m `shouldBe` True
+      late <- async $ C.threadDelay maxBound
+      -- Registration fails rather than leaking the async past teardown.
+      registerAsyncs scope [late] `shouldReturn` False
+      -- The refused async was cancelled, not left running.
+      poll late >>= \res -> isJust res `shouldBe` True
