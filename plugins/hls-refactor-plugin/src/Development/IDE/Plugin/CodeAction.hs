@@ -89,6 +89,7 @@ import           Ide.Logger                                        hiding
 import           Ide.PluginUtils                                   (extendToFullLines,
                                                                     subRange)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                        as L
 import           Language.LSP.Protocol.Message                     (Method (..),
                                                                     SMethod (..))
 import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
@@ -101,7 +102,6 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
-                                                                    UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
@@ -376,14 +376,6 @@ findSigOfBinds range = go
 #endif
             findSigOfBind range (unLoc lHsBindLR)
     go _ = Nothing
-
-findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
-findInstanceHead df instanceHead decls =
-  listToMaybe
-    [ hsib_body
-      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
-        showSDoc df (ppr hsib_body) == instanceHead
-    ]
 
 #if MIN_VERSION_ghc(9,9,0)
 findDeclContainingLoc :: (Foldable t, HasLoc l) => Position -> t (GenLocated l e) -> Maybe (GenLocated l e)
@@ -1267,67 +1259,39 @@ suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
                _                                  -> Nothing
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
-suggestConstraint :: DynFlags -> ParsedSource -> FileDiagnostic -> [(T.Text, Rewrite)]
-suggestConstraint df ps fd
+suggestConstraint :: ParsedSource -> FileDiagnostic -> [(T.Text, Rewrite)]
+suggestConstraint ps fd
   | Just missingConstraint <- structuredMissingConstraint
-  = let
+  =
 #if MIN_VERSION_ghc(9,9,0)
-        parsedSource = ps
+    let parsedSource = ps in
 #else
-        parsedSource = makeDeltaAst ps
+    let parsedSource = makeDeltaAst ps in
 #endif
-        codeAction = if _message =~ ("the type signature for:" :: String)
-                        then suggestFunctionConstraint df parsedSource
-                        else suggestInstanceConstraint df parsedSource
-     in codeAction diag missingConstraint
+    -- The error site sits in exactly one of the two, so at most one fires.
+       suggestFunctionConstraint parsedSource diag missingConstraint
+    ++ suggestInstanceConstraint parsedSource diag missingConstraint
   | otherwise = []
     where
-      diag@Diagnostic{..} = fdLspDiagnostic fd
+      diag = fdLspDiagnostic fd
 
       -- The missing constraint, taken from GHC's structured solver report.
       structuredMissingConstraint =
-        printOutputable <$>
-          (fd ^? fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL
-                 . _TcRnMessage . _TcRnSolverReport . _1 . reportContentL . _CouldNotDeducePred)
+        fmap printOutputable $
+          fd ^? fdStructuredMessageL
+            . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+            . _TcRnSolverReport . _1 . reportContentL . _CouldNotDeducePred
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
-suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
-
-suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
-  | Just instHead <- instanceHead
-  = [(actionTitle missingConstraint , appendConstraint (T.unpack missingConstraint) instHead)]
+suggestInstanceConstraint :: ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
+suggestInstanceConstraint (L _ HsModule {hsmodDecls}) diag missingConstraint
+  -- The error range is inside an instance method, so the enclosing declaration
+  -- is the instance whose context gains the constraint.
+  | Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig{sig_body = sig})})))
+      <- findDeclContainingLoc (diag ^. L.range . L.start) hsmodDecls
+  = [(actionTitle missingConstraint, appendConstraint (T.unpack missingConstraint) sig)]
   | otherwise = []
     where
-      instanceHead
-        -- Suggests a constraint for an instance declaration with no existing constraints.
-        -- • No instance for (Eq a) arising from a use of ‘==’
-        --   Possible fix: add (Eq a) to the context of the instance declaration
-        -- • In the expression: x == y
-        --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
-        --   In the instance declaration for ‘Eq (Wrap a)’
-        | Just [instanceDeclaration] <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
-        , Just instHead <- findInstanceHead df (T.unpack instanceDeclaration) hsmodDecls
-        = Just instHead
-        -- Suggests a constraint for an instance declaration with one or more existing constraints.
-        -- • Could not deduce (Eq b) arising from a use of ‘==’
-        --   from the context: Eq a
-        --     bound by the instance declaration at /path/to/Main.hs:7:10-32
-        --   Possible fix: add (Eq b) to the context of the instance declaration
-        -- • In the second argument of ‘(&&)’, namely ‘x' == y'’
-        --   In the expression: x == y && x' == y'
-        --   In an equation for ‘==’:
-        --       (Pair x x') == (Pair y y') = x == y && x' == y'
-        | Just [instanceLineStr, constraintFirstCharStr]
-            <- matchRegexUnifySpaces _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
-        , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig{sig_body = hsib_body})})))
-            <- findDeclContainingLoc (Position (readPositionNumber instanceLineStr) (readPositionNumber constraintFirstCharStr)) hsmodDecls
-        = Just hsib_body
-        | otherwise
-        = Nothing
-
-      readPositionNumber :: T.Text -> UInt
-      readPositionNumber = T.unpack >>> read @Integer >>> fromIntegral
-
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
         <> "` to the context of the instance declaration"
@@ -1336,9 +1300,9 @@ suggestImplicitParameter ::
   ParsedSource ->
   Diagnostic ->
   [(T.Text, Rewrite)]
-suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
-  | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
-    Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
+suggestImplicitParameter (L _ HsModule {hsmodDecls}) diag
+  | Just [implicitT] <- matchRegexUnifySpaces (diag ^. L.message) "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
+    Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (diag ^. L.range . L.start) hsmodDecls,
     Just (TypeSig _ _ HsWC {hswc_body = (unLoc -> HsSig {sig_body = hsib_body})})
       <- findSigOfDecl (== funId) hsmodDecls
     =
@@ -1350,35 +1314,15 @@ findTypeSignatureName :: T.Text -> Maybe T.Text
 findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " >>= listToMaybe
 
 -- | Suggests a constraint for a type signature with any number of existing constraints.
-suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
-
-suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missingConstraint
--- • No instance for (Eq a) arising from a use of ‘==’
---   Possible fix:
---     add (Eq a) to the context of
---       the type signature for:
---         eq :: forall a. a -> a -> Bool
--- • In the expression: x == y
---   In an equation for ‘eq’: eq x y = x == y
-
--- • Could not deduce (Eq b) arising from a use of ‘==’
---   from the context: Eq a
---     bound by the type signature for:
---                eq :: forall a b. Eq a => Pair a b -> Pair a b -> Bool
---     at Main.hs:5:1-42
---   Possible fix:
---     add (Eq b) to the context of
---       the type signature for:
---         eq :: forall a b. Eq a => Pair a b -> Pair a b -> Bool
--- • In the second argument of ‘(&&)’, namely ‘y == y'’
---   In the expression: x == x' && y == y'
---   In an equation for ‘eq’:
---       eq (Pair x y) (Pair x' y') = x == x' && y == y'
-  | Just typeSignatureName <- findTypeSignatureName _message
-  , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
-    <- findSigOfDecl ((T.unpack typeSignatureName ==) . showSDoc df . ppr) hsmodDecls
+suggestFunctionConstraint :: ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
+suggestFunctionConstraint (L _ HsModule {hsmodDecls}) diag missingConstraint
+  -- The error range is inside the function body, so the enclosing binding names
+  -- the signature whose context gains the constraint.
+  | Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (diag ^. L.range . L.start) hsmodDecls
+  , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body})}) <- findSigOfDecl (== funId) hsmodDecls
+  , let typeSignatureName = T.pack (printRdrName funId)
   , title <- actionTitle missingConstraint typeSignatureName
-  = [(title, appendConstraint (T.unpack missingConstraint) sig)]
+  = [(title, appendConstraint (T.unpack missingConstraint) sig_body)]
   | otherwise
   = []
     where
