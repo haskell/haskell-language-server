@@ -300,18 +300,48 @@ transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
 -- Asynchronous computations with cancellation
 
 -- | A simple monad to implement cancellation on top of 'Async',
---   generalizing 'withAsync' to monadic scopes.
-newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
+-- generalizing 'withAsync' to monadic scopes.
+--
+-- See Note [Closing escaped rule computations].
+newtype AIO a = AIO { unAIO :: ReaderT (IORef (Maybe [Async ()])) IO a }
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
 -- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
-    asyncs <- newIORef []
+    asyncs <- newIORef (Just [])
     runReaderT act asyncs `onException` cleanupAsync asyncs
+
+{- Note [Closing escaped rule computations]
+
+Rule computations run as asyncs inside a per-'build' AIO scope, which
+'cleanupAsync' drains when the scope ends. One kind of async escapes that drain.
+
+  - A memoized 'splitIO' thunk in a 'Running' status can be forced by a later
+    build.
+  - That force runs in the original scope that produced the thunk.
+  - If that scope has already ended, the async it spawns has no parent to cancel
+    it, so on a restart it escapes the step bump and leaks. See
+    https://github.com/haskell/haskell-language-server/issues/4985.
+
+We close the leak at registration rather than teardown. The scope registry is
+a 'Maybe'. 'cleanupAsync' sets it to 'Nothing', and 'registerAsyncs' refuses a
+closed scope and cancels it, so the thunk can't spawn a surviving thread.
+-}
+
+-- | Register asyncs into a scope, or, if the scope has already closed, cancel
+--   them and report failure. See Note [Closing escaped rule computations].
+registerAsyncs :: IORef (Maybe [Async ()]) -> [Async ()] -> IO Bool
+registerAsyncs st as = do
+    registered <- atomicModifyIORef' st $ \case
+        Nothing -> (Nothing, False)
+        Just xs -> (Just (as ++ xs), True)
+    unless registered $ mapM_ uninterruptibleCancel as
+    pure registered
 
 -- | Like 'async' but with built-in cancellation.
 --   Returns an IO action to wait on the result.
+--   See Note [Closing escaped rule computations].
 asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
     st <- AIO ask
@@ -319,8 +349,8 @@ asyncWithCleanUp act = do
     -- mask to make sure we keep track of the spawned async
     liftIO $ uninterruptibleMask $ \restore -> do
         a <- async $ restore io
-        atomicModifyIORef'_ st (void a :)
-        return $ wait a
+        registered <- registerAsyncs st [void a]
+        return $ if registered then wait a else throwIO AsyncCancelled
 
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
@@ -334,10 +364,12 @@ withRunInIO k = do
     st <- AIO ask
     k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
 
-cleanupAsync :: IORef [Async a] -> IO ()
+cleanupAsync :: IORef (Maybe [Async a]) -> IO ()
 -- mask to make sure we interrupt all the asyncs
 cleanupAsync ref = uninterruptibleMask $ \unmask -> do
-    asyncs <- atomicModifyIORef' ref ([],)
+    -- Close the scope so no later force can register, and take the live asyncs
+    -- to interrupt. See Note [Closing escaped rule computations].
+    asyncs <- atomicModifyIORef' ref $ \m -> (Nothing, fromMaybe [] m)
     -- interrupt all the asyncs without waiting
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     -- Wait until all the asyncs are done
@@ -368,12 +400,16 @@ waitConcurrently_ many = do
     ref <- AIO ask
     -- spawn the async computations.
     -- mask to make sure we keep track of all the asyncs.
-    (asyncs, syncs) <- liftIO $ uninterruptibleMask $ \unmask -> do
+    (asyncs, syncs, registered) <- liftIO $ uninterruptibleMask $ \unmask -> do
         waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
         let (syncs, asyncs) = partitionEithers waits
-        liftIO $ atomicModifyIORef'_ ref (asyncs ++)
-        return (asyncs, syncs)
-    -- work on the sync computations
-    liftIO $ sequence_ syncs
-    -- wait for the async computations before returning
-    liftIO $ traverse_ wait asyncs
+        registered <- liftIO $ registerAsyncs ref asyncs
+        return (asyncs, syncs, registered)
+    -- A closed scope means our asyncs were cancelled, so abort the superseded work.
+    if not registered
+      then liftIO $ throwIO AsyncCancelled
+      else do
+        -- work on the sync computations
+        liftIO $ sequence_ syncs
+        -- wait for the async computations before returning
+        liftIO $ traverse_ wait asyncs
