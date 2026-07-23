@@ -131,7 +131,6 @@ import           Development.IDE.Core.RuleInput        (InputFingerprint (..),
                                                         NoInput (..),
                                                         RuleInput, SomeInput,
                                                         fromInput,
-                                                        IsFileInput (..),
                                                         someInputFilePath',
                                                         toInput)
 import           Development.IDE.Core.RuleTypes
@@ -1110,37 +1109,39 @@ data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate ::
 -- | Lookup value in the database and return with the stale value immediately
 -- Will queue an action to refresh the value.
 -- Might block the first time the rule runs, but never blocks after that.
-useWithStaleFast :: (IdeRule k v, IsFileInput i, RuleInput k ~ i) => k -> i -> IdeAction (Maybe (v, PositionMapping))
+useWithStaleFast :: (IdeRule k v) => k -> RuleInput k -> IdeAction (Maybe (v, PositionMapping))
 useWithStaleFast key input = stale <$> useWithStaleFast' key input
 
 -- | Same as useWithStaleFast but lets you wait for an up to date result
-useWithStaleFast' :: (IdeRule k v, IsFileInput i, RuleInput k ~ i) => k -> i -> IdeAction (FastResult v)
+useWithStaleFast' :: (IdeRule k v) => k -> RuleInput k -> IdeAction (FastResult v)
 useWithStaleFast' key input = do
-  let file = inputFilePath input
-  -- This lookup directly looks up the key in the shake database and
-  -- returns the last value that was computed for this key without
-  -- checking freshness.
+  case inputFingerprint input of
+    InputFile file -> do
+      -- This lookup directly looks up the key in the shake database and
+      -- returns the last value that was computed for this key without
+      -- checking freshness.
 
-  -- Async trigger the key to be built anyway because we want to
-  -- keep updating the value in the key.
-  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key input
+      -- Async trigger the key to be built anyway because we want to
+      -- keep updating the value in the key.
+      waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key input
 
-  s@ShakeExtras{state} <- askShake
-  r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key (toInput input)
-  liftIO $ case r of
-    -- block for the result if we haven't computed before
-    Nothing -> do
-      -- Check if we can get a stale value from disk
-      res <- lastValueIO s key input
-      case res of
+      s@ShakeExtras{state} <- askShake
+      r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key (toInput input)
+      liftIO $ case r of
+        -- block for the result if we haven't computed before
         Nothing -> do
-          a <- waitValue
-          pure $ FastResult ((,zeroMapping) <$> a) (pure a)
-        Just _ -> pure $ FastResult res waitValue
-    -- Otherwise, use the computed value even if it's out of date.
-    Just _ -> do
-      res <- lastValueIO s key input
-      pure $ FastResult res waitValue
+          -- Check if we can get a stale value from disk
+          res <- lastValueIO s key input
+          case res of
+            Nothing -> do
+              a <- waitValue
+              pure $ FastResult ((,zeroMapping) <$> a) (pure a)
+            Just _ -> pure $ FastResult res waitValue
+        -- Otherwise, use the computed value even if it's out of date.
+        Just _ -> do
+          res <- lastValueIO s key input
+          pure $ FastResult res waitValue
+    _ -> pure $ FastResult Nothing (pure Nothing)
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key =

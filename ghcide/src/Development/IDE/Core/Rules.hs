@@ -112,7 +112,8 @@ import           Development.IDE.Core.RuleInput               (InputFingerprint 
                                                                ProjectHaskellInput,
                                                                SomeHaskellInput,
                                                                SomeInput,
-                                                               reclassifyInput, SomeFileInput)
+                                                               reclassifyInput, SomeFileInput,
+                                                               toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service                 hiding (Log,
                                                                LogShake)
@@ -342,15 +343,15 @@ getLocatedImportsRule recorder =
         let getTargetFor modName nfp
                 | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
+                    itExists <- getFileExists $ toSomeFileInput nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
-                    itExists <- getFileExists nfp'
+                    itExists <- getFileExists $ toSomeFileInput nfp'
                     return $ if itExists then Just nfp' else Nothing
                 | otherwise = do
-                    itExists <- getFileExists nfp
+                    itExists <- getFileExists $ toSomeFileInput nfp
                     return $ if itExists then Just nfp else Nothing
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
@@ -759,9 +760,10 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
                 let nfp = toNormalizedFilePath' fp
-                itExists <- getFileExists nfp
+                let file = toSomeFileInput nfp
+                itExists <- getFileExists file
                 when itExists $ void $ do
-                  use_ GetPhysicalModificationTime nfp
+                  use_ GetPhysicalModificationTime file
 
         mapM_ addDependency deps
 
