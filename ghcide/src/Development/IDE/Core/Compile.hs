@@ -73,7 +73,8 @@ import           Development.IDE.Core.FileStore               (resetInterfaceSto
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleInput              (IsFileInput (inputFilePath),
-                                                              SomeHaskellInput)
+                                                              SomeHaskellInput,
+                                                              toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.WorkerThread            (writeTaskQueue)
@@ -864,7 +865,7 @@ atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
+  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toSomeFileInput (toNormalizedFilePath' targetPath))) >> pure x)
     `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult
@@ -1072,7 +1073,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                         then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
                                Nothing -> pure Nothing
                                Just fs -> let ml = fromJust $ do
-                                                    id <- lookupPathToId (depPathIdMap dep_info) fs
+                                                    id <- pathToId (depPathIdMap dep_info) fs
                                                     artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
 #if MIN_VERSION_ghc(9,13,0)
                                           in pure $ Just $ InstalledFound ml
@@ -1098,8 +1099,8 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                   then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
                          Nothing -> pure Nothing
                          Just fs -> let ml = fromJust $ do
-                                              id <- lookupPathToId (depPathIdMap dep_info) fs
-                                              artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
+                                          id <- pathToId (depPathIdMap dep_info) fs
+                                          artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
                                     in pure $ Just $ InstalledFound ml im
                   else lookupFinderCache (hsc_FC env) gwib
             }

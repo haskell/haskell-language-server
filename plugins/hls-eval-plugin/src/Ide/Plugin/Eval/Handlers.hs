@@ -35,7 +35,8 @@ import           Data.List                                    (dropWhileEnd,
                                                                intercalate,
                                                                intersperse)
 import qualified Data.Map                                     as Map
-import           Data.Maybe                                   (catMaybes)
+import           Data.Maybe                                   (catMaybes,
+                                                               mapMaybe)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
@@ -43,6 +44,7 @@ import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
+import           Development.IDE.Core.RuleInput               (toProjectHaskellInput, ProjectHaskellInput, IsFileInput (inputFilePath))
 import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
@@ -254,21 +256,21 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
-initialiseSessionForEval needs_quickcheck st nfp = do
+initialiseSessionForEval :: Bool -> IdeState -> ProjectHaskellInput -> IO HscEnv
+initialiseSessionForEval needs_quickcheck st projectFile = do
   (ms, env1) <- runAction "runEvalCmd" st $ do
 
-    ms <- msrModSummary <$> use_ GetModSummary nfp
-    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
+    ms <- msrModSummary <$> use_ GetModSummary projectFile
+    deps_hsc <- hscEnv <$> use_ GhcSessionDeps projectFile
 
-    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph nfp <*> pure nfp
-    linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
+    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph projectFile <*> pure (inputFilePath projectFile)
+    linkables <- uses_ GetLinkable (projectFile : mapMaybe toProjectHaskellInput (maybe [] transitiveModuleDeps linkables_needed))
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    tm <- tmrTypechecked <$> use_ TypeCheck nfp
+    tm <- tmrTypechecked <$> use_ TypeCheck projectFile
     let rdr_env = tcg_rdr_env tm
         addRdrEnv hmi
           | iface <- hm_iface hmi

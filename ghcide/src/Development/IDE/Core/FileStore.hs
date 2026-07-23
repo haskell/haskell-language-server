@@ -34,6 +34,7 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
+import           Data.Maybe                                   (mapMaybe)
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
@@ -42,7 +43,9 @@ import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
+                                                               ProjectHaskellInput,
                                                                SomeFileInput,
+                                                               toProjectHaskellInput,
                                                                toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
@@ -135,7 +138,7 @@ getModificationTimeImpl missingFileDiags file = do
                         -- but also need a dependency on IsFileOfInterest to reinstall
                         -- alwaysRerun when the file becomes VFS
                     void (use_ IsFileOfInterest file)
-                else if isInterface srcPath
+                else if isInterface file
                     then -- interface files are tracked specially using the closed world assumption
                         pure ()
                     else -- in all other cases we will need to freshly check the file system
@@ -177,30 +180,30 @@ getPhysicalModificationTimeImpl file = do
 -- | Interface files cannot be watched, since they live outside the workspace.
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
-isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
+isInterface :: IsFileInput file => file -> Bool
+isInterface f = takeExtension (fromNormalizedFilePath (inputFilePath f)) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
+resetInterfaceStore :: ShakeExtras -> SomeFileInput -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
+resetFileStore :: IdeState -> [(SomeFileInput, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
     -- FOI filtering is done by the caller (LSP Notification handler)
     fmap concat <$>
-        forM changes $ \(nfp, c) -> do
+        forM changes $ \(input, c) -> do
             case c of
                 LSP.FileChangeType_Changed
                     --  already checked elsewhere |  not $ HM.member nfp fois
                     ->
                       atomically $ do
-                        ks <- deleteValue (shakeExtras ideState) GetModificationTime nfp
-                        vs <- deleteValue (shakeExtras ideState) GetPhysicalModificationTime nfp
+                        ks <- deleteValue (shakeExtras ideState) GetModificationTime input
+                        vs <- deleteValue (shakeExtras ideState) GetPhysicalModificationTime input
                         pure $ ks ++ vs
                 _ -> pure []
 
@@ -226,7 +229,7 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents :: SomeFileInput -> Action (UTCTime, Maybe Rope)
 getFileModTimeContents f = do
     (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -236,7 +239,7 @@ getFileModTimeContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
+            posix <- getModTime $ fromNormalizedFilePath (inputFilePath f)
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
@@ -275,7 +278,7 @@ setFileModified :: Recorder (WithPriority Log)
                 -> VFSModified
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
-                -> NormalizedFilePath
+                -> ProjectHaskellInput
                 -> IO [Key]
                 -> IO ()
 setFileModified recorder vfs state saved nfp actionBefore = do
@@ -285,24 +288,26 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath (inputFilePath nfp) ++ " (modified)") [] $ do
         keys<-actionBefore
         return (toKey GetModificationTime nfp:keys)
     when checkParents $
       typecheckParents recorder state nfp
 
-typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
-typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
-  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> ProjectHaskellInput -> IO ()
+typecheckParents recorder state input =
+    void $ shakeEnqueue (shakeExtras state) $ mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder input)
 
-typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
-typecheckParentsAction recorder nfp = do
-    revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph nfp
+typecheckParentsAction :: Recorder (WithPriority Log) -> ProjectHaskellInput -> Action ()
+typecheckParentsAction recorder input = do
+    let nfp = inputFilePath input
+    revs <- transitiveReverseDependencies input <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph input
     case revs of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
+        let projectHaskell = mapMaybe toProjectHaskellInput rs
         logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        void $ uses GetModIface rs
+        void $ uses GetModIface projectHaskell
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

@@ -132,6 +132,7 @@ import           Development.IDE.Core.RuleInput        (InputFingerprint (..),
                                                         RuleInput, SomeInput,
                                                         fromInput,
                                                         someInputFilePath',
+                                                        toSomeFileInput,
                                                         toInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Options          as Options
@@ -1052,13 +1053,13 @@ defineNoDiagnostics
 defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
-use :: (IdeRule k v, IsInput i)
-    => k -> i -> Action (Maybe v)
+use :: (IdeRule k v)
+    => k -> RuleInput k -> Action (Maybe v)
 use key input = runIdentity <$> uses key (Identity input)
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
-useWithStale :: (IdeRule k v, IsInput i)
-    => k -> i -> Action (Maybe (v, PositionMapping))
+useWithStale :: (IdeRule k v)
+    => k -> RuleInput k -> Action (Maybe (v, PositionMapping))
 useWithStale key input = runIdentity <$> usesWithStale key (Identity input)
 
 -- |Request a Rule result, it not available return the last computed result
@@ -1068,8 +1069,8 @@ useWithStale key input = runIdentity <$> usesWithStale key (Identity input)
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
-useWithStale_ :: (IdeRule k v, IsInput i)
-    => k -> i -> Action (v, PositionMapping)
+useWithStale_ :: (IdeRule k v)
+    => k -> RuleInput k -> Action (v, PositionMapping)
 useWithStale_ key input = runIdentity <$> usesWithStale_ key (Identity input)
 
 -- |Plural version of 'useWithStale_'
@@ -1078,7 +1079,7 @@ useWithStale_ key input = runIdentity <$> usesWithStale_ key (Identity input)
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers.
-usesWithStale_ :: (Traversable f, IdeRule k v, IsInput i) => k -> f i -> Action (f (v, PositionMapping))
+usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f (RuleInput k) -> Action (f (v, PositionMapping))
 usesWithStale_ key inputs = do
     res <- usesWithStale key inputs
     case sequence res of
@@ -1115,33 +1116,34 @@ useWithStaleFast key input = stale <$> useWithStaleFast' key input
 -- | Same as useWithStaleFast but lets you wait for an up to date result
 useWithStaleFast' :: (IdeRule k v) => k -> RuleInput k -> IdeAction (FastResult v)
 useWithStaleFast' key input = do
-  case inputFingerprint input of
-    InputFile file -> do
-      -- This lookup directly looks up the key in the shake database and
-      -- returns the last value that was computed for this key without
-      -- checking freshness.
+  let inputLabel = case inputFingerprint input of
+        InputFile file -> fromNormalizedFilePath file
+        InputNoFile    -> "<no-file>"
+        InputValue{}   -> show input
+  -- This lookup directly looks up the key in the shake database and
+  -- returns the last value that was computed for this key without
+  -- checking freshness.
 
-      -- Async trigger the key to be built anyway because we want to
-      -- keep updating the value in the key.
-      waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key input
+  -- Async trigger the key to be built anyway because we want to
+  -- keep updating the value in the key.
+  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ inputLabel) Debug $ use key input
 
-      s@ShakeExtras{state} <- askShake
-      r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key (toInput input)
-      liftIO $ case r of
-        -- block for the result if we haven't computed before
+  s@ShakeExtras{state} <- askShake
+  r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key (toInput input)
+  liftIO $ case r of
+    -- block for the result if we haven't computed before
+    Nothing -> do
+      -- Check if we can get a stale value from disk
+      res <- lastValueIO s key input
+      case res of
         Nothing -> do
-          -- Check if we can get a stale value from disk
-          res <- lastValueIO s key input
-          case res of
-            Nothing -> do
-              a <- waitValue
-              pure $ FastResult ((,zeroMapping) <$> a) (pure a)
-            Just _ -> pure $ FastResult res waitValue
-        -- Otherwise, use the computed value even if it's out of date.
-        Just _ -> do
-          res <- lastValueIO s key input
-          pure $ FastResult res waitValue
-    _ -> pure $ FastResult Nothing (pure Nothing)
+          a <- waitValue
+          pure $ FastResult ((,zeroMapping) <$> a) (pure a)
+        Just _ -> pure $ FastResult res waitValue
+    -- Otherwise, use the computed value even if it's out of date.
+    Just _ -> do
+      res <- lastValueIO s key input
+      pure $ FastResult res waitValue
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key =
@@ -1153,7 +1155,7 @@ useNoFile key =
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
-use_ :: (IdeRule k v, IsInput i) => k -> i -> Action v
+use_ :: IdeRule k v => k -> RuleInput k -> Action v
 use_ key input = runIdentity <$> uses_ key (Identity input)
 
 useNoFile_ :: IdeRule k v => k -> Action v
@@ -1167,7 +1169,7 @@ useNoFile_ key = useNoFile key >>= \case
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
-uses_ :: (Traversable f, IdeRule k v, IsInput i) => k -> f i -> Action (f v)
+uses_ :: (Traversable f, IdeRule k v) => k -> f (RuleInput k) -> Action (f v)
 uses_ key inputs = do
     res <- uses key inputs
     case sequence res of
@@ -1175,13 +1177,13 @@ uses_ key inputs = do
         Just v  -> return v
 
 -- | Plural version of 'use'
-uses :: (Traversable f, IdeRule k v, IsInput i)
-    => k -> f i -> Action (f (Maybe v))
+uses :: (Traversable f, IdeRule k v)
+    => k -> f (RuleInput k) -> Action (f (Maybe v))
 uses key inputs = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q key . toInput) inputs)
 
 -- | Return the last computed result which might be stale.
-usesWithStale :: (Traversable f, IdeRule k v, IsInput i)
-    => k -> f i -> Action (f (Maybe (v, PositionMapping)))
+usesWithStale :: (Traversable f, IdeRule k v)
+    => k -> f (RuleInput k) -> Action (f (Maybe (v, PositionMapping)))
 usesWithStale key inputs = do
     _ <- apply (fmap (Q key . toInput) inputs)
     -- We don't look at the result of the 'apply' since 'lastValue' will
@@ -1191,23 +1193,23 @@ usesWithStale key inputs = do
 
 -- we use separate fingerprint rules to trigger the rebuild of the rule
 useWithSeparateFingerprintRule
-    :: forall k v k1 i. (IdeRule k v, IdeRule k1 Fingerprint, RuleInput k ~ NoInput, IsInput i)
-    => k1 -> k -> i -> Action (Maybe v)
+    :: forall k v k1. (IdeRule k v, IdeRule k1 Fingerprint, RuleInput k ~ NoInput)
+    => k1 -> k -> RuleInput k1 -> Action (Maybe v)
 useWithSeparateFingerprintRule fingerKey key input = do
     _ <- use fingerKey input
     useWithoutDependency key NoInput
 
 -- we use separate fingerprint rules to trigger the rebuild of the rule
 useWithSeparateFingerprintRule_
-    :: forall k v k1 i. (IdeRule k v, IdeRule k1 Fingerprint, RuleInput k ~ NoInput, IsInput i)
-    => k1 -> k -> i -> Action v
+    :: forall k v k1. (IdeRule k v, IdeRule k1 Fingerprint, RuleInput k ~ NoInput)
+    => k1 -> k -> RuleInput k1 -> Action v
 useWithSeparateFingerprintRule_ fingerKey key input = do
     useWithSeparateFingerprintRule fingerKey key input >>= \case
         Just v -> return v
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
 
-useWithoutDependency :: forall k v i. (IdeRule k v, IsInput i)
-    => k -> i -> Action (Maybe v)
+useWithoutDependency :: forall k v. (IdeRule k v)
+    => k -> RuleInput k -> Action (Maybe v)
 useWithoutDependency key input =
     (\(Identity (A value)) -> currentValue value) <$> applyWithoutDependency (Identity (Q key (toInput input)))
 
@@ -1302,7 +1304,7 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@(Succeeded _ x), diags) -> do
-                        ver <- estimateFileVersionUnsafely key (Just x) file
+                        ver <- estimateFileVersionUnsafely key (Just x) input
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old (A v) $ return ()
                     _ -> return Nothing
@@ -1323,7 +1325,7 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
 
-                ver <- estimateFileVersionUnsafely key mbRes file
+                ver <- estimateFileVersionUnsafely key mbRes input
                 (bs, res) <- case mbRes of
                     Nothing -> do
                         pure (toShakeValue ShakeStale mbBs, staleV)
@@ -1351,20 +1353,22 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
     estimateFileVersionUnsafely
         :: k
         -> Maybe v
-        -> NormalizedFilePath
+        -> SomeInput
         -> Action (Maybe FileVersion)
-    estimateFileVersionUnsafely _k v fp
-        | fp == emptyFilePath = pure Nothing
-        | Just Refl <- eqT @k @GetModificationTime = pure v
-        -- GetModificationTime depends on these rules, so avoid creating a cycle
-        | Just Refl <- eqT @k @AddWatchedFile = pure Nothing
-        | Just Refl <- eqT @k @IsFileOfInterest = pure Nothing
-        -- GetFileExists gets called for missing files
-        | Just Refl <- eqT @k @GetFileExists = pure Nothing
-        -- For all other rules - compute the version properly without:
-        --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
-        --  * creating bogus "file does not exists" diagnostics
-        | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+    estimateFileVersionUnsafely _k v input =
+        case inputFingerprint input of
+          InputFile file
+            | Just Refl <- eqT @k @GetModificationTime -> pure v
+            -- GetModificationTime depends on these rules, so avoid creating a cycle
+            | Just Refl <- eqT @k @AddWatchedFile -> pure Nothing
+            | Just Refl <- eqT @k @IsFileOfInterest -> pure Nothing
+            -- GetFileExists gets called for missing files
+            | Just Refl <- eqT @k @GetFileExists -> pure Nothing
+            -- For all other rules - compute the version properly without:
+            --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
+            --  * creating bogus "file does not exists" diagnostics
+            | otherwise -> useWithoutDependency (GetModificationTime_ False) (toSomeFileInput file)
+          _ -> pure Nothing
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

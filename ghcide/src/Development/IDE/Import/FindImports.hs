@@ -19,6 +19,8 @@ import           Control.Monad.IO.Class
 import           Data.List                         (find, isSuffixOf)
 import           Data.Maybe
 import qualified Data.Set                          as S
+import           Development.IDE.Core.RuleInput    (IsFileInput (inputFilePath),
+                                                    ProjectHaskellInput)
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
@@ -56,13 +58,14 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
+modSummaryToArtifactsLocation :: ProjectHaskellInput -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation nfp ms = ArtifactsLocation file (ms_location <$> ms) source mbMod
   where
+    file = inputFilePath nfp
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath file
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
