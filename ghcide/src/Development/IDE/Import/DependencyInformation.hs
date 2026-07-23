@@ -59,6 +59,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics                       (Generic)
 import           Prelude                            hiding (mod)
+import Development.IDE.Core.RuleInput (ProjectHaskellInput, IsFileInput (inputFilePath))
 
 
 -- | The imports for a given module.
@@ -113,8 +114,8 @@ insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.inse
 pathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
 pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.!? path
 
-lookupPathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
-lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup path pathToIdMap
+lookupPathToId :: PathIdMap -> ProjectHaskellInput -> Maybe FilePathId
+lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup (inputFilePath path) pathToIdMap
 
 idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
 idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
@@ -163,7 +164,7 @@ data DependencyInformation =
     -- ^ Map from FilePathId to the fingerprint of the immediate reverse dependencies of the module.
     } deriving (Show, Generic)
 
-lookupFingerprint :: NormalizedFilePath -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
+lookupFingerprint :: ProjectHaskellInput -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
 lookupFingerprint fileId DependencyInformation {..} depFingerprintMap =
   do
     FilePathId cur_id <- lookupPathToId depPathIdMap fileId
@@ -360,7 +361,7 @@ partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
 -- | Transitive reverse dependencies of a file
-transitiveReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
+transitiveReverseDependencies :: ProjectHaskellInput -> DependencyInformation -> Maybe [NormalizedFilePath]
 transitiveReverseDependencies file DependencyInformation{..} = do
     FilePathId cur_id <- lookupPathToId depPathIdMap file
     return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
@@ -373,7 +374,7 @@ transitiveReverseDependencies file DependencyInformation{..} = do
       in IntSet.foldr go visited' new
 
 -- | Immediate reverse dependencies of a file
-immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
+immediateReverseDependencies :: ProjectHaskellInput -> DependencyInformation -> Maybe [NormalizedFilePath]
 immediateReverseDependencies file DependencyInformation{..} = do
   FilePathId cur_id <- lookupPathToId depPathIdMap file
   return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))

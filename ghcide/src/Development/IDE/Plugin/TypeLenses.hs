@@ -42,6 +42,8 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentRange,
                                                        toCurrentRange)
+import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
+                                                       RuleInput)
 import           Development.IDE.Core.Rules           (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes       (TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service         (getDiagnostics)
@@ -310,6 +312,7 @@ instance NFData GlobalBindingTypeSigsResult where
   rnf = rwhnf
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
+type instance RuleInput GetGlobalBindingTypeSigs = ProjectHaskellInput
 
 rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do

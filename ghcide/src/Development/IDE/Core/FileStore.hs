@@ -34,6 +34,7 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
+import           Data.Maybe                                   (mapMaybe)
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
@@ -41,6 +42,11 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
+import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
+                                                               ProjectHaskellInput,
+                                                               SomeFileInput,
+                                                               toProjectHaskellInput,
+                                                               toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
@@ -95,7 +101,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule :: Recorder (WithPriority Log) -> (SomeFileInput -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
@@ -104,7 +110,7 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
         ShakeExtras{lspEnv} <- getShakeExtras
         case lspEnv of
             Just env -> fmap Just $ liftIO $ LSP.runLspT env $
-                registerFileWatches [fromNormalizedFilePath f]
+                registerFileWatches [fromNormalizedFilePath (inputFilePath f)]
             Nothing -> pure $ Just False
 
 
@@ -114,12 +120,13 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedFilePath
+  -> SomeFileInput
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl missingFileDiags file = do
-    let file' = fromNormalizedFilePath file
+    let srcPath = inputFilePath file
+        file' = fromNormalizedFilePath srcPath
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
-    mbVf <- getVirtualFile file
+    mbVf <- getVirtualFile srcPath
     case mbVf of
         Just (virtualFileVersion -> ver) -> do
             alwaysRerun
@@ -141,21 +148,22 @@ getModificationTimeImpl missingFileDiags file = do
                 `catch` \(e :: IOException) -> do
                     let err | isDoesNotExistError e = "File does not exist: " ++ file'
                             | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                        diag = ideErrorText file (T.pack err)
+                        diag = ideErrorText srcPath (T.pack err)
                     if isDoesNotExistError e && not missingFileDiags
                         then return (Nothing, ([], Nothing))
                         else return (Nothing, ([diag], Nothing))
 
 
 getPhysicalModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
-getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetPhysicalModificationTime file ->
-    getPhysicalModificationTimeImpl file
+getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetPhysicalModificationTime input ->
+    getPhysicalModificationTimeImpl input
 
 getPhysicalModificationTimeImpl
-  :: NormalizedFilePath
+  :: SomeFileInput
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getPhysicalModificationTimeImpl file = do
-    let file' = fromNormalizedFilePath file
+    let srcPath = inputFilePath file
+        file' = fromNormalizedFilePath srcPath
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
 
     alwaysRerun
@@ -164,7 +172,7 @@ getPhysicalModificationTimeImpl file = do
         `catch` \(e :: IOException) -> do
             let err | isDoesNotExistError e = "File does not exist: " ++ file'
                     | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                diag = ideErrorText file (T.pack err)
+                diag = ideErrorText srcPath (T.pack err)
             if isDoesNotExistError e
                 then return (Nothing, ([], Nothing))
                 else return (Nothing, ([diag], Nothing))
@@ -172,30 +180,30 @@ getPhysicalModificationTimeImpl file = do
 -- | Interface files cannot be watched, since they live outside the workspace.
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
-isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
+isInterface :: IsFileInput file => file -> Bool
+isInterface f = takeExtension (fromNormalizedFilePath (inputFilePath f)) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
+resetInterfaceStore :: ShakeExtras -> SomeFileInput -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
+resetFileStore :: IdeState -> [(SomeFileInput, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
     -- FOI filtering is done by the caller (LSP Notification handler)
     fmap concat <$>
-        forM changes $ \(nfp, c) -> do
+        forM changes $ \(input, c) -> do
             case c of
                 LSP.FileChangeType_Changed
                     --  already checked elsewhere |  not $ HM.member nfp fois
                     ->
                       atomically $ do
-                        ks <- deleteValue (shakeExtras ideState) GetModificationTime nfp
-                        vs <- deleteValue (shakeExtras ideState) GetPhysicalModificationTime nfp
+                        ks <- deleteValue (shakeExtras ideState) GetModificationTime input
+                        vs <- deleteValue (shakeExtras ideState) GetPhysicalModificationTime input
                         pure $ ks ++ vs
                 _ -> pure []
 
@@ -208,19 +216,20 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedFilePath
+    :: SomeFileInput
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
+    let srcPath = inputFilePath file
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
-        mbVirtual <- getVirtualFile file
+        mbVirtual <- getVirtualFile srcPath
         pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents :: SomeFileInput -> Action (UTCTime, Maybe Rope)
 getFileModTimeContents f = do
     (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -230,16 +239,16 @@ getFileModTimeContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
+            posix <- getModTime $ fromNormalizedFilePath (inputFilePath f)
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
-getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents :: SomeFileInput -> Action (Maybe Rope)
 getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
 getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+    join <$> traverse (getFileContents . toSomeFileInput) (uriToNormalizedFilePath uri)
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -256,7 +265,7 @@ getVersionedTextDoc doc = do
         Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> (SomeFileInput -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
     getPhysicalModificationTimeRule recorder
@@ -269,7 +278,7 @@ setFileModified :: Recorder (WithPriority Log)
                 -> VFSModified
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
-                -> NormalizedFilePath
+                -> ProjectHaskellInput
                 -> IO [Key]
                 -> IO ()
 setFileModified recorder vfs state saved nfp actionBefore = do
@@ -279,24 +288,26 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath (inputFilePath nfp) ++ " (modified)") [] $ do
         keys<-actionBefore
         return (toKey GetModificationTime nfp:keys)
     when checkParents $
       typecheckParents recorder state nfp
 
-typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
-typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
-  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> ProjectHaskellInput -> IO ()
+typecheckParents recorder state input =
+    void $ shakeEnqueue (shakeExtras state) $ mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder input)
 
-typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
-typecheckParentsAction recorder nfp = do
-    revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph nfp
+typecheckParentsAction :: Recorder (WithPriority Log) -> ProjectHaskellInput -> Action ()
+typecheckParentsAction recorder input = do
+    let nfp = inputFilePath input
+    revs <- transitiveReverseDependencies input <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph input
     case revs of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
+        let projectHaskell = mapMaybe toProjectHaskellInput rs
         logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        void $ uses GetModIface rs
+        void $ uses GetModIface projectHaskell
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
