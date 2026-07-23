@@ -20,6 +20,8 @@ import           Control.Monad.Except           (ExceptT)
 import           Control.Monad.IO.Class
 import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
+import           Development.IDE.Core.RuleInput  (toSomeFileInput,
+                                                  toSomeHaskellInput)
 import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
                                                  runIdeAction)
@@ -50,11 +52,11 @@ hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPos
 gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
 gotoImplementation :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentImplementation)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
-gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition . InR . map fst)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition . InR . map fst)
-gotoImplementation = request "Implementation" getImplementationDefinition (InR $ InR Null) (InL . Definition . InR)
-hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
-documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
+gotoDefinition = request "Definition" (getDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR . map fst)
+gotoTypeDefinition = request "TypeDefinition" (getTypeDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR . map fst)
+gotoImplementation = request "Implementation" (getImplementationDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR)
+hover          = request "Hover"      getAtPointForFile     (InR Null)     foundHover
+documentHighlight = request "DocumentHighlight" highlightAtPointForFile (InR Null) InL
 
 references :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentReferences
 references recorder ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
@@ -70,6 +72,18 @@ wsSymbols recorder ide _ (WorkspaceSymbolParams _ _ query) = liftIO $ do
 foundHover :: (Maybe Range, [T.Text]) -> Hover |? Null
 foundHover (mbRange, contents) =
   InL $ Hover (InL $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator contents) mbRange
+
+getAtPointForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPointForFile file pos =
+  case toSomeHaskellInput file of
+    Nothing -> pure Nothing
+    Just input -> getAtPoint input pos
+
+highlightAtPointForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
+highlightAtPointForFile file pos =
+  case toSomeHaskellInput file of
+    Nothing -> pure Nothing
+    Just input -> highlightAtPoint input pos
 
 -- | Respond to and log a hover or go-to-definition request
 request
