@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 module Development.IDE.Core.PluginUtils
 (-- * Wrapped Action functions
@@ -43,6 +44,9 @@ import qualified Data.Text                            as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput       (IsFileInput,
+                                                       RuleInput,
+                                                       toSomeFileInput)
 import           Development.IDE.Core.Service         (runAction)
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
                                                        IdeState (shakeExtras),
@@ -121,11 +125,11 @@ runIdeActionMT _herald s i = MaybeT $ liftIO $ runReaderT (Shake.runIdeActionT $
 
 -- |ExceptT version of `useWithStaleFast` that throws a PluginRuleFailed upon
 -- failure
-useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
+useWithStaleFastE :: (IdeRule k v) => k -> RuleInput k -> ExceptT PluginError IdeAction (v, PositionMapping)
 useWithStaleFastE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useWithStaleFastMT k
 
 -- |MaybeT version of `useWithStaleFast`
-useWithStaleFastMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMT :: (IdeRule k v) => k -> RuleInput k -> MaybeT IdeAction (v, PositionMapping)
 useWithStaleFastMT k = MaybeT . Shake.useWithStaleFast k
 
 -- ----------------------------------------------------------------------------
@@ -252,7 +256,7 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
     provider m ide _pid params
       | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
-        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
+        contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents $ toSomeFileInput nfp
         case contentsMaybe of
           Just contents -> do
             let (typ, mtoken) = case m of

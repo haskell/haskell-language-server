@@ -30,7 +30,7 @@ import           Control.Concurrent.STM.Stats             (atomically,
                                                            modifyTVar')
 import           Data.Aeson                               (toJSON)
 import qualified Data.ByteString                          as BS
-import           Data.Maybe                               (catMaybes)
+import           Data.Maybe                               (catMaybes, mapMaybe)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake               hiding (Log)
@@ -49,6 +49,10 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
+import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
+                                                           SomeFileInput,
+                                                           toProjectHaskellInput,
+                                                           toSomeHaskellInput)
 
 data Log = LogShake Shake.Log
   deriving Show
@@ -57,7 +61,7 @@ instance Pretty Log where
   pretty = \case
     LogShake msg -> pretty msg
 
-newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestVar = OfInterestVar (Var (HashMap SomeFileInput FileOfInterestStatus))
 
 instance IsIdeGlobal OfInterestVar
 
@@ -86,24 +90,24 @@ instance IsIdeGlobal GarbageCollectVar
 ------------------------------------------------------------
 -- Exposed API
 
-getFilesOfInterest :: IdeState -> IO( HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterest :: IdeState -> IO( HashMap SomeFileInput FileOfInterestStatus)
 getFilesOfInterest state = do
     OfInterestVar var <- getIdeGlobalState state
     readVar var
 
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-setFilesOfInterest :: IdeState -> HashMap NormalizedFilePath FileOfInterestStatus -> IO ()
+setFilesOfInterest :: IdeState -> HashMap SomeFileInput FileOfInterestStatus -> IO ()
 setFilesOfInterest state files = do
     OfInterestVar var <- getIdeGlobalState state
     writeVar var files
 
-getFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterestUntracked :: Action (HashMap SomeFileInput FileOfInterestStatus)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
-addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: IdeState -> SomeFileInput -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     (prev, files) <- modifyVar var $ \dict -> do
@@ -112,16 +116,16 @@ addFileOfInterest state f v = do
     if prev /= Just v
     then do
         logWith (ideLogger state) Debug $
-            LogSetFilesOfInterest (HashMap.toList files)
+            LogSetFilesOfInterest (filesOfInterestToNormalizedList files)
         return [toKey IsFileOfInterest f]
     else return []
 
-deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO [Key]
+deleteFileOfInterest :: IdeState -> SomeFileInput -> IO [Key]
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
     logWith (ideLogger state) Debug $
-        LogSetFilesOfInterest (HashMap.toList files)
+        LogSetFilesOfInterest (filesOfInterestToNormalizedList files)
     return [toKey IsFileOfInterest f]
 scheduleGarbageCollection :: IdeState -> IO ()
 scheduleGarbageCollection state = do
@@ -134,21 +138,24 @@ kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
+    let normalizedFiles = map inputFilePath files
+        haskellFiles = mapMaybe (toSomeHaskellInput . inputFilePath) files
+        projectHaskellFiles = mapMaybe (toProjectHaskellInput . inputFilePath) files
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
-                toJSON $ map fromNormalizedFilePath files
+                toJSON $ map fromNormalizedFilePath normalizedFiles
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress ProgressNewStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files
-            <* uses GetHieAst files
+    results <- uses GenerateCore projectHaskellFiles
+            <* uses GetHieAst haskellFiles
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
-            <* uses NonLocalCompletions files
+            <* uses NonLocalCompletions projectHaskellFiles
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
@@ -161,3 +168,9 @@ kick = do
         liftIO $ writeVar var False
 
     signal (Proxy @"kick/done")
+
+-- | Convert the files-of-interest map to a list keyed by normalized file path.
+filesOfInterestToNormalizedList :: HashMap SomeFileInput FileOfInterestStatus -> [(NormalizedFilePath, FileOfInterestStatus)]
+filesOfInterestToNormalizedList = fmap firstFilePath . HashMap.toList
+  where
+    firstFilePath (file, status) = (inputFilePath file, status)

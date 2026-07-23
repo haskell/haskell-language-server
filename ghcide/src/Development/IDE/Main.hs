@@ -27,7 +27,8 @@ import qualified Data.HashMap.Strict                      as HashMap
 import           Data.List.Extra                          (intercalate,
                                                            isPrefixOf, nubOrd,
                                                            partition)
-import           Data.Maybe                               (catMaybes, isJust)
+import           Data.Maybe                               (catMaybes, isJust,
+                                                           mapMaybe)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            Priority (Debug),
@@ -47,6 +48,10 @@ import qualified Development.IDE.Core.Rules               as Rules
 import           Development.IDE.Core.RuleTypes           (GenerateCore (GenerateCore),
                                                            GetHieAst (GetHieAst),
                                                            TypeCheck (TypeCheck))
+import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
+                                                           toProjectHaskellInput,
+                                                           toSomeFileInput,
+                                                           toSomeHaskellInput)
 import           Development.IDE.Core.Service             (initialise,
                                                            runAction)
 import qualified Development.IDE.Core.Service             as Service
@@ -75,6 +80,7 @@ import           Development.IDE.Session                  (SessionLoadingOptions
                                                            retryOnSqliteBusy)
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
+                                                           fromNormalizedFilePath,
                                                            toNormalizedFilePath')
 import           Development.IDE.Types.Monitoring         (Monitoring)
 import           Development.IDE.Types.Options            (IdeGhcSession,
@@ -434,11 +440,15 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
-            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
-            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
-            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
-            let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
+            let normalizedFiles = map toNormalizedFilePath' absoluteFiles
+                projectHaskellFiles = mapMaybe toProjectHaskellInput normalizedFiles
+                haskellFiles = mapMaybe toSomeHaskellInput normalizedFiles
+                typecheckFiles = map (fromNormalizedFilePath . inputFilePath) projectHaskellFiles
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toSomeFileInput) normalizedFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck projectHaskellFiles
+            _results <- runAction "GetHie" ide $ uses GetHieAst haskellFiles
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore projectHaskellFiles
+            let (worked, failed) = partition fst $ zip (map isJust results) typecheckFiles
             when (failed /= []) $
                 putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 

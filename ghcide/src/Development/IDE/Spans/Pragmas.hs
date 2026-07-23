@@ -18,6 +18,7 @@ import qualified Data.Text                       as Text
 import           Data.Text.Utf16.Rope.Mixed      (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed      as Rope
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Development.IDE.Core.RuleInput  (toSomeFileInput)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types    as LSP
@@ -53,7 +54,7 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
-  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents $ toSomeFileInput nfp
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------

@@ -30,6 +30,7 @@ import           Data.Proxy
 import           Data.String
 import           Data.Text                            (Text, pack)
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
+import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath))
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -150,7 +151,7 @@ testRequestHandler s GetStoredKeys = do
     return $ Right $ toJSON $ map show keys
 testRequestHandler s GetFilesOfInterest = do
     ff <- liftIO $ getFilesOfInterest s
-    return $ Right $ toJSON $ map fromNormalizedFilePath $ HM.keys ff
+    return $ Right $ toJSON $ map (fromNormalizedFilePath . inputFilePath) $ HM.keys ff
 testRequestHandler s GetRebuildsCount = do
     count <- liftIO $ runAction "get build count" s getRebuildCount
     return $ Right $ toJSON count

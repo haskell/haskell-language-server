@@ -21,6 +21,8 @@ import           Data.List.NonEmpty           (NonEmpty (..))
 import           Data.String                  (IsString (..))
 import           Data.Text                    (Text)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Core.RuleInput (ProjectHaskellInput,
+                                                 RuleInput)
 import           Development.IDE.Graph        (RuleResult)
 import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
@@ -31,7 +33,9 @@ import qualified Language.LSP.Protocol.Types  as J
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
+type instance RuleInput LocalCompletions = ProjectHaskellInput
 type instance RuleResult NonLocalCompletions = CachedCompletions
+type instance RuleInput NonLocalCompletions = ProjectHaskellInput
 
 data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Generic)
