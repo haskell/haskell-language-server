@@ -183,7 +183,7 @@ parseModule IdeOptions{..} env filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
         (diag, modu) <- parseFileContents env optPreprocessor filename ms
-        return (diag, Just modu)
+        pure (diag, Just modu)
 
 
 -- | Given a package identifier, what packages does it depend on
@@ -194,12 +194,12 @@ computePackageDeps
 computePackageDeps env pkg = do
     case lookupUnit env pkg of
         Nothing ->
-          return $ Left
+          pure $ Left
             [ ideErrorText
                 (toNormalizedFilePath' noFilePath)
                 (T.pack $ "unknown package: " ++ show pkg)
             ]
-        Just pkgInfo -> return $ Right $ unitDepends pkgInfo
+        Just pkgInfo -> pure $ Right $ unitDepends pkgInfo
 
 data TypecheckHelpers
   = TypecheckHelpers
@@ -218,7 +218,7 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (Loader.initializePlugins (hscSetFlags (ms_hspp_opts modSummary) hsc))
         case initialized of
-          Left errs -> return (errs, Nothing)
+          Left errs -> pure (errs, Nothing)
           Right hscEnv -> do
             etcm <-
                 let
@@ -228,7 +228,7 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
                   catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
                     tcRnModule hscEnv tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary'}
             case etcm of
-              Left errs -> return (errs, Nothing)
+              Left errs -> pure (errs, Nothing)
               Right tcm ->
                 let addReason diag =
                       map (Just (diagnosticReason (errMsgDiagnostic diag)),) $
@@ -237,7 +237,7 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
                     diags = concatMap errorPipeline $ Compat.getMessages $ tmrWarnings tcm
                     deferredError = any fst diags
                 in
-                return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
+                pure (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -249,7 +249,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
   res <- k (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
   splices <- readIORef splice_ref
   needed_mods <- readIORef dep_ref
-  return (res, splices, needed_mods)
+  pure (res, splices, needed_mods)
   where
     addLinkableDepHook :: IORef (ModuleEnv BS.ByteString) -> Hooks -> Hooks
     addLinkableDepHook var h = h { hscCompileCoreExprHook = Just (compile_bco_hook var) }
@@ -361,7 +361,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #endif
 
            ; modifyIORef' var (flip extendModuleEnvList [(mi_module $ hm_iface hm, linkableHash lb) | lb <- lbs, let hm = linkableHomeMod lb])
-           ; return hval }
+           ; pure hval }
 
     -- TODO: support backpack
     nodeKeyToInstalledModule :: NodeKey -> Maybe InstalledModule
@@ -642,9 +642,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
     dflags = hsc_dflags session'
     source = "compile"
     catchErrs x = x `catches`
-      [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
+      [ Handler $ pure . (,Nothing) . diagFromGhcException source dflags
       , Handler $ \diag ->
-          return
+          pure
             ( diagFromString
                 source DiagnosticSeverity_Error (noSpan "<internal>")
                 ("Error during " ++ T.unpack source ++ show @SomeException diag)
@@ -671,7 +671,6 @@ compileModule (RunSimplifier simplify) session ms tcg =
   catchSrcErrors (hsc_dflags session) compilePhase compileAction
        >>= \case Left diags             -> pure (diags, Nothing)
                  Right (diags, modGuts) -> pure (diags, Just modGuts)
-
   where
     compilePhase = "compile"
     compileAction = do
@@ -1019,9 +1018,9 @@ writeHiFile se hscEnv tc =
 
 handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
 handleGenerationErrors dflags source action =
-  action >> return [] `catches`
-    [ Handler $ return . diagFromGhcException source dflags
-    , Handler $ \(exception :: SomeException) -> return $
+  action >> pure [] `catches`
+    [ Handler $ pure . diagFromGhcException source dflags
+    , Handler $ \(exception :: SomeException) -> pure $
         diagFromString
           source DiagnosticSeverity_Error (noSpan "<internal>")
           ("Error during " ++ T.unpack source ++ show exception)
@@ -1031,9 +1030,9 @@ handleGenerationErrors dflags source action =
 handleGenerationErrors' :: DynFlags -> T.Text -> IO (Maybe a) -> IO ([FileDiagnostic], Maybe a)
 handleGenerationErrors' dflags source action =
   fmap ([],) action `catches`
-    [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
+    [ Handler $ pure . (,Nothing) . diagFromGhcException source dflags
     , Handler $ \(exception :: SomeException) ->
-        return
+        pure
           ( diagFromString
               source DiagnosticSeverity_Error (noSpan "<internal>")
               ("Error during " ++ T.unpack source ++ show exception)
@@ -1081,7 +1080,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
             }
       loadModulesHome extraMods hsc_env'
 #else
-    return $! loadModulesHome extraMods $
+    pure $! loadModulesHome extraMods $
       let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
       (hscUpdateHUG (const newHug) env){
           hsc_mod_graph = mg,
@@ -1112,7 +1111,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
           hpt_b <- readIORef . hptInternalTableRef . homeUnitEnv_hpt =<< b
           hpt_a <- readIORef . hptInternalTableRef . homeUnitEnv_hpt $ a_v
           result <- hptInternalTableFromRef =<< (newIORef $! mergeUDFM hpt_a hpt_b)
-          return $! a_v { homeUnitEnv_hpt = result }
+          pure $! a_v { homeUnitEnv_hpt = result }
         mergeUDFM = plusUDFM_C combineModules
         combineModules a b
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
@@ -1140,7 +1139,7 @@ mergeEnvs env mg _dep_info ms extraMods envs = do
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
     newFinderCache <- concatFC curFinderCache (map hsc_FC envs)
-    return $! loadModulesHome extraMods $
+    pure $! loadModulesHome extraMods $
       let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
       (hscUpdateHUG (const newHug) env){
           hsc_FC = newFinderCache,
@@ -1279,7 +1278,7 @@ getModSummaryFromImports env fp mContents = do
 
     msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
     msrHscEnv <- liftIO $ Loader.initializePlugins (hscSetFlags (ms_hspp_opts msrModSummary) ppEnv)
-    return ModSummaryResult{..}
+    pure ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields
@@ -1304,7 +1303,7 @@ getModSummaryFromImports env fp mContents = do
                       G.ThisPkg uid  -> put $ getKey $ getUnique uid
                       G.OtherPkg uid -> put $ getKey $ getUnique uid
 #endif
-            return $! Util.fingerprintFingerprints $
+            pure $! Util.fingerprintFingerprints $
                     [ Util.fingerprintString fp
                     , fingerPrintImports
                     , modLocationFingerprint ms_location
@@ -1347,7 +1346,7 @@ parseHeader dflags filename contents = do
             throwE $ diagFromGhcErrorMessages sourceParser dflags errs
 
         let warnings = diagFromGhcErrorMessages sourceParser dflags warns
-        return (warnings, rdr_module)
+        pure (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
 -- parsed module (or errors) and any parse warnings. Does not run any preprocessors
@@ -1550,10 +1549,10 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
         read_result <- liftIO $ readIface read_dflags ncu mod iface_file
 #endif
         case read_result of
-          Util.Failed{}        -> return Nothing
+          Util.Failed{}        -> pure Nothing
           -- important to call `shareUsages` here before checkOldIface
           -- consults `mi_usages`
-          Util.Succeeded iface -> return $ Just (shareUsages iface)
+          Util.Succeeded iface -> pure $ Just (shareUsages iface)
 
     -- If mb_old_iface is nothing then checkOldIface will load it for us
     -- given that the source is unmodified
@@ -1588,9 +1587,9 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                    (coreFile@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
                      readBinCoreFile (mkUpdater $ hsc_NC session) core_file
                    if cf_iface_hash == getModuleHash iface
-                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (coreFile, fingerprintToBS core_hash)))
+                   then pure ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (coreFile, fingerprintToBS core_hash)))
                    else do_regenerate (recompBecause "Core file out of date (doesn't match iface hash)")
-                 | otherwise -> return ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
+                 | otherwise -> pure ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
                  where handleErrs = flip catches
                          [Handler $ \(e :: IOException) -> do_regenerate (recompBecause $ "Reading core file failed (" ++ show e ++ ")")
                          ,Handler $ \(e :: GhcException) -> case e of
@@ -1701,7 +1700,7 @@ getDocsBatch
 getDocsBatch hsc_env _names = do
     res <- initIfaceLoad hsc_env $ forM _names $ \name ->
         case nameModule_maybe name of
-            Nothing -> return (Left $ NameHasNoModule name)
+            Nothing -> pure (Left $ NameHasNoModule name)
             Just mod -> do
              ModIface {
                         mi_docs = Just Docs{ docs_mod_hdr = mb_doc_hdr
@@ -1714,7 +1713,7 @@ getDocsBatch hsc_env _names = do
                else pure (Right (
                                   lookupUniqMap dmap name,
                                   lookupWithDefaultUniqMap amap mempty name))
-    return $ map (first $ T.unpack . printOutputable) res
+    pure $ map (first $ T.unpack . printOutputable) res
   where
     compiled n =
       -- TODO: Find a more direct indicator.
@@ -1733,17 +1732,17 @@ lookupName _ name
 lookupName hsc_env name = exceptionHandle $ do
   mb_thing <- liftIO $ lookupType hsc_env name
   case mb_thing of
-    x@(Just _) -> return x
+    x@(Just _) -> pure x
     Nothing
       | x@(Just thing) <- wiredInNameTyThing_maybe name
       -> do when (needWiredInHomeIface thing)
                  (initIfaceLoad hsc_env (loadWiredInHomeIface name))
-            return x
+            pure x
       | otherwise -> do
         res <- initIfaceLoad hsc_env $ importDecl name
         case res of
-          Util.Succeeded x -> return (Just x)
-          _                -> return Nothing
+          Util.Succeeded x -> pure (Just x)
+          _                -> pure Nothing
   where
     exceptionHandle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
