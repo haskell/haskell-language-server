@@ -51,9 +51,9 @@ makeMethodDecl df (mName, sig) = do
     pure (name, sig')
 
 #if MIN_VERSION_ghc_exactprint(1,10,0)
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> Located (HsModule GhcPs)
+addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> ParsedSource
 #else
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located (HsModule GhcPs))
+addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity ParsedSource
 #endif
 addMethodDecls ps mDecls range withSig
     | withSig = go (concatMap (\(decl, sig) -> [sig, decl]) mDecls)
@@ -66,6 +66,7 @@ addMethodDecls ps mDecls range withSig
         allDecls <- hsDecls ps
 #endif
         case break (inRange range . getLoc) allDecls of
+            (_, []) -> ps
             (before, L l inst : after) ->
                 let
                     indent = case inst of
@@ -88,7 +89,9 @@ addMethodDecls ps mDecls range withSig
 #endif
                     instRow = srcSpanEndLine instSpan
                     methodEpAnn = noAnnSrcSpanDP $ deltaPos 1 indent
-                    -- Put each TyCl method/type signature on separate line, indented by 2 spaces relative to instance decl
+                    -- Put each TyCl method/type signature on separate line,
+                    -- indented relative to instance decl as much as existing
+                    -- methods, or by 2 spaces otherwise
                     newLine (L _ e) = L methodEpAnn e
 
                     -- Set DeltaPos for following declarations so they don't move undesirably
@@ -105,8 +108,6 @@ addMethodDecls ps mDecls range withSig
                     resetFollowing = id
 #endif
                 in replaceDecls ps (before ++ L l (addWhere inst):(map newLine inserting ++ resetFollowing after))
-            (before, []) ->
-                replaceDecls ps before
 
     -- Add `where` keyword for `instance X where` if `where` is missing.
     --
@@ -121,10 +122,10 @@ addMethodDecls ps mDecls range withSig
     addWhere instd@(InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
         case cid_ext of
 #if MIN_VERSION_ghc(9,11,0)
-            (warnings, anns, key)
-                | EpTok _ <- acid_where anns -> instd
-                | otherwise ->
-                    InstD xInstD (ClsInstD ext decl {
+            (warnings, anns, key) -> case acid_where anns of
+               EpTok _ -> instd
+               NoEpTok ->
+                  InstD xInstD (ClsInstD ext decl {
                     cid_ext = ( warnings
                               , anns { acid_where = EpTok d1 }
                               , key
