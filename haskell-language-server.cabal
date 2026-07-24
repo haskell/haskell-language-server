@@ -576,6 +576,57 @@ test-suite hls-explicit-imports-plugin-tests
     , text
 
 -----------------------------
+-- case split plugin
+-----------------------------
+
+flag caseSplit
+  description: Enable caseSplit plugin
+  default:     True
+  manual:      True
+
+common caseSplit
+  if flag(caseSplit)
+    build-depends: haskell-language-server:hls-case-split-plugin
+    cpp-options: -Dhls_caseSplit
+
+library hls-case-split-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(casesplit)
+    buildable: False
+  exposed-modules:  Ide.Plugin.CaseSplit
+  hs-source-dirs:   plugins/hls-case-split-plugin/src
+  build-depends:
+    , extra
+    , ghc
+    , haskell-language-server:hls-refactor-plugin
+    , ghcide                == 2.14.0.0
+    , hls-plugin-api        == 2.14.0.0
+    , lens
+    , lsp
+    , mtl
+    , syb
+    , text
+    , transformers
+
+  default-extensions:
+    DataKinds
+
+test-suite hls-case-split-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(casesplit)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-case-split-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , filepath
+    , haskell-language-server:hls-case-split-plugin
+    , hls-test-utils   == 2.14.0.0
+    , lens
+    , lsp-types
+    , text
+
+-----------------------------
 -- rename plugin
 -----------------------------
 
@@ -1853,6 +1904,7 @@ library
                   , class
                   , eval
                   , importLens
+                  , caseSplit
                   , rename
                   , hlint
                   , stan
