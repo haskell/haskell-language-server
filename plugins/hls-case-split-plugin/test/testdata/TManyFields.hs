@@ -1,0 +1,15 @@
+{-# LANGUAGE EmptyCase #-}
+{-# OPTIONS_GHC -Wall -fmax-uncovered-patterns=99 #-}
+module TManyFields where
+
+data X = A
+       | B Int
+       | C Int Int
+       | D Int Int Int
+       | E Int Int Int Int
+       | F Int Int Int Int Int
+
+foo :: X -> Int
+foo x = case x of
+          A {} -> 1
+          B _ -> 2
