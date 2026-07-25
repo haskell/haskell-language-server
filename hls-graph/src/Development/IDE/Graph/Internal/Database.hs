@@ -318,7 +318,6 @@ runAIO (AIO act) = do
 
 Rule computations run as asyncs inside a per-'build' AIO scope, which
 'cleanupAsync' drains when the scope ends. One kind of async escapes that drain.
-
   - A memoized 'splitIO' thunk in a 'Running' status can be forced by a later
     build.
   - That force runs in the original scope that produced the thunk.
@@ -326,13 +325,17 @@ Rule computations run as asyncs inside a per-'build' AIO scope, which
     it, so on a restart it escapes the step bump and leaks. See
     https://github.com/haskell/haskell-language-server/issues/4985.
 
-We close the leak at registration rather than teardown. The scope registry is
-a 'Maybe'. 'cleanupAsync' sets it to 'Nothing', and 'registerAsyncs' refuses a
-closed scope and cancels it, so the thunk can't spawn a surviving thread.
+The fix closes the leak at registration rather than teardown, and conditions on it:
+  - A spawned thread runs its rule computation only after it successfully
+    registered. Otherwise it does nothing.
+  - A closed scope refuses registration and cancels the parked thread, so
+    nothing escapes teardown.
 -}
 
--- | Register asyncs into a scope, or, if the scope has already closed, cancel
---   them and report failure. See Note [Closing escaped rule computations].
+-- | Register threads into a scope, or, if the scope has already closed, cancel
+-- them and report failure.
+--
+-- See Note [Closing escaped rule computations].
 registerAsyncs :: IORef (Maybe [Async ()]) -> [Async ()] -> IO Bool
 registerAsyncs st as = do
     registered <- atomicModifyIORef' st $ \case
@@ -342,17 +345,29 @@ registerAsyncs st as = do
     pure registered
 
 -- | Like 'async' but with built-in cancellation.
---   Returns an IO action to wait on the result.
---   See Note [Closing escaped rule computations].
+-- Returns an IO action to wait on the result.
+--
+-- See Note [Closing escaped rule computations].
 asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
-    st <- AIO ask
-    io <- unliftAIO act
-    -- mask to make sure we keep track of the spawned async
-    liftIO $ uninterruptibleMask $ \restore -> do
-        a <- async $ restore io
-        registered <- registerAsyncs st [void a]
-        return $ if registered then wait a else throwIO AsyncCancelled
+  st <- AIO ask
+  io <- unliftAIO act
+  let registeredAction registered act =
+        if registered
+          then act
+          else throwIO AsyncCancelled
+  -- mask so the spawn and registration can't be split by interrupt
+  liftIO $ uninterruptibleMask_ $ do
+    -- Use a signal to indicate whether the thread is being spawned into a
+    -- open/closed scope.
+    gate <- newEmptyMVar
+    a <- asyncWithUnmask $ \unmask -> do
+      registered <- unmask (takeMVar gate)
+      -- Only if the thread was successfully registered do we execute
+      registeredAction registered $ unmask io
+    registered <- registerAsyncs st [void a]
+    putMVar gate registered
+    return $ registeredAction registered $ wait a
 
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
