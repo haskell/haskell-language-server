@@ -22,9 +22,8 @@ import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       SomeFileInput,
-                                                       SomeHaskellInput,
-                                                       reclassifyInput,
+                                                       SomeFileInput (SomeFileHaskellInput),
+                                                       SomeHaskellInput (SomeProjectHaskellInput, SomeNonProjectHaskellInput),
                                                        toSomeHaskellInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -57,7 +56,9 @@ getAtPoint file pos = runMaybeT $ do
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   shakeExtras <- lift askShake
-  projectFile <- MaybeT $ pure $ reclassifyInput file
+  projectFile <- MaybeT $ pure $ case file of
+    SomeNonProjectHaskellInput _ -> Nothing
+    SomeProjectHaskellInput fp -> Just fp
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession projectFile
   modSummary <- fst <$> useWithStaleFastMT GetModSummary projectFile
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap projectFile)
@@ -97,20 +98,21 @@ toCurrentLocation mapping file (Location uri range) =
     nUri = toNormalizedUri uri
 
 -- | Goto Definition.
-getDefinition :: SomeFileInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
 
-    haskellFile <- MaybeT $ pure $ reclassifyInput file
-    projectFile <- MaybeT $ pure $ reclassifyInput file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
 
-    (hf, mapping) <- useWithStaleFastMT GetHieAst haskellFile
-    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap projectFile
+    ImportMap imports <- case file of
+      SomeNonProjectHaskellInput _ -> pure $ ImportMap mempty
+      SomeProjectHaskellInput pFile -> fst <$> useWithStaleFastMT GetImportMap pFile
+
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping (SomeFileHaskellInput file) location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
@@ -119,7 +121,9 @@ getTypeDefinition :: SomeFileInput -> Position -> IdeAction (Maybe [(Location, I
 getTypeDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    haskellFile <- MaybeT $ pure $ reclassifyInput file
+    haskellFile <- MaybeT $ pure $ case file of
+      SomeFileHaskellInput fp -> Just fp
+      _ -> Nothing
     (hf, mapping) <- useWithStaleFastMT GetHieAst haskellFile
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
@@ -132,7 +136,9 @@ getImplementationDefinition :: SomeFileInput -> Position -> IdeAction (Maybe [Lo
 getImplementationDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    haskellFile <- MaybeT $ pure $ reclassifyInput file
+    haskellFile <- MaybeT $ pure $ case file of
+      SomeFileHaskellInput hFile -> Just hFile
+      _ -> Nothing
     (hf, mapping) <- useWithStaleFastMT GetHieAst haskellFile
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'

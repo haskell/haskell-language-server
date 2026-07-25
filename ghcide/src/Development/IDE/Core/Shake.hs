@@ -135,7 +135,6 @@ import           Development.IDE.Core.RuleInput        (InputFingerprint (..),
                                                         NoInput (..),
                                                         RuleInput, SomeInput,
                                                         fromInput,
-                                                        someInputFilePath',
                                                         toSomeFileInput,
                                                         toInput)
 import           Development.IDE.Core.RuleTypes
@@ -1233,13 +1232,15 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q key input) (old :: Maybe BS
     case fromInput input :: Maybe (RuleInput k) of
       Nothing -> fail "invalid rule input"
       Just ruleInput -> do
-        let file = someInputFilePath' input
-        otTracedAction key input mode traceA $ \traceDiagnostics -> do
-            extras <- getShakeExtras
-            let diagnostics ver diags = do
-                    traceDiagnostics diags
-                    updateFileDiagnostics recorder file ver (newKey key) extras diags
-            defineEarlyCutoff' diagnostics (==) key input old mode $ const $ op key ruleInput
+        case inputFingerprint input of
+          InputFile file ->
+            otTracedAction key input mode traceA $ \traceDiagnostics -> do
+                extras <- getShakeExtras
+                let diagnostics ver diags = do
+                        traceDiagnostics diags
+                        updateFileDiagnostics recorder file ver (newKey key) extras diags
+                defineEarlyCutoff' diagnostics (==) key input old mode $ const $ op key ruleInput
+          _ -> fail "expected file input"
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q key input) (old :: Maybe BS.ByteString) mode ->
     case fromInput input :: Maybe (RuleInput k) of
       Nothing -> fail "invalid rule input"
@@ -1264,13 +1265,15 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q key input) (old
     case fromInput input :: Maybe (RuleInput k) of
       Nothing -> fail "invalid rule input"
       Just ruleInput -> do
-        let file = someInputFilePath' input
-        otTracedAction key input mode traceA $ \traceDiagnostics -> do
-            extras <- getShakeExtras
-            let diagnostics ver diags = do
-                    traceDiagnostics diags
-                    updateFileDiagnostics recorder file ver (newKey key) extras diags
-            defineEarlyCutoff' diagnostics (==) key input old mode $ op key ruleInput
+        case inputFingerprint input of
+          InputFile file ->
+            otTracedAction key input mode traceA $ \traceDiagnostics -> do
+                extras <- getShakeExtras
+                let diagnostics ver diags = do
+                        traceDiagnostics diags
+                        updateFileDiagnostics recorder file ver (newKey key) extras diags
+                defineEarlyCutoff' diagnostics (==) key input old mode $ op key ruleInput
+          _ -> fail "expected file input"
 
 defineNoFile :: (IdeRule k v, RuleInput k ~ NoInput ) => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k NoInput -> do
@@ -1293,11 +1296,15 @@ defineEarlyCutoff'
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
-    let file = someInputFilePath' input
+    let mbFile = case inputFingerprint input of
+          InputFile file -> Just file
+          _              -> Nothing
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
-    (if optSkipProgress options key then id else trans (inProgress progress file)) $ do
+    (case mbFile of
+      Just file | not (optSkipProgress options key) -> trans (inProgress progress file)
+      _                                            -> id) $ do
         val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
                 mbValue <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key input
@@ -1324,7 +1331,7 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | Just file <- [mbFile], not $ isBadDependency e], Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes input
                 (bs, res) <- case mbRes of
@@ -1564,7 +1571,12 @@ updatePositionMappingHelper ver changes mappingForUri = snd $
 kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [SomeInput] -> Proxy s -> Action ()
 kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
   LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
-  toJSON $ map (fromNormalizedFilePath . someInputFilePath') files
+  toJSON $ mapMaybe inputFile files
+  where
+    inputFile input =
+      case inputFingerprint input of
+        InputFile file -> Just $ fromNormalizedFilePath file
+        _              -> Nothing
 
 -- | Add kick start/done signal to rule
 runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [RuleInput k] -> k -> Action ()

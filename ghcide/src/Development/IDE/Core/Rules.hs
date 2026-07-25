@@ -106,14 +106,10 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput               (InputFingerprint (..),
-                                                               IsInput (inputFingerprint, toInput),
-                                                               IsFileInput (inputFilePath),
-                                                               ProjectHaskellInput,
-                                                               SomeFileInput,
-                                                               SomeHaskellInput,
-                                                               SomeInput,
-                                                               reclassifyInput,
+import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
+                                                               ProjectHaskellInput (ProjectHaskellInput),
+                                                               SomeFileInput (SomeFileHaskellInput),
+                                                               SomeHaskellInput (SomeProjectHaskellInput),
                                                                toProjectHaskellInput,
                                                                toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
@@ -278,7 +274,7 @@ getParsedModuleRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt (toInput input) ms
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput input) ms
 
 withoutOptHaddock :: ModSummary -> ModSummary
 withoutOptHaddock = withoutOption Opt_Haddock
@@ -305,7 +301,7 @@ getParsedModuleWithCommentsRule recorder =
     let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt (toInput file) ms''
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput file) ms''
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
@@ -317,14 +313,11 @@ getModifyDynFlags f = do
 getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
-    -> SomeInput
+    -> SomeFileInput
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt input ms = do
-    case inputFingerprint input of
-      InputFile file -> do
-        let fp = fromNormalizedFilePath file
-        parseModule opt packageState fp ms
-      _ -> pure ([], Nothing)
+    let fp = fromNormalizedFilePath (inputFilePath input)
+    parseModule opt packageState fp ms
 
 getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
@@ -526,12 +519,12 @@ reportImportCyclesRule recorder =
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      case toProjectHaskellInput (inputFilePath f) of
-        Nothing -> pure ([], Nothing)
-        Just projectFile -> do
-          tmr <- use_ TypeCheck projectFile
-          hsc <- hscEnv <$> use_ GhcSessionDeps projectFile
+      case f of
+        SomeProjectHaskellInput input -> do
+          tmr <- use_ TypeCheck input
+          hsc <- hscEnv <$> use_ GhcSessionDeps input
           getHieAstRuleDefinition f hsc tmr
+        _ -> pure ([], Nothing)
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
@@ -586,7 +579,7 @@ persistentImportMapRule = addPersistentRule GetImportMap $ \_ -> pure $ Just (Im
 getBindingsRule :: Recorder (WithPriority Log) -> Rules ()
 getBindingsRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetBindings f -> do
-    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst (fromJust $ reclassifyInput f)
+    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst (SomeProjectHaskellInput f)
     case kind of
       HieFresh      -> pure ([], Just $ bindings rm)
       HieFromDisk _ -> pure ([], Nothing)
@@ -596,7 +589,7 @@ getDocMapRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetDocMap file -> do
       (tmrTypechecked -> tc) <- use_ TypeCheck file
       (hscEnv -> hsc)        <- use_ GhcSessionDeps file
-      HAR{refMap=rf}         <- use_ GetHieAst (fromJust $ reclassifyInput file)
+      HAR{refMap=rf}         <- use_ GetHieAst (SomeProjectHaskellInput file)
       cfg <- getClientConfigAction
       dkMap <- liftIO $ mkDocMap hsc rf tc $ LinkTargets
                 { linkSource = linkSourceTo cfg
@@ -940,7 +933,7 @@ getModIfaceFromDiskAndIndexRule recorder =
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
           logWith recorder Logger.Debug $ LogReindexingHieFile file
-          indexHieFile se ms (fromJust $ reclassifyInput f) fileHash hf
+          indexHieFile se ms (SomeProjectHaskellInput f) fileHash hf
 
   return (Just x)
 
@@ -962,7 +955,7 @@ getModSummaryRule displayTHWarning recorder = do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = setNonHomeFCHook $ hscSetFlags (modify_dflags $ hsc_dflags session') session' -- TODO wz1000
-        mFileContent <- getFileContents (fromJust $ reclassifyInput f)
+        mFileContent <- getFileContents (SomeFileHaskellInput(SomeProjectHaskellInput f))
         let fp = fromNormalizedFilePath (inputFilePath f)
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp (textToStringBuffer . Rope.toText <$> mFileContent)
@@ -1059,7 +1052,7 @@ regenerateHiFile sess input ms compNeeded = do
     opt <- getIdeOptions
 
     -- By default, we parse with `-haddock` unless 'OptHaddockParse' is overwritten.
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt (toInput input) ms
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput input) ms
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
@@ -1080,20 +1073,21 @@ regenerateHiFile sess input ms compNeeded = do
                 -- Write hi file
                 hiDiags <- case res of
                   Just !hiFile -> do
-
+                    let haskellInput = SomeProjectHaskellInput input
+                        fileInput = SomeFileHaskellInput haskellInput
                     -- Write hie file. Do this before writing the .hi file to
                     -- ensure that we always have a up2date .hie file if we have
                     -- a .hi file
                     se' <- getShakeExtras
                     (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
-                    source <- getSourceFileSource (fromJust $ reclassifyInput input)
+                    source <- getSourceFileSource fileInput
                     wDiags <- forM masts $ \asts ->
                       liftIO $
                         writeAndIndexHieFile
                           hsc
                           se'
                           (tmrModSummary tmr)
-                          (fromJust $ reclassifyInput input)
+                          haskellInput
                           (tcg_exports $ tmrTypechecked tmr)
                           asts
                           source
@@ -1248,13 +1242,11 @@ needsCompilationRule input = do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        case traverse reclassifyInput revdeps :: Maybe [ProjectHaskellInput] of
-          Nothing -> fail $ "Expected project Haskell reverse dependencies of " ++ show input
-          Just revdepInputs -> do
-            (modsums,needsComps) <- liftA2
-                (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdepInputs)
-                    (uses NeedsCompilation revdepInputs)
-            pure $ computeLinkableType modsums (map join needsComps)
+        let revdepInputs = ProjectHaskellInput <$> revdeps
+        (modsums,needsComps) <- liftA2
+            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdepInputs)
+                (uses NeedsCompilation revdepInputs)
+        pure $ computeLinkableType modsums (map join needsComps)
   pure (Just $ encodeLinkableType res, Just res)
   where
     computeLinkableType :: [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
@@ -1363,9 +1355,12 @@ mainRule recorder RulesConfig{..} = do
 -- | Get HieFile for haskell file on NormalizedFilePath
 getHieFile :: SomeFileInput -> Action (Maybe HieFile)
 getHieFile input = runMaybeT $ do
-  let file = inputFilePath input
-  haskellInput <- MaybeT $ pure $ reclassifyInput input
-  projectInput <- MaybeT $ pure $ toProjectHaskellInput file
+  haskellInput <- MaybeT $ pure $ case input of
+    SomeFileHaskellInput fp -> Just fp
+    _ -> Nothing
+  projectInput <- MaybeT $ pure $ case haskellInput of
+    SomeProjectHaskellInput fp -> Just fp
+    _ -> Nothing
   HAR {hieAst} <- MaybeT $ use GetHieAst haskellInput
   tmr <- MaybeT $ use TypeCheck projectInput
   ghc <- MaybeT $ use GhcSession projectInput

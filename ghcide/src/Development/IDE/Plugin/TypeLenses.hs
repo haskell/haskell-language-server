@@ -43,7 +43,8 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentRange,
                                                        toCurrentRange)
 import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       RuleInput)
+                                                       RuleInput,
+                                                       toProjectHaskellInput)
 import           Development.IDE.Core.Rules           (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes       (TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service         (getDiagnostics)
@@ -156,11 +157,14 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
             , Just newRange <- [toCurrentRange mp range]]
     if mode == Always || mode == Exported
       then do
+        projectFile <- handleMaybe
+          (PluginInvalidParams $ "Expected project Haskell file: " <> T.pack (show uri))
+          (toProjectHaskellInput nfp)
         -- In this mode we get the global bindings from the
         -- GlobalBindingTypeSigs rule.
         (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
           runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-          $ useWithStaleE GetGlobalBindingTypeSigs nfp
+          $ useWithStaleE GetGlobalBindingTypeSigs projectFile
         -- Depending on whether we only want exported or not we filter our list
         -- of signatures to get what we want
         let relevantGlobalSigs =
@@ -179,9 +183,12 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
+  projectFile <- handleMaybe
+    (PluginInvalidParams $ "Expected project Haskell file: " <> T.pack (show uri))
+    (toProjectHaskellInput nfp)
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
-    $ useWithStaleE GetGlobalBindingTypeSigs nfp
+    $ useWithStaleE GetGlobalBindingTypeSigs projectFile
   -- regardless of how the original lens was generated, we want to get the range
   -- that the global bindings rule would expect here, hence the need to reverse
   -- position map the range, regardless of whether it was position mapped in the

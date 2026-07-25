@@ -11,20 +11,18 @@
 module Development.IDE.Core.RuleInput
     ( RuleInput
     , InputFingerprint(..)
-    , ProjectHaskellInput
-    , NonProjectHaskellInput
-    , SomeHaskellInput
-    , CabalInput
-    , SomeFileInput
+    , ProjectHaskellInput(..)
+    , NonProjectHaskellInput(..)
+    , SomeHaskellInput(..)
+    , CabalInput(..)
+    , SomeFileInput(..)
     , NoInput(..)
     , SomeInput
     , IsInput(..)
-    , reclassifyInput
     , fileInputFingerprint
     , isHaskellFilePath
     , isDependencyHaskellPath
     , IsFileInput(..)
-    , someInputFilePath'
     , toProjectHaskellInput
     , toNonProjectHaskellInput
     , toCabalInput
@@ -47,7 +45,6 @@ import           GHC.Generics                          (Generic)
 import           Ide.Plugin.Error                      (PluginError (..))
 import           Language.LSP.Protocol.Types           (NormalizedFilePath,
                                                         Uri,
-                                                        emptyNormalizedFilePath,
                                                         fromNormalizedFilePath,
                                                         toNormalizedUri,
                                                         uriToNormalizedFilePath)
@@ -106,11 +103,6 @@ instance IsInput SomeInput where
     toInput = id
     fromInput = Just
     inputFingerprint (SomeInput i) = inputFingerprint i
-
--- | Reinterpret an input as another typed input when they have a compatible
--- fingerprint.
-reclassifyInput :: (IsInput i, IsInput j) => i -> Maybe j
-reclassifyInput = fromInput . toInput
 
 -- RuleInput : NoInput
 -- | A valid Rule Input that has no file associated with it.
@@ -254,15 +246,6 @@ someInputFilePathMaybe input =
     case inputFingerprint input of
         InputFile path -> Just path
         _ -> Nothing
-
--- | Returns the underlying Normalised File Path of a Typed Rules.
--- Returns Empty nfp if no such path found.
--- Not reccomended to use !
-someInputFilePath' :: SomeInput -> NormalizedFilePath
-someInputFilePath' input =
-    case inputFingerprint input of
-        InputFile path -> path
-        _ -> emptyNormalizedFilePath
 
 -- Helpers that convert NFP to typed rules
 toProjectHaskellInput :: NormalizedFilePath -> Maybe ProjectHaskellInput

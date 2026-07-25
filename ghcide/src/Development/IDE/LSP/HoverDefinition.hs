@@ -26,6 +26,7 @@ import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
                                                  runIdeAction)
 import           Development.IDE.Types.Location
+import           GHC.Iface.Ext.Types           (Identifier)
 import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Types
@@ -52,7 +53,7 @@ hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPos
 gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
 gotoImplementation :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentImplementation)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
-gotoDefinition = request "Definition" (getDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR . map fst)
+gotoDefinition = request "Definition" getDefinitionForFile (InR $ InR Null) (InL . Definition . InR . map fst)
 gotoTypeDefinition = request "TypeDefinition" (getTypeDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR . map fst)
 gotoImplementation = request "Implementation" (getImplementationDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR)
 hover          = request "Hover"      getAtPointForFile     (InR Null)     foundHover
@@ -78,6 +79,12 @@ getAtPointForFile file pos =
   case toSomeHaskellInput file of
     Nothing -> pure Nothing
     Just input -> getAtPoint input pos
+
+getDefinitionForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getDefinitionForFile file pos =
+  case toSomeHaskellInput file of
+    Nothing -> pure Nothing
+    Just input -> getDefinition input pos
 
 highlightAtPointForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPointForFile file pos =

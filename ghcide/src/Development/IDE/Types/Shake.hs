@@ -24,13 +24,12 @@ import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (toInput, IsInput, SomeInput, NoInput(..), someInputFilePath')
+import           Development.IDE.Core.RuleInput       (toInput, IsInput, SomeInput, NoInput(..))
 import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key, RuleResult, newKey,
                                                        pattern Key)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location
 import           GHC.Generics
 import           HieDb.Types                          (HieDb)
 import qualified StmContainers.Map                    as STM
@@ -102,7 +101,7 @@ data Q k = Q !k !SomeInput
     deriving anyclass (Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q k input) = show k ++ "; " ++ fromNormalizedFilePath (someInputFilePath' input)
+    show (Q k input) = show k ++ "; " ++ show input
 
 -- | Invariant: the @v@ must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database

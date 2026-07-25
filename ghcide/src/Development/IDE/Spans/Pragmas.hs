@@ -18,13 +18,14 @@ import qualified Data.Text                       as Text
 import           Data.Text.Utf16.Rope.Mixed      (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed      as Rope
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
-import           Development.IDE.Core.RuleInput  (toSomeFileInput)
+import           Development.IDE.Core.RuleInput  (toProjectHaskellInput,
+                                                  toSomeFileInput)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types    as LSP
 import           Control.Monad.IO.Class         (MonadIO (..))
 import           Control.Monad.Trans.Except     (ExceptT)
-import           Ide.Plugin.Error               (PluginError)
+import           Ide.Plugin.Error               (PluginError (..), handleMaybe)
 import           Ide.Types                      (PluginId(..))
 import qualified Data.Text                      as T
 import           Development.IDE.Core.PluginUtils
@@ -53,7 +54,8 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
 
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
-  (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
+  projectFile <- handleMaybe (PluginInvalidParams $ pack "Expected project Haskell file") $ toProjectHaskellInput nfp
+  (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession projectFile
   fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents $ toSomeFileInput nfp
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
