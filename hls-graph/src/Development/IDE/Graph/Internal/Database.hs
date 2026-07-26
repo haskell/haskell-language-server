@@ -341,6 +341,7 @@ registerAsyncs st as = do
     registered <- atomicModifyIORef' st $ \case
         Nothing -> (Nothing, False)
         Just xs -> (Just (as ++ xs), True)
+    unless registered $ mapM_ uninterruptibleCancel as
     pure registered
 
 -- | Like 'async' but with built-in cancellation.
@@ -360,19 +361,15 @@ asyncWithCleanUp act = do
     registered <- registerAsyncs st [void a]
     putMVar gate registered
     return (registered, a)
-  return $ if registered
-              then wait a
-              -- we don't want to throw an exception here because the async is already running and will be cancelled by the scope,
-              -- so we just wait for it to finish
-              else (forever $ sleep 10)
+  -- A closed scope means the async was refused and cancelled, abort.
+  return $ if registered then wait a else throwIO AsyncCancelled
 
 runAsyncIfRegistered :: MVar Bool -> IO a -> IO (Async a)
 runAsyncIfRegistered gate io =
-    asyncWithUnmask $ \unmask -> unmask $ do
-      b <- readMVar gate
-      -- Only if the thread was successfully registered do we execute
-      if b then io else (error "asyncWithCleanUp: scope closed before thread could be spawned")
-
+  asyncWithUnmask $ \unmask -> unmask $ do
+    registered <- readMVar gate
+    -- Only if the thread was successfully registered do we run the computation.
+    if registered then io else throwIO AsyncCancelled
 
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
@@ -392,24 +389,18 @@ cleanupAsync ref = uninterruptibleMask $ \unmask -> do
     -- Close the scope so no later force can register, and take the live asyncs
     -- to interrupt. See Note [Closing escaped rule computations].
     asyncs <- atomicModifyIORef' ref $ \m -> (Nothing, fromMaybe [] m)
-    -- interrupt all the asyncs without waiting
-    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
-    -- Wait until all the asyncs are done
-    -- But if it takes more than 10 seconds, log to stderr
+    -- Cancel the asyncs concurrently. If teardown takes over 10 seconds, log
+    -- to stderr.
     unless (null asyncs) $ do
         let warnIfTakingTooLong = unmask $ forever $ do
                 sleep 10
                 traceM "cleanupAsync: waiting for asyncs to finish"
         withAsync warnIfTakingTooLong $ \_ ->
-            mapM_ waitCatch asyncs
+            mapConcurrently_ cancel asyncs
 
 data Wait
     = Wait {justWait :: !(IO ())}
     | Spawn {justWait :: !(IO ())}
-
-fmapWait :: (IO () -> IO ()) -> Wait -> Wait
-fmapWait f (Wait io)  = Wait (f io)
-fmapWait f (Spawn io) = Spawn (f io)
 
 waitOrSpawn :: MVar Bool -> Wait -> IO (Either (IO ()) (Async ()))
 waitOrSpawn _mv (Wait io) = pure $ Left io
@@ -420,18 +411,17 @@ waitConcurrently_ [] = pure ()
 waitConcurrently_ [one] = liftIO $ justWait one
 waitConcurrently_ many = do
     ref <- AIO ask
-    -- spawn the async computations.
-    -- mask to make sure we keep track of all the asyncs.
-    (asyncs, syncs, registered) <- liftIO $ uninterruptibleMask $ \unmask -> do
+    -- Mask so spawn + register stay atomic.
+    (asyncs, syncs, registered) <- liftIO $ uninterruptibleMask_ $ do
         gate <- newEmptyMVar
-        waits <- liftIO $ traverse (waitOrSpawn gate. fmapWait unmask) many
+        waits <- liftIO $ traverse (waitOrSpawn gate) many
         let (syncs, asyncs) = partitionEithers waits
         registered <- liftIO $ registerAsyncs ref asyncs
         putMVar gate registered
         return (asyncs, syncs, registered)
-    -- A closed scope means our asyncs were cancelled, so abort the superseded work.
+    -- A closed scope means our threads were cancelled, so abort.
     if not registered
-      then liftIO $ (forever sleep 10) -- wait for the asyncs to finish, but don't block the main thread
+      then liftIO $ throwIO AsyncCancelled
       else do
         -- work on the sync computations
         liftIO $ sequence_ syncs

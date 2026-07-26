@@ -143,7 +143,9 @@ spec = do
       gate <- newEmptyMVar
       a <- runAsyncIfRegistered gate $ do C.threadDelay maxBound
       registerAsyncs scope [a] `shouldReturn` True
-      -- should still running
+      -- Confirm registration so the parked thread proceeds to its computation.
+      C.putMVar gate True
+      -- The registered async runs and stays alive.
       poll a >>= \res -> isJust res `shouldBe` False
     it "refuses to register into a closed scope and cancels the late async" $ do
       scope <- newIORef (Just [])
@@ -153,4 +155,4 @@ spec = do
       -- Registration fails rather than leaking the async past teardown.
       registerAsyncs scope [late] `shouldReturn` False
       -- The refused async was cancelled, not left running.
-      poll late >>= \res -> isJust res `shouldBe` False
+      poll late >>= \res -> isJust res `shouldBe` True
