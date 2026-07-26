@@ -584,7 +584,7 @@ getHieAstRuleDefinition f hsc tmr = do
 getImportMapRule :: Recorder (WithPriority Log) -> Rules ()
 getImportMapRule recorder = define (cmapWithPrio LogShake recorder) $ \GetImportMap f -> do
   im <- use GetLocatedImports f
-  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . inputFilePath . artifactFilePath <$> mfp) fileImports
+  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . SomeProjectHaskellInput . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
 
 -- | Ensure that go to definition doesn't block on startup

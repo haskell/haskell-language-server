@@ -235,7 +235,7 @@ gotoDefinition
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName SomeHaskellInput
   -> HieAstResult
   -> Position
   -> MaybeT m [(Location, Identifier)]
@@ -569,7 +569,7 @@ locationsAtPoint
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName SomeHaskellInput
   -> Position
   -> HieAstResult
   -> m [(Location, Identifier)]
@@ -577,7 +577,7 @@ locationsAtPoint withHieDb lookupModule _ideOptions imports pos (HAR _ ast _rm _
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
-      modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' fs) zeroRange)) $ M.lookup m imports
+      modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' $ inputFilePath fs) zeroRange)) $ M.lookup m imports
    in fmap (nubOrd . concat) $ mapMaybeM
         (either (\m -> pure ((fmap $ fmap (,Left m)) (modToLocation m)))
                 (\n -> fmap (fmap $ fmap (,Right n)) (nameToLocation withHieDb lookupModule n)))

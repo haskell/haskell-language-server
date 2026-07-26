@@ -48,8 +48,7 @@ import           GHC.Driver.Errors.Types                      (WarningMessages)
 import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
-import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+import           Language.LSP.Protocol.Types                  (Int32)
 import           Development.IDE.Core.RuleInput               (NoInput,
                                                                ProjectHaskellInput,
                                                                RuleInput,
@@ -141,7 +140,7 @@ instance NFData   GetImportMap
 type instance RuleResult GetImportMap = ImportMap
 type instance RuleInput GetImportMap = ProjectHaskellInput
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName SomeHaskellInput -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 
