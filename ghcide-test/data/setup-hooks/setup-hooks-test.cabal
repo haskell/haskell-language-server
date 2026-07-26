@@ -1,0 +1,19 @@
+cabal-version:      3.14
+name:               setup-hooks-test
+version:            0.1.0.0
+synopsis:           HLS test fixture for build-type: Hooks
+build-type:         Hooks
+
+custom-setup
+  setup-depends:
+      base
+    , Cabal
+    , Cabal-hooks
+    , directory
+    , filepath
+
+library
+  autogen-modules:  Gen
+  exposed-modules:  Gen, Lib
+  build-depends:    base
+  default-language: Haskell2010
