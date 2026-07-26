@@ -34,7 +34,6 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
-import           Data.Maybe                                   (mapMaybe)
 import qualified Data.Text                                    as T
 import qualified Data.Text                                    as Text
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
@@ -45,7 +44,6 @@ import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
                                                                ProjectHaskellInput,
                                                                SomeFileInput,
-                                                               toProjectHaskellInput,
                                                                toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
@@ -86,7 +84,7 @@ import           System.IO.Unsafe
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
-  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
+  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [ProjectHaskellInput])
   | LogShake Shake.Log
   deriving Show
 
@@ -305,9 +303,8 @@ typecheckParentsAction recorder input = do
     case revs of
       Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
-        let projectHaskell = mapMaybe toProjectHaskellInput rs
         logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
-        void $ uses GetModIface projectHaskell
+        void $ uses GetModIface rs
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

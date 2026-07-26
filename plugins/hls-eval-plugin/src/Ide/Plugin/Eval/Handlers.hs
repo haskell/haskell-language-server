@@ -44,7 +44,8 @@ import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
-import           Development.IDE.Core.RuleInput               (toProjectHaskellInput, ProjectHaskellInput, IsFileInput (inputFilePath))
+import           Development.IDE.Core.RuleInput               (ProjectHaskellInput,
+                                                               classifyAsHaskell)
 import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
@@ -164,11 +165,11 @@ mkRangeCommands recorder st plId textDocument =
             do
                 let TextDocumentIdentifier uri = textDocument
                 fp <- uriToFilePathE uri
-                let nfp = toNormalizedFilePath' fp
-                    isLHS = isLiterate fp
+                projectFile <- classifyAsHaskell uri
+                let isLHS = isLiterate fp
                 dbg $ LogCodeLensFp fp
                 (comments, _) <-
-                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
+                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments projectFile
                 dbg $ LogCodeLensComments comments
 
                 -- Extract 'EvalExpr's from source code
@@ -219,6 +220,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
+            projectFile <- classifyAsHaskell _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText st _uri
 
@@ -232,7 +234,7 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
                 unqueueForEvaluation st nfp
                 return [toKey IsEvaluating nfp]
                 )
-              (initialiseSessionForEval (needsQuickCheck evalExprs) st nfp)
+              (initialiseSessionForEval (needsQuickCheck evalExprs) st projectFile)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -263,8 +265,8 @@ initialiseSessionForEval needs_quickcheck st projectFile = do
     ms <- msrModSummary <$> use_ GetModSummary projectFile
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps projectFile
 
-    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph projectFile <*> pure (inputFilePath projectFile)
-    linkables <- uses_ GetLinkable (projectFile : mapMaybe toProjectHaskellInput (maybe [] transitiveModuleDeps linkables_needed))
+    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph projectFile <*> pure projectFile
+    linkables <- uses_ GetLinkable (projectFile : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env

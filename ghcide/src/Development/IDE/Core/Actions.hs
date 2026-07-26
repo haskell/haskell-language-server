@@ -152,11 +152,11 @@ highlightAtPoint file pos = runMaybeT $ do
     mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
 
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
+refsAtPoint :: SomeHaskellInput -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- mapMaybe (toSomeHaskellInput . inputFilePath) . HM.keys <$> getFilesOfInterestUntracked
-    asts <- HM.fromList . mapMaybe sequence . zip (map inputFilePath fs) <$> usesWithStale GetHieAst fs
+    asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
     AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
 
 workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])

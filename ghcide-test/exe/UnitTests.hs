@@ -13,6 +13,7 @@ import           Data.List.Extra
 import           Data.String                                  (IsString (fromString))
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.FileStore               (getModTime)
+import           Development.IDE.Core.RuleInput               (ProjectHaskellInput (ProjectHaskellInput))
 import           Development.IDE.Import.DependencyInformation (DependencyInformation (..),
                                                                FilePathId (..),
                                                                PathIdMap (..),
@@ -116,11 +117,13 @@ tests = do
          -- not just the immediate reverse-dep {1}.
          let path :: Int -> NormalizedFilePath
              path i = toNormalizedFilePath' ("/M" ++ show i ++ ".hs")
+             input :: Int -> ProjectHaskellInput
+             input i = ProjectHaskellInput (path i)
              loc :: Int -> ArtifactsLocation
-             loc i = ArtifactsLocation (path i) Nothing True Nothing
+             loc i = ArtifactsLocation (input i) Nothing True Nothing
              pathIdMap = PathIdMap
                { idToPathMap = IntMap.fromList [(i, loc i) | i <- [0..3]]
-               , pathToIdMap = HMS.fromList   [(path i, FilePathId i) | i <- [0..3]]
+               , pathToIdMap = HMS.fromList   [(input i, FilePathId i) | i <- [0..3]]
                , nextFreshId = 4
                }
              revDeps = IntMap.fromList
@@ -141,8 +144,8 @@ tests = do
                , depTransReverseDepsFingerprints     = IntMap.empty
                , depImmediateReverseDepsFingerprints = IntMap.empty
                }
-         (sort <$> transitiveReverseDependencies (path 0) depInfo)
-           @?= Just [path 1, path 2, path 3]
+         (sort <$> transitiveReverseDependencies (input 0) depInfo)
+           @?= Just [input 1, input 2, input 3]
      , Progress.tests
      , FuzzySearch.tests
      ]

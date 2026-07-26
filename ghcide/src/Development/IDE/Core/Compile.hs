@@ -73,6 +73,7 @@ import           Development.IDE.Core.FileStore               (resetInterfaceSto
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleInput              (IsFileInput (inputFilePath),
+                                                              ProjectHaskellInput,
                                                               SomeHaskellInput,
                                                               toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
@@ -206,7 +207,7 @@ computePackageDeps env pkg = do
 
 data TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables   :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables   :: [ProjectHaskellInput] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   , getModuleGraph :: IO DependencyInformation
   }
 
@@ -1506,7 +1507,7 @@ data RecompilationInfo m
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
   , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
-  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
+  , get_linkable_hashes :: [ProjectHaskellInput] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
@@ -1620,7 +1621,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies :: MonadIO m => ([ProjectHaskellInput] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps = do
   graph <- get_module_graph
   let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph

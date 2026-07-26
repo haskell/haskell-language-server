@@ -43,7 +43,10 @@ import           Data.List.NonEmpty              (NonEmpty)
 import           Data.Map.Strict                 (Map)
 import           Data.String                     (IsString (..))
 import qualified Data.Text                       as T
-import           Development.IDE                 (Range, RuleResult)
+import           Development.IDE                 (NormalizedFilePath, Range,
+                                                  RuleResult)
+import           Development.IDE.Core.RuleInput  (ProjectHaskellInput,
+                                                  RuleInput)
 import qualified Development.IDE.Core.Shake      as Shake
 import qualified Development.IDE.GHC.Compat.Core as Core
 import           Development.IDE.Graph.Classes
@@ -174,6 +177,7 @@ data IsEvaluating = IsEvaluating
 instance Hashable IsEvaluating
 instance NFData   IsEvaluating
 
+type instance RuleInput IsEvaluating = NormalizedFilePath
 type instance RuleResult IsEvaluating = Bool
 
 data GetEvalComments = GetEvalComments
@@ -181,6 +185,7 @@ data GetEvalComments = GetEvalComments
 instance Hashable GetEvalComments
 instance NFData   GetEvalComments
 
+type instance RuleInput GetEvalComments = ProjectHaskellInput
 type instance RuleResult GetEvalComments = Comments
 data Comments = Comments
     { lineComments  :: Map Range RawLineComment

@@ -63,7 +63,9 @@ references :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method
 references recorder ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
   nfp <- getNormalizedFilePathE uri
   liftIO $ logWith recorder Debug $ LogRequest "References" pos nfp
-  InL <$> (liftIO $ Shake.runAction "references" ide $ refsAtPoint nfp pos)
+  case toSomeHaskellInput nfp of
+    Nothing -> pure $ InL []
+    Just input -> InL <$> (liftIO $ Shake.runAction "references" ide $ refsAtPoint input pos)
 
 wsSymbols :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_WorkspaceSymbol
 wsSymbols recorder ide _ (WorkspaceSymbolParams _ _ query) = liftIO $ do

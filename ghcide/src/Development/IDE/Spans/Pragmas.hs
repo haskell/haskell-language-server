@@ -17,9 +17,9 @@ import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
 import           Data.Text.Utf16.Rope.Mixed      (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed      as Rope
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
-import           Development.IDE.Core.RuleInput  (toProjectHaskellInput,
-                                                  toSomeFileInput)
+import           Development.IDE                 (srcSpanToRange, IdeState, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Development.IDE.Core.RuleInput  (SomeFileInput (SomeFileHaskellInput),
+                                                  SomeHaskellInput (SomeProjectHaskellInput))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types    as LSP
@@ -52,11 +52,14 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> SomeFileInput -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
-  projectFile <- handleMaybe (PluginInvalidParams $ pack "Expected project Haskell file") $ toProjectHaskellInput nfp
+  projectFile <- handleMaybe (PluginInvalidParams $ pack "Expected project Haskell file") $
+    case nfp of
+      SomeFileHaskellInput (SomeProjectHaskellInput projectFile) -> Just projectFile
+      _ -> Nothing
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession projectFile
-  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents $ toSomeFileInput nfp
+  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------

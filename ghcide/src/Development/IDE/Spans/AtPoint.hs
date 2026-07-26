@@ -96,9 +96,11 @@ import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
+import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
+                                                       SomeHaskellInput)
 
 -- | HieFileResult for files of interest, along with the position mappings
-newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
+newtype FOIReferences = FOIReferences (HM.HashMap SomeHaskellInput (HieAstResult, PositionMapping))
 
 computeTypeReferences :: Foldable f => f (HieAST Type) -> M.Map Name [Span]
 computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
@@ -115,7 +117,7 @@ computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
 -- | Given a file and position, return the names at a point, the references for
 -- those names in the FOIs, and a list of file paths we already searched through
 foiReferencesAtPoint
-  :: NormalizedFilePath
+  :: SomeHaskellInput
   -> Position
   -> FOIReferences
   -> ([Name],[Location],[FilePath])
@@ -131,7 +133,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                                (mapMaybe (\n -> M.lookup (Right n) rf) names)
               typerefs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation))
                                    (mapMaybe (`M.lookup` tr) names)
-        in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
+        in (names, adjustedLocs,map (fromNormalizedFilePath . inputFilePath) $ HM.keys asts)
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
 getNamesAtPoint hf pos mapping =
@@ -146,7 +148,7 @@ toCurrentLocation mapping (Location uri range) =
 referencesAtPoint
   :: MonadIO m
   => WithHieDb
-  -> NormalizedFilePath -- ^ The file the cursor is in
+  -> SomeHaskellInput -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
   -> m [Location]

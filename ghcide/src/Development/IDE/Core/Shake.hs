@@ -361,7 +361,7 @@ type WithProgressFunc = forall a.
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
 
-type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
+type GetStalePersistent = SomeInput -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
@@ -403,10 +403,13 @@ getPluginConfigAction plId = do
 -- This is called when we don't already have a result, or computing the rule failed.
 -- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
 -- be queued if the rule hasn't run before.
-addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
+addPersistentRule :: IdeRule k v => k -> (RuleInput k -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
-  void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) (fmap (fmap (first3 toDyn)) . getVal)
+  let getVal' input = case fromInput input of
+        Nothing -> pure Nothing
+        Just ruleInput -> fmap (fmap (first3 toDyn)) $ getVal ruleInput
+  void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) getVal'
 
 class Typeable a => IsIdeGlobal a where
 
@@ -487,7 +490,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k input = do
                   mv <- runMaybeT $ do
                     liftIO $ logWith (shakeRecorder s) Debug $ LogLookupPersistentKey (T.pack $ show k)
                     f <- MaybeT $ pure $ lookupKeyMap (newKey k) pmap
-                    (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
+                    (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f (toInput input)
                     MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
                   case mv of
                     Nothing -> atomicallyNamed "lastValueIO 1" $ do

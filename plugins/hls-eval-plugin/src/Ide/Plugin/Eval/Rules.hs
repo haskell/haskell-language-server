@@ -25,6 +25,7 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath))
 import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),
@@ -80,12 +81,12 @@ pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
-evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
-    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
+evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments input -> do
+    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments input
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
                     | FastString.unpackFS (srcSpanFile real) ==
-                        fromNormalizedFilePath nfp
+                        fromNormalizedFilePath (inputFilePath input)
                     , let ran0 = realSrcSpanToRange real
                     , Just curRan <- toCurrentRange posMap ran0
                     ->
@@ -120,7 +121,7 @@ isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $
 -- leading to much better performance of the evaluate code lens
 redefinedNeedsCompilation :: Recorder (WithPriority Log) -> Rules ()
 redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
-    isEvaluating <- use_ IsEvaluating f
+    isEvaluating <- use_ IsEvaluating (inputFilePath f)
     if isEvaluating then do
         let linkableType = BCOLinkable
             fp = encodeLinkableType $ Just linkableType

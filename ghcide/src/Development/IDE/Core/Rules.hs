@@ -84,6 +84,7 @@ import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
+import qualified Data.IntSet                                  as IntSet
 import           Data.IORef
 import           Data.List
 import           Data.List.Extra                              (nubOrd, nubOrdOn)
@@ -107,7 +108,7 @@ import           Development.IDE.Core.OfInterest              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
-                                                               ProjectHaskellInput (ProjectHaskellInput),
+                                                               ProjectHaskellInput,
                                                                SomeFileInput (SomeFileHaskellInput),
                                                                SomeHaskellInput (SomeProjectHaskellInput),
                                                                toProjectHaskellInput,
@@ -148,10 +149,6 @@ import           GHC.Iface.Ext.Utils                          (generateReference
 import qualified GHC.LanguageExtensions                       as LangExt
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
-import           GHC.Types.Basic                              (ImportLevel (..))
-import           GHC.Unit.Types                               (GenWithIsBoot(..))
-import           GHC.Unit.Module.Graph                        (mkModuleEdge)
-import           GHC.Unit.Module.ModNodeKey                   (mnkModuleName)
 #endif
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
@@ -191,7 +188,7 @@ import           GHC.Fingerprint
 data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
-  | LogLoadingHieFile !NormalizedFilePath
+  | LogLoadingHieFile !ProjectHaskellInput
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogTypecheckedFOI !NormalizedFilePath
@@ -203,7 +200,7 @@ instance Pretty Log where
     LogReindexingHieFile path ->
       "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFile path ->
-      "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath path)
+      "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath $ inputFilePath path)
     LogLoadingHieFileFail path e ->
       nest 2 $
         vcat
@@ -335,19 +332,21 @@ getLocatedImportsRule recorder =
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
         opt <- getIdeOptions
-        let getTargetFor modName nfp
+        let getTargetFor modName input
                 | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     itExists <- getFileExists $ toSomeFileInput nfp'
-                    return $ if itExists then Just nfp' else Nothing
+                    return $ if itExists then toProjectHaskellInput nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
                     let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
                     itExists <- getFileExists $ toSomeFileInput nfp'
-                    return $ if itExists then Just nfp' else Nothing
+                    return $ if itExists then toProjectHaskellInput nfp' else Nothing
                 | otherwise = do
                     itExists <- getFileExists $ toSomeFileInput nfp
-                    return $ if itExists then Just nfp else Nothing
+                    return $ if itExists then Just input else Nothing
+              where
+                nfp = inputFilePath input
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
 #else
@@ -376,24 +375,26 @@ getLocatedImportsRule recorder =
         let moduleImports = catMaybes $ bootArtifact : imports'
         pure (concat diags, Just moduleImports)
 
-type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
+type RawDepState = (RawDependencyInformation, IntMap ArtifactsLocation, IntMap ProjectHaskellInput)
+type RawDepM a = StateT RawDepState Action a
 
-execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
+execRawDepM :: Monad m => StateT RawDepState m a -> m RawDepState
 execRawDepM act =
     execStateT act
         ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
+        , IntMap.empty
         , IntMap.empty
         )
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [ProjectHaskellInput] -> Action (RawDependencyInformation, BootIdMap)
+rawDependencyInformation :: [ProjectHaskellInput] -> Action (RawDependencyInformation, BootIdMap, IntMap ProjectHaskellInput)
 rawDependencyInformation fs = do
-    (rdi, ss) <- execRawDepM (goPlural fs)
+    (rdi, ss, inputs) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
-    return (rdi, bm)
+    return (rdi, bm, inputs)
   where
-    goPlural :: [ProjectHaskellInput] -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action [FilePathId]
+    goPlural :: [ProjectHaskellInput] -> RawDepM [FilePathId]
     goPlural ff = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
         zipWithM go ff mss
@@ -408,7 +409,7 @@ rawDependencyInformation fs = do
       checkAlreadyProcessed f $ do
           let al = modSummaryToArtifactsLocation f mbModSum
           -- Get a fresh FilePathId for the new file
-          fId <- getFreshFid al
+          fId <- getFreshFid f al
           -- Record this module and its location
           whenJust mbModSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
@@ -433,7 +434,7 @@ rawDependencyInformation fs = do
                   (mns, ls) = unzip with_file
               -- Recursively process all the imports we just learnt about
               -- and get back a list of their FilePathIds
-              fids <- goPlural $ mapMaybe (toProjectHaskellInput . artifactFilePath) ls
+              fids <- goPlural $ map artifactFilePath ls
               -- Associate together the ModuleName with the FilePathId
               let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
               -- Insert into the map the information about this modules
@@ -444,25 +445,26 @@ rawDependencyInformation fs = do
 
     checkAlreadyProcessed :: ProjectHaskellInput -> RawDepM FilePathId -> RawDepM FilePathId
     checkAlreadyProcessed nfp k = do
-      (rawDepInfo, _) <- get
+      (rawDepInfo, _, _) <- get
       maybe k return (lookupPathToId (rawPathIdMap rawDepInfo) nfp)
 
     modifyRawDepInfo :: (RawDependencyInformation -> RawDependencyInformation) -> RawDepM ()
-    modifyRawDepInfo f = modify (first f)
+    modifyRawDepInfo f = modify (\(rd, ss, inputs) -> (f rd, ss, inputs))
 
     addBootMap ::  ArtifactsLocation -> FilePathId -> RawDepM ()
     addBootMap al fId =
-      modify (\(rd, ss) -> (rd, if isBootLocation al
-                                  then IntMap.insert (getFilePathId fId) al ss
-                                  else ss))
+      modify (\(rd, ss, inputs) -> (rd, if isBootLocation al
+                                            then IntMap.insert (getFilePathId fId) al ss
+                                            else ss
+                                    , inputs))
 
-    getFreshFid :: ArtifactsLocation -> RawDepM FilePathId
-    getFreshFid al = do
-      (rawDepInfo, ss) <- get
+    getFreshFid :: ProjectHaskellInput -> ArtifactsLocation -> RawDepM FilePathId
+    getFreshFid input al = do
+      (rawDepInfo, ss, inputs) <- get
       let (fId, path_map) = getPathId al (rawPathIdMap rawDepInfo)
       -- Insert the File into the bootmap if it's a boot module
       let rawDepInfo' = rawDepInfo { rawPathIdMap = path_map }
-      put (rawDepInfo', ss)
+      put (rawDepInfo', ss, IntMap.insert (getFilePathId fId) input inputs)
       return fId
 
     -- Split in (package imports, local imports)
@@ -476,7 +478,8 @@ rawDependencyInformation fs = do
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
       if not artifactIsSource
         then
-          let msource_mod_id = pathToId (rawPathIdMap pm) (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath artifactFilePath)
+          let msource_mod_id = toProjectHaskellInput (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath $ inputFilePath artifactFilePath)
+                                >>= lookupPathToId (rawPathIdMap pm)
           in case msource_mod_id of
                Just source_mod_id -> insertBootId source_mod_id (FilePathId boot_mod_id) bm
                Nothing -> bm
@@ -485,11 +488,19 @@ rawDependencyInformation fs = do
     dropBootSuffix :: FilePath -> FilePath
     dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
+immediateReverseDependencyInputs :: ProjectHaskellInput -> DependencyInformation -> Maybe [ProjectHaskellInput]
+immediateReverseDependencyInputs file DependencyInformation{..} = do
+  FilePathId cur_id <- lookupPathToId depPathIdMap file
+  pure $
+    map (idToPath depPathIdMap . FilePathId) $
+      maybe mempty IntSet.toList $
+        IntMap.lookup cur_id depReverseModuleDeps
+
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles input -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
         DependencyInformation{..} <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph input
-        case pathToId depPathIdMap (inputFilePath input) of
+        case lookupPathToId depPathIdMap input of
           -- The header of the file does not parse, so it can't be part of any import cycles.
           Nothing -> pure []
           Just fileId ->
@@ -499,8 +510,9 @@ reportImportCyclesRule recorder =
                   let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
                   -- Convert cycles of files into cycles of module names
                   forM cycles $ \(imp, files) -> do
-                      modNames <- forM files $
-                          getModuleName . idToPath depPathIdMap
+                      modNames <- forM files $ \cycleFileId -> do
+                          let cycleInput = idToPath depPathIdMap cycleFileId
+                          getModuleName cycleInput
                       pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
@@ -510,8 +522,7 @@ reportImportCyclesRule recorder =
               & fdLspDiagnosticL %~ JL.range .~ rng
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
-          getModuleName file = do
-           input <- maybe (fail $ "Expected project Haskell file: " ++ show file) pure $ toProjectHaskellInput file
+          getModuleName input = do
            ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps input
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
@@ -527,8 +538,12 @@ getHieAstsRule recorder =
         _ -> pure ([], Nothing)
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
-persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
-  res <- readHieFileForSrcFromDisk recorder file
+persistentHieFileRule recorder = addPersistentRule GetHieAst $ \input -> runMaybeT $ do
+  projectInput <- MaybeT $ pure $ case input of
+    SomeProjectHaskellInput projectInput -> Just projectInput
+    _ -> Nothing
+  let file = inputFilePath projectInput
+  res <- readHieFileForSrcFromDisk recorder projectInput
   vfsRef <- asks vfsVar
   vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case getVirtualFileFromVFS (VFS vfsData) (filePathToUri' file) of
@@ -569,7 +584,7 @@ getHieAstRuleDefinition f hsc tmr = do
 getImportMapRule :: Recorder (WithPriority Log) -> Rules ()
 getImportMapRule recorder = define (cmapWithPrio LogShake recorder) $ \GetImportMap f -> do
   im <- use GetLocatedImports f
-  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
+  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . inputFilePath . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
 
 -- | Ensure that go to definition doesn't block on startup
@@ -601,12 +616,13 @@ getDocMapRule recorder =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
-readHieFileForSrcFromDisk recorder file = do
+readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> ProjectHaskellInput -> MaybeT IdeAction Compat.HieFile
+readHieFileForSrcFromDisk recorder input = do
   ShakeExtras{withHieDb} <- ask
+  let file = inputFilePath input
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
-  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
+  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile input
   exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
 readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
@@ -647,7 +663,7 @@ getFileHashRule recorder =
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
-  dependencyInfoForFiles (HashSet.toList fs)
+  dependencyInfoForFiles (mapMaybe toProjectHaskellInput $ HashSet.toList fs)
 
 #if MIN_VERSION_ghc(9,13,0)
 -- | Build level-aware module graph edges from a ModSummary and a list of dependency NodeKeys.
@@ -665,12 +681,14 @@ mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl 
       _ -> [NormalLevel]
 #endif
 
-dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
+dependencyInfoForFiles :: [ProjectHaskellInput] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
-  (rawDepInfo, bm) <- rawDependencyInformation (mapMaybe toProjectHaskellInput fs)
-  let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
-      allProjectFs = mapMaybe toProjectHaskellInput all_fs
-  msrs <- uses GetModSummaryWithoutTimestamps allProjectFs
+  (rawDepInfo, bm, inputMap) <- rawDependencyInformation fs
+  let allInputsWithIds =
+        map (\(fileId, input) -> (input, FilePathId fileId)) $
+          IntMap.toList inputMap
+      (allProjectInputs, _all_ids) = unzip allInputsWithIds
+  msrs <- uses GetModSummaryWithoutTimestamps allProjectInputs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
@@ -708,10 +726,7 @@ typeCheckRuleDefinition hsc pm fp = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkables = \files -> unliftIO unlift $
-                case traverse toProjectHaskellInput files of
-                  Nothing -> fail $ "Expected project Haskell linkable files: " ++ show files
-                  Just inputs -> uses_ GetLinkable inputs
+           { getLinkables = \files -> unliftIO unlift $ uses_ GetLinkable files
            , getModuleGraph = unliftIO unlift $ useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph fp
            }
   -- This 'setFileCacheHook' is neccessary to work correctly
@@ -804,11 +819,11 @@ ghcSessionDepsDefinition
         Bool ->
         GhcSessionDepsConfig -> HscEnvEq -> ProjectHaskellInput -> Action (Maybe HscEnvEq)
 ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
-    mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+    mbdeps <- mapM snd <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
-            let projectDeps = mapMaybe toProjectHaskellInput deps
+            let projectDeps = map artifactFilePath deps
             when fullModuleGraph $ void $ use_ ReportImportCycles file
             msr <- if fullModSummary
                 then use_ GetModSummary file
@@ -878,9 +893,8 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False} . toSomeFileInput
             , get_linkable_hashes = \fs ->
-                case traverse toProjectHaskellInput fs of
-                  Nothing -> fail $ "Expected project Haskell linkable files: " ++ show fs
-                  Just inputs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface inputs
+                map (snd . fromJust . hirCoreFp)
+                  <$> uses_ GetModIface fs
             , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
@@ -1229,7 +1243,7 @@ needsCompilationRule input = do
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing
-    Just depinfo -> case immediateReverseDependencies input depinfo of
+    Just depinfo -> case immediateReverseDependencyInputs input depinfo of
       -- If we fail to get immediate reverse dependencies, fail with an error message
       Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show input
       Just revdeps -> do
@@ -1242,10 +1256,9 @@ needsCompilationRule input = do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        let revdepInputs = ProjectHaskellInput <$> revdeps
         (modsums,needsComps) <- liftA2
-            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdepInputs)
-                (uses NeedsCompilation revdepInputs)
+            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
+                (uses NeedsCompilation revdeps)
         pure $ computeLinkableType modsums (map join needsComps)
   pure (Just $ encodeLinkableType res, Just res)
   where
