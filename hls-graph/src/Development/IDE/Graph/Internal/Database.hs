@@ -341,7 +341,6 @@ registerAsyncs st as = do
     registered <- atomicModifyIORef' st $ \case
         Nothing -> (Nothing, False)
         Just xs -> (Just (as ++ xs), True)
-    unless registered $ mapM_ uninterruptibleCancel as
     pure registered
 
 -- | Like 'async' but with built-in cancellation.
@@ -352,22 +351,28 @@ asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
   st <- AIO ask
   io <- unliftAIO act
-  let registeredAction registered act =
-        if registered
-          then act
-          else throwIO AsyncCancelled
   -- mask so the spawn and registration can't be split by interrupt
-  liftIO $ uninterruptibleMask_ $ do
+  (registered, a) <- liftIO $ uninterruptibleMask_ $ do
     -- Use a signal to indicate whether the thread is being spawned into a
     -- open/closed scope.
     gate <- newEmptyMVar
-    a <- asyncWithUnmask $ \unmask -> do
-      registered <- unmask (takeMVar gate)
-      -- Only if the thread was successfully registered do we execute
-      registeredAction registered $ unmask io
+    a <- runAsyncIfRegistered gate io
     registered <- registerAsyncs st [void a]
     putMVar gate registered
-    return $ registeredAction registered $ wait a
+    return (registered, a)
+  return $ if registered
+              then wait a
+              -- we don't want to throw an exception here because the async is already running and will be cancelled by the scope,
+              -- so we just wait for it to finish
+              else (forever $ sleep 10)
+
+runAsyncIfRegistered :: MVar Bool -> IO a -> IO (Async a)
+runAsyncIfRegistered gate io =
+    asyncWithUnmask $ \unmask -> unmask $ do
+      b <- readMVar gate
+      -- Only if the thread was successfully registered do we execute
+      if b then io else (error "asyncWithCleanUp: scope closed before thread could be spawned")
+
 
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
@@ -406,9 +411,9 @@ fmapWait :: (IO () -> IO ()) -> Wait -> Wait
 fmapWait f (Wait io)  = Wait (f io)
 fmapWait f (Spawn io) = Spawn (f io)
 
-waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
-waitOrSpawn (Wait io)  = pure $ Left io
-waitOrSpawn (Spawn io) = Right <$> async io
+waitOrSpawn :: MVar Bool -> Wait -> IO (Either (IO ()) (Async ()))
+waitOrSpawn _mv (Wait io) = pure $ Left io
+waitOrSpawn mv (Spawn io) = Right <$> runAsyncIfRegistered mv io
 
 waitConcurrently_ :: [Wait] -> AIO ()
 waitConcurrently_ [] = pure ()
@@ -418,13 +423,15 @@ waitConcurrently_ many = do
     -- spawn the async computations.
     -- mask to make sure we keep track of all the asyncs.
     (asyncs, syncs, registered) <- liftIO $ uninterruptibleMask $ \unmask -> do
-        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
+        gate <- newEmptyMVar
+        waits <- liftIO $ traverse (waitOrSpawn gate. fmapWait unmask) many
         let (syncs, asyncs) = partitionEithers waits
         registered <- liftIO $ registerAsyncs ref asyncs
+        putMVar gate registered
         return (asyncs, syncs, registered)
     -- A closed scope means our asyncs were cancelled, so abort the superseded work.
     if not registered
-      then liftIO $ throwIO AsyncCancelled
+      then liftIO $ (forever sleep 10) -- wait for the asyncs to finish, but don't block the main thread
       else do
         -- work on the sync computations
         liftIO $ sequence_ syncs
