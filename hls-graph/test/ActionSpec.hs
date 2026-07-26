@@ -3,7 +3,8 @@
 
 module ActionSpec where
 
-import           Control.Concurrent                      (MVar, readMVar)
+import           Control.Concurrent                      (MVar, newEmptyMVar,
+                                                          readMVar)
 import qualified Control.Concurrent                      as C
 import           Control.Concurrent.Async                (async, poll)
 import           Control.Concurrent.STM
@@ -16,7 +17,8 @@ import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabaseForKeys)
 import           Development.IDE.Graph.Internal.Database (build, cleanupAsync,
                                                           incDatabase,
-                                                          registerAsyncs)
+                                                          registerAsyncs,
+                                                          runAsyncIfRegistered)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
@@ -138,8 +140,11 @@ spec = do
   describe "Closing escaped rule computations" $ do
     it "tracks an async registered while the scope is open" $ do
       scope <- newIORef (Just [])
-      a <- async $ C.threadDelay maxBound
+      gate <- newEmptyMVar
+      a <- runAsyncIfRegistered gate $ do C.threadDelay maxBound
       registerAsyncs scope [a] `shouldReturn` True
+      -- should still running
+      poll a >>= \res -> isJust res `shouldBe` False
     it "refuses to register into a closed scope and cancels the late async" $ do
       scope <- newIORef (Just [])
       cleanupAsync scope
@@ -148,4 +153,4 @@ spec = do
       -- Registration fails rather than leaking the async past teardown.
       registerAsyncs scope [late] `shouldReturn` False
       -- The refused async was cancelled, not left running.
-      poll late >>= \res -> isJust res `shouldBe` True
+      poll late >>= \res -> isJust res `shouldBe` False

@@ -10,7 +10,7 @@
 
 module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge,
     -- * Exposed for testing. See Note [Closing escaped rule computations].
-    registerAsyncs, cleanupAsync) where
+    registerAsyncs, cleanupAsync, runAsyncIfRegistered) where
 
 import           Prelude                              hiding (unzip)
 
