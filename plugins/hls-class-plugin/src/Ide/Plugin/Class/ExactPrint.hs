@@ -50,14 +50,10 @@ makeMethodDecl df (mName, sig) = do
     sig' <- eitherToMaybe $ parseDecl df (T.unpack sig) $ T.unpack sig
     pure (name, sig')
 
-#if !MIN_VERSION_ghc(9,10,0)
 #if MIN_VERSION_ghc_exactprint(1,10,0)
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> Located (HsModule GhcPs)
+addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> ParsedSource
 #else
 addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located (HsModule GhcPs))
-#endif
-#else
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> ParsedSource
 #endif
 addMethodDecls ps mDecls range withSig
     | withSig = go (concatMap (\(decl, sig) -> [sig, decl]) mDecls)
@@ -71,6 +67,9 @@ addMethodDecls ps mDecls range withSig
 #endif
         case break (inRange range . getLoc) allDecls of
 #if MIN_VERSION_ghc(9,10,0)
+            -- With new enough GHC, `hsDecls` followed by
+            -- `replaceDecls` is idempotent, see
+            -- https://github.com/alanz/ghc-exactprint/blob/e2224c5e3d335e5a2c50a44749367337e278a8c0/src/Language/Haskell/GHC/ExactPrint/Transform.hs#L817
             (_, []) -> ps
 #else
             (before, []) -> replaceDecls ps before
