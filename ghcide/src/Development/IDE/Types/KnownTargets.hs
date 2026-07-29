@@ -15,12 +15,12 @@ import           Data.HashSet
 import qualified Data.HashSet                   as HSet
 import           Development.IDE.GHC.Compat     (ModuleName)
 import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Types.Location
+import           Development.IDE.Core.RuleInput (ProjectHaskellInput)
 import           GHC.Generics
 
 -- | A mapping of module name to known files
 newtype KnownTargets = KnownTargets
-  { targetMap :: (HashMap Target (HashSet NormalizedFilePath)) }
+  { targetMap :: (HashMap Target (HashSet ProjectHaskellInput)) }
   deriving Show
 
 
@@ -28,7 +28,7 @@ unionKnownTargets :: KnownTargets -> KnownTargets -> KnownTargets
 unionKnownTargets (KnownTargets tm) (KnownTargets tm') =
   KnownTargets (HMap.unionWith (<>) tm tm')
 
-mkKnownTargets :: [(Target, HashSet NormalizedFilePath)] -> KnownTargets
+mkKnownTargets :: [(Target, HashSet ProjectHaskellInput)] -> KnownTargets
 mkKnownTargets vs = KnownTargets (HMap.fromList vs)
 
 instance NFData KnownTargets where
@@ -43,9 +43,9 @@ instance Hashable KnownTargets where
 emptyKnownTargets :: KnownTargets
 emptyKnownTargets = KnownTargets HMap.empty
 
-data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
+data Target = TargetModule ModuleName | TargetFile ProjectHaskellInput
   deriving ( Eq, Ord, Generic, Show )
   deriving anyclass (Hashable, NFData)
 
-toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath
+toKnownFiles :: KnownTargets -> HashSet ProjectHaskellInput
 toKnownFiles = HSet.unions . HMap.elems . targetMap

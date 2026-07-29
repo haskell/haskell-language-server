@@ -221,18 +221,17 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
             projectFile <- classifyAsHaskell _uri
-            let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText st _uri
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                queueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                queueForEvaluation st projectFile
+                return [toKey IsEvaluating projectFile]
                 )
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                unqueueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                unqueueForEvaluation st projectFile
+                return [toKey IsEvaluating projectFile]
                 )
               (initialiseSessionForEval (needsQuickCheck evalExprs) st projectFile)
 

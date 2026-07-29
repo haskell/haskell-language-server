@@ -17,7 +17,6 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        IdeState,
                                                        LinkableType (BCOLinkable),
                                                        NeedsCompilation (NeedsCompilation),
-                                                       NormalizedFilePath,
                                                        RuleBody (RuleNoDiagnostics),
                                                        Rules, defineEarlyCutoff,
                                                        encodeLinkableType,
@@ -25,7 +24,8 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath))
+import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
+                                                       ProjectHaskellInput)
 import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),
@@ -49,15 +49,15 @@ rules recorder = do
     isEvaluatingRule recorder
     addIdeGlobal . EvaluatingVar =<< liftIO(newIORef mempty)
 
-newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedFilePath))
+newtype EvaluatingVar = EvaluatingVar (IORef (HashSet ProjectHaskellInput))
 instance IsIdeGlobal EvaluatingVar
 
-queueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+queueForEvaluation :: IdeState -> ProjectHaskellInput -> IO ()
 queueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     atomicModifyIORef' var (\fs -> (Set.insert nfp fs, ()))
 
-unqueueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+unqueueForEvaluation :: IdeState -> ProjectHaskellInput -> IO ()
 unqueueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True
@@ -121,7 +121,7 @@ isEvaluatingRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $
 -- leading to much better performance of the evaluate code lens
 redefinedNeedsCompilation :: Recorder (WithPriority Log) -> Rules ()
 redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
-    isEvaluating <- use_ IsEvaluating (inputFilePath f)
+    isEvaluating <- use_ IsEvaluating f
     if isEvaluating then do
         let linkableType = BCOLinkable
             fp = encodeLinkableType $ Just linkableType

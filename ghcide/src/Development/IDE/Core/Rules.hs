@@ -333,15 +333,15 @@ getLocatedImportsRule recorder =
         let dflags = hsc_dflags env
         opt <- getIdeOptions
         let getTargetFor modName input
-                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
+                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile input) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists $ toSomeFileInput nfp'
-                    return $ if itExists then toProjectHaskellInput nfp' else Nothing
+                    itExists <- getFileExists (SomeFileHaskellInput ( SomeProjectHaskellInput nfp'))
+                    return (if itExists then Just nfp' else Nothing)
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
-                    itExists <- getFileExists $ toSomeFileInput nfp'
-                    return $ if itExists then toProjectHaskellInput nfp' else Nothing
+                    let nfp' = fromMaybe input (HashSet.lookupElement input tt)
+                    itExists <- getFileExists (SomeFileHaskellInput ( SomeProjectHaskellInput nfp'))
+                    return (if itExists then Just nfp' else Nothing)
                 | otherwise = do
                     itExists <- getFileExists $ toSomeFileInput nfp
                     return $ if itExists then Just input else Nothing
@@ -663,7 +663,7 @@ getFileHashRule recorder =
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
-  dependencyInfoForFiles (mapMaybe toProjectHaskellInput $ HashSet.toList fs)
+  dependencyInfoForFiles (HashSet.toList fs)
 
 #if MIN_VERSION_ghc(9,13,0)
 -- | Build level-aware module graph edges from a ModSummary and a list of dependency NodeKeys.
@@ -891,7 +891,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
           recompInfo = RecompilationInfo
             { source_version = ver
             , old_value = m_old
-            , get_file_version = use GetModificationTime_{missingFileDiagnostics = False} . toSomeFileInput
+            , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , get_linkable_hashes = \fs ->
                 map (snd . fromJust . hirCoreFp)
                   <$> uses_ GetModIface fs

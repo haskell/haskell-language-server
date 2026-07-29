@@ -107,7 +107,7 @@ instance IsInput SomeInput where
 -- RuleInput : NoInput
 -- | A valid Rule Input that has no file associated with it.
 data NoInput = NoInput
-    deriving (Eq, Show, Generic)
+    deriving (Eq, Ord, Show, Generic)
 instance Hashable NoInput
 instance NFData NoInput
 
@@ -158,7 +158,7 @@ fileInputFingerprint input = InputFile (inputFilePath input)
 -- RuleInput : CabalInput
 -- | Leaf Type which represents a cabal file.
 newtype CabalInput = CabalInput NormalizedFilePath
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic)
 instance Hashable CabalInput
 instance NFData CabalInput
 
@@ -197,7 +197,7 @@ instance IsHaskellInput SomeHaskellInput
 -- RuleInput : ProjectHaskellInput
 -- | Leaf Type representing a Haskell file inside project directory.
 newtype ProjectHaskellInput = ProjectHaskellInput NormalizedFilePath
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic)
 instance Hashable ProjectHaskellInput
 instance NFData ProjectHaskellInput
 
@@ -211,7 +211,7 @@ instance IsHaskellInput ProjectHaskellInput
 -- RuleInput : NonProjectHaskellInput
 -- | Leaf Type representing a Haskell file inside project .hls/dependencies directory.
 newtype NonProjectHaskellInput = NonProjectHaskellInput NormalizedFilePath
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic)
 instance Hashable NonProjectHaskellInput
 instance NFData NonProjectHaskellInput
 

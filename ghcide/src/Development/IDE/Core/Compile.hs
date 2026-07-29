@@ -74,6 +74,7 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
 import           Development.IDE.Core.RuleInput              (IsFileInput (inputFilePath),
                                                               ProjectHaskellInput,
+                                                              SomeFileInput,
                                                               SomeHaskellInput,
                                                               toSomeFileInput)
 import           Development.IDE.Core.RuleTypes
@@ -855,9 +856,9 @@ tagDiag (w@(Just (WarningWithFlag warning)), fd)
 -- other diagnostics are left unaffected
 tagDiag t = t
 
-addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
-addRelativeImport fp modu dflags = dflags
-    {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
+addRelativeImport :: ProjectHaskellInput -> ModuleName -> DynFlags -> DynFlags
+addRelativeImport input modu dflags = dflags
+    {importPaths = nubOrd (maybeToList (moduleImportPath (inputFilePath input) modu) ++ importPaths dflags)}
 
 -- | Also resets the interface store
 atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO a
@@ -948,18 +949,18 @@ indexHieFile :: ShakeExtras -> ModSummary -> SomeHaskellInput -> Util.Fingerprin
 indexHieFile se mod_summary srcPath !hash hf = do
  atomically $ do
   pending <- readTVar indexPending
-  case HashMap.lookup srcFile pending of
+  case HashMap.lookup srcPath pending of
     Just pendingHash | pendingHash == hash -> pure () -- An index is already scheduled
     _ -> do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
-      modifyTVar' indexPending $ HashMap.insert srcFile hash
+      modifyTVar' indexPending $ HashMap.insert srcPath hash
       writeTaskQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
           pendingOps <- readTVar indexPending
-          pure $ case HashMap.lookup srcFile pendingOps of
+          pure $ case HashMap.lookup srcPath pendingOps of
             Nothing          -> False
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
@@ -980,7 +981,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       mdone <- atomically $ do
         -- Remove current element from pending
         pending <- stateTVar indexPending $
-          dupe . HashMap.update (\pendingHash -> guard (pendingHash /= hash) $> pendingHash) srcFile
+          dupe . HashMap.update (\pendingHash -> guard (pendingHash /= hash) $> pendingHash) srcPath
         modifyTVar' indexCompleted (+1)
         -- If we are done, report and reset completed
         whenMaybe (HashMap.null pending) $
@@ -1506,7 +1507,7 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
+  , get_file_version :: SomeFileInput -> m (Maybe FileVersion)
   , get_linkable_hashes :: [ProjectHaskellInput] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface

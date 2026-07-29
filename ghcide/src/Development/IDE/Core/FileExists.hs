@@ -251,7 +251,7 @@ fileExistsSlow file = do
 getFileExistsVFS :: SomeFileInput -> Action Bool
 getFileExistsVFS file = do
   let srcPath = inputFilePath file
-  vf <- getVirtualFile srcPath
+  vf <- getVirtualFile file
   if isJust vf
   then pure True
   else liftIO $ handle (\(_ :: IOException) -> return False) $

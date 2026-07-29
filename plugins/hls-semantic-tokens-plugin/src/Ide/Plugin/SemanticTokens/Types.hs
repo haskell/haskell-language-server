@@ -12,6 +12,7 @@ import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
 import           Data.Text                     (Text)
 import           Development.IDE               (Pretty (pretty), RuleResult)
+import           Development.IDE.Core.RuleInput (ProjectHaskellInput, RuleInput)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
 import           Development.IDE.Graph.Classes (Hashable)
@@ -130,6 +131,7 @@ showRange :: Range -> String
 showRange (Range (Position l1 c1) (Position l2 c2)) = show l1 <> ":" <> show c1 <> "-" <> show l2 <> ":" <> show c2
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
+type instance RuleInput GetSemanticTokens = ProjectHaskellInput
 
 data HieFunMaskKind kind where
   HieFreshFun :: HieFunMaskKind Type

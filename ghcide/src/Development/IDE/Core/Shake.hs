@@ -131,9 +131,10 @@ import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleInput        (InputFingerprint (..),
+                                                        IsFileInput (inputFilePath),
                                                         IsInput (inputFingerprint),
                                                         NoInput (..),
-                                                        RuleInput, SomeInput,
+                                                        RuleInput, SomeFileInput, SomeHaskellInput, SomeInput,
                                                         fromInput,
                                                         toSomeFileInput,
                                                         toInput)
@@ -263,7 +264,7 @@ instance Pretty Log where
 data HieDbWriter
   = HieDbWriter
   { indexQueue             :: IndexQueue
-  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexPending           :: TVar (HMap.HashMap SomeHaskellInput Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted         :: TVar Int -- ^ to report progress
   , indexProgressReporting :: ProgressReporting
   }
@@ -306,7 +307,7 @@ data ShakeExtras = ShakeExtras
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
 
-    ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
+    ,semanticTokensCache:: STM.Map SomeHaskellInput SemanticTokens
     -- ^ Cache of last response of semantic tokens for each file,
     -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
     -- putting semantic tokens cache and id in shakeExtras might not be ideal
@@ -414,11 +415,11 @@ addPersistentRule k getVal = do
 class Typeable a => IsIdeGlobal a where
 
 -- | Read a virtual file from the current snapshot
-getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
-getVirtualFile nf = do
+getVirtualFile :: SomeFileInput -> Action (Maybe VirtualFile)
+getVirtualFile input = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $!  -- Don't leak a reference to the entire map
-    getVirtualFileFromVFS (VFS vfs) $ filePathToUri' nf
+    getVirtualFileFromVFS (VFS vfs) (filePathToUri' (inputFilePath input))
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
@@ -1241,7 +1242,7 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q key input) (old :: Maybe BS
                 extras <- getShakeExtras
                 let diagnostics ver diags = do
                         traceDiagnostics diags
-                        updateFileDiagnostics recorder file ver (newKey key) extras diags
+                        updateFileDiagnostics recorder (toSomeFileInput file) ver (newKey key) extras diags
                 defineEarlyCutoff' diagnostics (==) key input old mode $ const $ op key ruleInput
           _ -> fail "expected file input"
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q key input) (old :: Maybe BS.ByteString) mode ->
@@ -1274,7 +1275,7 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q key input) (old
                 extras <- getShakeExtras
                 let diagnostics ver diags = do
                         traceDiagnostics diags
-                        updateFileDiagnostics recorder file ver (newKey key) extras diags
+                        updateFileDiagnostics recorder (toSomeFileInput file) ver (newKey key) extras diags
                 defineEarlyCutoff' diagnostics (==) key input old mode $ op key ruleInput
           _ -> fail "expected file input"
 
@@ -1306,7 +1307,7 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
     options <- getIdeOptions
     let trans g x =  withRunInIO $ \run -> g (run x)
     (case mbFile of
-      Just file | not (optSkipProgress options key) -> trans (inProgress progress file)
+      Just file | not (optSkipProgress options key) -> trans (inProgress progress (toSomeFileInput file))
       _                                            -> id) $ do
         val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
@@ -1445,13 +1446,13 @@ traceA (A Succeeded{}) = "Success"
 
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
-  -> NormalizedFilePath
+  -> SomeFileInput
   -> Maybe Int32
   -> Key
   -> ShakeExtras
   -> [FileDiagnostic] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 = do
+updateFileDiagnostics recorder input ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 = do
   liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
     addTag "key" (show k)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fdShouldShowDiagnostic) current
@@ -1484,6 +1485,8 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) (map fdLspDiagnostic newDiags)
                 return action
     where
+        fp = inputFilePath input
+
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
             | coerce ideTesting = c & L.relatedInformation ?~

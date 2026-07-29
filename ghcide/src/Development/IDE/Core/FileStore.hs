@@ -124,7 +124,7 @@ getModificationTimeImpl missingFileDiags file = do
     let srcPath = inputFilePath file
         file' = fromNormalizedFilePath srcPath
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
-    mbVf <- getVirtualFile srcPath
+    mbVf <- getVirtualFile file
     case mbVf of
         Just (virtualFileVersion -> ver) -> do
             alwaysRerun
@@ -217,11 +217,10 @@ getFileContentsImpl
     :: SomeFileInput
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
-    let srcPath = inputFilePath file
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
-        mbVirtual <- getVirtualFile srcPath
+        mbVirtual <- getVirtualFile file
         pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
@@ -256,8 +255,8 @@ getVersionedTextDoc :: TextDocumentIdentifier -> Action VersionedTextDocumentIde
 getVersionedTextDoc doc = do
   let uri = doc ^. L.uri
   mvf <-
-    maybe (pure Nothing) getVirtualFile $
-        uriToNormalizedFilePath $ toNormalizedUri uri
+    maybe (pure Nothing) (getVirtualFile . toSomeFileInput)
+        (uriToNormalizedFilePath (toNormalizedUri uri))
   let ver = case mvf of
         Just (VirtualFile lspver _ _ _) -> lspver
         Nothing                         -> 0

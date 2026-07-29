@@ -53,11 +53,11 @@ hover              :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPos
 gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentTypeDefinition)
 gotoImplementation :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentImplementation)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
-gotoDefinition = request "Definition" getDefinitionForFile (InR $ InR Null) (InL . Definition . InR . map fst)
-gotoTypeDefinition = request "TypeDefinition" (getTypeDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR . map fst)
-gotoImplementation = request "Implementation" (getImplementationDefinition . toSomeFileInput) (InR $ InR Null) (InL . Definition . InR)
-hover          = request "Hover"      getAtPointForFile     (InR Null)     foundHover
-documentHighlight = request "DocumentHighlight" highlightAtPointForFile (InR Null) InL
+gotoDefinition = request "Definition" toSomeHaskellInput getDefinition (InR (InR Null)) (InL . Definition . InR . map fst)
+gotoTypeDefinition = request "TypeDefinition" (Just . toSomeFileInput) getTypeDefinition (InR (InR Null)) (InL . Definition . InR . map fst)
+gotoImplementation = request "Implementation" (Just . toSomeFileInput) getImplementationDefinition (InR (InR Null)) (InL . Definition . InR)
+hover          = request "Hover" toSomeHaskellInput getAtPoint (InR Null) foundHover
+documentHighlight = request "DocumentHighlight" toSomeHaskellInput highlightAtPoint (InR Null) InL
 
 references :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentReferences
 references recorder ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
@@ -76,42 +76,25 @@ foundHover :: (Maybe Range, [T.Text]) -> Hover |? Null
 foundHover (mbRange, contents) =
   InL $ Hover (InL $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator contents) mbRange
 
-getAtPointForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
-getAtPointForFile file pos =
-  case toSomeHaskellInput file of
-    Nothing -> pure Nothing
-    Just input -> getAtPoint input pos
-
-getDefinitionForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
-getDefinitionForFile file pos =
-  case toSomeHaskellInput file of
-    Nothing -> pure Nothing
-    Just input -> getDefinition input pos
-
-highlightAtPointForFile :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
-highlightAtPointForFile file pos =
-  case toSomeHaskellInput file of
-    Nothing -> pure Nothing
-    Just input -> highlightAtPoint input pos
-
 -- | Respond to and log a hover or go-to-definition request
 request
   :: T.Text
-  -> (NormalizedFilePath -> Position -> IdeAction (Maybe a))
+  -> (NormalizedFilePath -> Maybe input)
+  -> (input -> Position -> IdeAction (Maybe a))
   -> b
   -> (a -> b)
   -> Recorder (WithPriority Log)
   -> IdeState
   -> TextDocumentPositionParams
   -> ExceptT PluginError (HandlerM c) b
-request label getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
+request label classify getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
     mbResult <- case uriToFilePath' uri of
-        Just path -> logAndRunRequest recorder label getResults ide pos path
+        Just path -> logAndRunRequest recorder label classify getResults ide pos path
         Nothing   -> pure Nothing
     pure $ maybe notFound found mbResult
 
-logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
-logAndRunRequest recorder label getResults ide pos path = do
+logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Maybe input) -> (input -> Position -> IdeAction (Maybe a)) -> IdeState -> Position -> String -> IO (Maybe a)
+logAndRunRequest recorder label classify getResults ide pos path = do
   let filePath = toNormalizedFilePath' path
   logWith recorder Debug $ LogRequest label pos filePath
-  runIdeAction (T.unpack label) (shakeExtras ide) (getResults filePath pos)
+  maybe (pure Nothing) (runIdeAction (T.unpack label) (shakeExtras ide) . flip getResults pos) (classify filePath)

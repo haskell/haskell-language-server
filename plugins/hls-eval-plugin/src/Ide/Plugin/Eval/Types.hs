@@ -43,7 +43,7 @@ import           Data.List.NonEmpty              (NonEmpty)
 import           Data.Map.Strict                 (Map)
 import           Data.String                     (IsString (..))
 import qualified Data.Text                       as T
-import           Development.IDE                 (NormalizedFilePath, Range,
+import           Development.IDE                 (Range,
                                                   RuleResult)
 import           Development.IDE.Core.RuleInput  (ProjectHaskellInput,
                                                   RuleInput)
@@ -177,7 +177,7 @@ data IsEvaluating = IsEvaluating
 instance Hashable IsEvaluating
 instance NFData   IsEvaluating
 
-type instance RuleInput IsEvaluating = NormalizedFilePath
+type instance RuleInput IsEvaluating = ProjectHaskellInput
 type instance RuleResult IsEvaluating = Bool
 
 data GetEvalComments = GetEvalComments
