@@ -21,6 +21,10 @@ import qualified Data.Set                       as S
 import qualified Data.Text                      as T
 import           Data.Tuple.Extra
 import           Development.IDE
+import           Development.IDE.Core.RuleInput (IsFileInput (inputFilePath),
+                                                 SomeHaskellInput,
+                                                 classifyAsSomeHaskell,
+                                                 toSomeHaskellInput)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
@@ -33,7 +37,6 @@ import           GHC.Iface.Ext.Utils            (getNameBinding)
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
@@ -44,22 +47,22 @@ import           Text.Read                      (readMaybe)
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState Method_TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state _ param = do
-    nfp <- getNormalizedFilePathE (param ^. (L.textDocument . L.uri))
+    input <- classifyAsSomeHaskell (param ^. (L.textDocument . L.uri))
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
-        $ prepareCallHierarchyItem nfp (param ^. L.position)
+        $ prepareCallHierarchyItem input (param ^. L.position)
     pure $ InL items
 
-prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
-prepareCallHierarchyItem nfp pos = use GetHieAst nfp <&> \case
+prepareCallHierarchyItem :: SomeHaskellInput -> Position -> Action [CallHierarchyItem]
+prepareCallHierarchyItem input pos = use GetHieAst input <&> \case
     Nothing               -> mempty
-    Just (HAR _ hf _ _ _) -> prepareByAst hf pos nfp
+    Just (HAR _ hf _ _ _) -> prepareByAst input hf pos
 
-prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
-prepareByAst hf pos nfp =
+prepareByAst :: SomeHaskellInput -> HieASTs a -> Position -> [CallHierarchyItem]
+prepareByAst input hf pos =
     case listToMaybe $ pointCommand hf pos extract of
         Nothing    -> mempty
-        Just infos -> mapMaybe (construct nfp hf) infos
+        Just infos -> mapMaybe (construct input hf) infos
 
 extract :: HieAST a -> [(Identifier, [ContextInfo], Span)]
 extract ast = let span = nodeSpan ast
@@ -77,8 +80,8 @@ patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
 tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
 matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
-construct :: NormalizedFilePath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
-construct nfp hf (ident, contexts, ssp)
+construct :: SomeHaskellInput -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
+construct input hf (ident, contexts, ssp)
     | isInternalIdentifier ident = Nothing
 
     | Just (RecField RecFieldDecl _) <- recFieldInfo contexts
@@ -123,7 +126,7 @@ construct nfp hf (ident, contexts, ssp)
         -- as this is the call-hierarchy plugin
         skUnknown = SymbolKind_Function
 
-        mkCallHierarchyItem' = mkCallHierarchyItem nfp
+        mkCallHierarchyItem' = mkCallHierarchyItem input
 
         isInternalIdentifier = \case
             Left _     -> False
@@ -133,16 +136,16 @@ construct nfp hf (ident, contexts, ssp)
             Left _ -> Nothing
             Right name -> case getNameBinding name (getAsts hf) of
                 Nothing -> Nothing
-                Just sp -> listToMaybe $ prepareByAst hf (realSrcSpanToRange sp ^. L.start) nfp
+                Just sp -> listToMaybe $ prepareByAst input hf (realSrcSpanToRange sp ^. L.start)
 
-mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
-mkCallHierarchyItem nfp ident kind span selSpan =
+mkCallHierarchyItem :: SomeHaskellInput -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
+mkCallHierarchyItem input ident kind span selSpan =
     CallHierarchyItem
         (T.pack $ optimizeDisplay $ identifierName ident)
         kind
         Nothing
         (Just $ T.pack $ identifierToDetail ident)
-        (fromNormalizedUri $ normalizedFilePathToUri nfp)
+        (fromNormalizedUri $ normalizedFilePathToUri (inputFilePath input))
         (realSrcSpanToRange span)
         (realSrcSpanToRange selSpan)
         (toJSON . show <$> mkSymbol ident)
@@ -228,21 +231,24 @@ mkCallHierarchyCall mk v@Vertex{..} = do
                     (fromIntegral $ cael - 1)
                     (fromIntegral $ caec - 1)
 
-    prepareCallHierarchyItem nfp pos >>=
-        \case
-            [item] -> pure $ Just $ mk item [range]
-            _      -> do
-                ShakeExtras{withHieDb} <- getShakeExtras
-                sps <- liftIO (withHieDb (`Q.getSymbolPosition` v))
-                case sps of
-                    (x:_) -> do
-                        items <- prepareCallHierarchyItem
-                                    nfp
-                                    (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1))
-                        case items of
-                            [item] -> pure $ Just $ mk item [range]
-                            _      -> pure Nothing
-                    []     -> pure Nothing
+    case toSomeHaskellInput nfp of
+        Nothing -> pure Nothing
+        Just input ->
+            prepareCallHierarchyItem input pos >>=
+                \case
+                    [item] -> pure $ Just $ mk item [range]
+                    _      -> do
+                        ShakeExtras{withHieDb} <- getShakeExtras
+                        sps <- liftIO (withHieDb (`Q.getSymbolPosition` v))
+                        case sps of
+                            (x:_) -> do
+                                items <- prepareCallHierarchyItem
+                                            input
+                                            (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1))
+                                case items of
+                                    [item] -> pure $ Just $ mk item [range]
+                                    _      -> pure Nothing
+                            []     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
 queryCalls ::
@@ -252,9 +258,9 @@ queryCalls ::
     -> ([a] -> [a])
     -> Action [a]
 queryCalls item queryFunc makeFunc merge
-    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+    | Just input <- uriToNormalizedFilePath (toNormalizedUri uri) >>= toSomeHaskellInput = do
         ShakeExtras{withHieDb} <- getShakeExtras
-        maySymbol <- getSymbol nfp
+        maySymbol <- getSymbol input
         case maySymbol of
             Nothing -> pure mempty
             Just symbol -> do
@@ -272,8 +278,8 @@ queryCalls item queryFunc makeFunc merge
                 A.Error _ -> getSymbolFromAst nfp pos
             Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
-        getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
-        getSymbolFromAst nfp pos_ = use GetHieAst nfp <&> \case
+        getSymbolFromAst :: SomeHaskellInput -> Position -> Action (Maybe Symbol)
+        getSymbolFromAst input pos_ = use GetHieAst input <&> \case
             Nothing -> Nothing
             Just (HAR _ hf _ _ _) -> do
                 case listToMaybe $ pointCommand hf pos_ extract of

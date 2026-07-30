@@ -11,11 +11,11 @@ import           Control.Monad.IO.Class
 import           Data.Maybe
 import qualified Data.Text                               as T
 import           Data.Text.Encoding                      (decodeUtf8)
+import           Development.IDE.Core.RuleInput           (toCabalInput)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake              (IdeState (shakeExtras),
                                                           runIdeAction,
                                                           useWithStaleFast)
-import           Development.IDE.Types.Location          (toNormalizedFilePath')
 import           Distribution.Fields.Field               (Field (Field, Section),
                                                           Name (Name))
 import           Distribution.Parsec.Position            (Position)
@@ -31,9 +31,9 @@ import qualified Language.LSP.Protocol.Types             as LSP
 
 moduleOutline :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ LSP.DocumentSymbolParams {_textDocument = LSP.TextDocumentIdentifier uri} =
-  case LSP.uriToFilePath uri of
-    Just (toNormalizedFilePath' -> fp) -> do
-      mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields fp)
+  case LSP.uriToNormalizedFilePath (LSP.toNormalizedUri uri) >>= toCabalInput of
+    Just input -> do
+      mFields <- liftIO $ runIdeAction "cabal-plugin.fields" (shakeExtras ideState) (useWithStaleFast ParseCabalFields input)
       case fmap fst mFields of
         Just fieldPositions -> pure $ LSP.InR (LSP.InL allSymbols)
           where
