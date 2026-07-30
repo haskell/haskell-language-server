@@ -527,7 +527,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k input = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValue :: (IdeRule k v, IsInput i) => k -> i -> Action (Maybe (v, PositionMapping))
+lastValue :: IdeRule k v => k -> RuleInput k -> Action (Maybe (v, PositionMapping))
 lastValue key input = do
     s <- getShakeExtras
     case fromInput (toInput input) of
@@ -616,7 +616,7 @@ shakeDatabaseProfileIO mbProfileDir = do
 setValues :: IdeRule k v
           => Values
           -> k
-          -> SomeInput
+          -> RuleInput k
           -> Value v
           -> Vector FileDiagnostic
           -> STM ()
@@ -627,10 +627,10 @@ setValues state key input val diags =
 -- | Delete the value stored for a given ide build key
 -- and return the key that was deleted.
 deleteValue
-  :: forall k i. (Shake.ShakeValue k, IsInput i)
+  :: (Shake.ShakeValue k, IsInput (RuleInput k))
   => ShakeExtras
   -> k
-  -> i
+  -> RuleInput k
   -> STM [Key]
 deleteValue ShakeExtras{state} key input = do
     STM.delete (toKey key input) state
@@ -643,7 +643,7 @@ getValues ::
   IdeRule k v =>
   Values ->
   k ->
-  SomeInput ->
+  RuleInput k ->
   STM (Maybe (Value v, Vector FileDiagnostic))
 getValues state key input = do
     STM.lookup (toKey key input) state >>= \case
@@ -1133,7 +1133,7 @@ useWithStaleFast' key input = do
   waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ inputLabel) Debug $ use key input
 
   s@ShakeExtras{state} <- askShake
-  r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key (toInput input)
+  r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key input
   liftIO $ case r of
     -- block for the result if we haven't computed before
     Nothing -> do
@@ -1243,7 +1243,7 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q key input) (old :: Maybe BS
                 let diagnostics ver diags = do
                         traceDiagnostics diags
                         updateFileDiagnostics recorder (toSomeFileInput file) ver (newKey key) extras diags
-                defineEarlyCutoff' diagnostics (==) key input old mode $ const $ op key ruleInput
+                defineEarlyCutoff' diagnostics (==) key ruleInput old mode $ const $ op key ruleInput
           _ -> fail "expected file input"
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q key input) (old :: Maybe BS.ByteString) mode ->
     case fromInput input :: Maybe (RuleInput k) of
@@ -1253,7 +1253,7 @@ defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q key input) (ol
             let diagnostics _ver diags = do
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-            defineEarlyCutoff' diagnostics (==) key input old mode $ const $ second (mempty,) <$> op key ruleInput
+            defineEarlyCutoff' diagnostics (==) key ruleInput old mode $ const $ second (mempty,) <$> op key ruleInput
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q key input) (old :: Maybe BS.ByteString) mode ->
         case fromInput input :: Maybe (RuleInput k) of
@@ -1263,7 +1263,7 @@ defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
                 let diagnostics _ver diags = do
                         traceDiagnostics diags
                         mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
-                defineEarlyCutoff' diagnostics newnessCheck key input old mode $
+                defineEarlyCutoff' diagnostics newnessCheck key ruleInput old mode $
                     const $ second (mempty,) <$> build key ruleInput
 defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q key input) (old :: Maybe BS.ByteString) mode ->
     case fromInput input :: Maybe (RuleInput k) of
@@ -1276,7 +1276,7 @@ defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q key input) (old
                 let diagnostics ver diags = do
                         traceDiagnostics diags
                         updateFileDiagnostics recorder (toSomeFileInput file) ver (newKey key) extras diags
-                defineEarlyCutoff' diagnostics (==) key input old mode $ op key ruleInput
+                defineEarlyCutoff' diagnostics (==) key ruleInput old mode $ op key ruleInput
           _ -> fail "expected file input"
 
 defineNoFile :: (IdeRule k v, RuleInput k ~ NoInput ) => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
@@ -1294,7 +1294,7 @@ defineEarlyCutoff'
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
-    -> SomeInput
+    -> RuleInput k
     -> Maybe BS.ByteString
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
@@ -1365,7 +1365,7 @@ defineEarlyCutoff' doDiagnostics cmp key input mbOld mode action = do
     estimateFileVersionUnsafely
         :: k
         -> Maybe v
-        -> SomeInput
+        -> RuleInput k
         -> Action (Maybe FileVersion)
     estimateFileVersionUnsafely _k v input =
         case inputFingerprint input of

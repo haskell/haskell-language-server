@@ -24,7 +24,7 @@ import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (toInput, IsInput, SomeInput, NoInput(..))
+import           Development.IDE.Core.RuleInput       (toInput, IsInput, SomeInput, NoInput(..), RuleInput)
 import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key, RuleResult, newKey,
                                                        pattern Key)
@@ -76,7 +76,7 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: (Shake.ShakeValue k, IsInput i) => k -> i -> Key
+toKey :: (Shake.ShakeValue k, IsInput (RuleInput k)) => k -> RuleInput k -> Key
 toKey k input = newKey (Q k (toInput input))
 
 fromKey :: Typeable k => Key -> Maybe (k, SomeInput)
@@ -93,7 +93,7 @@ fromKeyType (Key k)
   = Just (SomeTypeRep a, f)
   | otherwise = Nothing
 
-toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
+toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, RuleInput k ~ NoInput ) => k -> Key
 toNoFileKey k = newKey (Q k (toInput NoInput))
 
 data Q k = Q !k !SomeInput

@@ -43,8 +43,8 @@ import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
                                                                ProjectHaskellInput,
-                                                               SomeFileInput,
-                                                               toSomeFileInput)
+                                                               SomeFileInput (SomeFileHaskellInput),
+                                                               toSomeFileInput, SomeHaskellInput (SomeProjectHaskellInput))
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
@@ -287,7 +287,7 @@ setFileModified recorder vfs state saved nfp actionBefore = do
           _           -> False
     restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath (inputFilePath nfp) ++ " (modified)") [] $ do
         keys<-actionBefore
-        return (toKey GetModificationTime nfp:keys)
+        return (toKey GetModificationTime (SomeFileHaskellInput $ SomeProjectHaskellInput nfp):keys)
     when checkParents $
       typecheckParents recorder state nfp
 
