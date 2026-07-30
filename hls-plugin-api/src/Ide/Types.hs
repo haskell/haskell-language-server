@@ -22,7 +22,10 @@ module Ide.Types
 , IdeNotification(..)
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
-, Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
+, Config(..), PluginConfig(..), CheckParents(..)
+, SessionLoadingPreferenceConfig(..)
+, LegacySessionLoadingPreferenceConfig(..)
+, getLegacySessionLoadingPreferenceConfig
 , OptLinkTo(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
@@ -179,7 +182,7 @@ data Config =
     , formattingProvider      :: !T.Text
     , cabalFormattingProvider :: !T.Text
     , maxCompletions          :: !Int
-    , sessionLoading          :: !SessionLoadingPreferenceConfig
+    , componentsLoading       :: !SessionLoadingPreferenceConfig
     , linkSourceTo            :: !OptLinkTo
     , linkDocTo               :: !OptLinkTo
     , plugins                 :: !(Map.Map PluginId PluginConfig)
@@ -192,7 +195,7 @@ instance ToJSON Config where
            , "formattingProvider"          .= formattingProvider
            , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
-           , "sessionLoading"              .= sessionLoading
+           , "componentsLoading"           .= componentsLoading
            , "linkSourceTo"                .= linkSourceTo
            , "linkDocTo"                   .= linkDocTo
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
@@ -208,7 +211,7 @@ instance Default Config where
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
-    , sessionLoading              = PreferMultiComponentLoading
+    , componentsLoading           = PreferMultiComponentLoading
     , linkSourceTo                = LinkToHackage
     , linkDocTo                   = LinkToHackage
     , plugins                     = mempty
@@ -240,24 +243,67 @@ data SessionLoadingPreferenceConfig
     --
     -- The cradle can decide how to handle these situations, and whether
     -- to honour the preference at all.
+    | PreferMultiWholeProjectLoading
+    -- ^ Prefer loading all the components specified in the cradle, if possible.
   deriving stock (Eq, Ord, Show, Generic)
 
 instance Pretty SessionLoadingPreferenceConfig where
-    pretty PreferSingleComponentLoading = "Prefer Single Component Loading"
-    pretty PreferMultiComponentLoading  = "Prefer Multiple Components Loading"
+    pretty PreferSingleComponentLoading   = "Prefer Single Component Loading"
+    pretty PreferMultiComponentLoading    = "Prefer Multiple Components Loading"
+    pretty PreferMultiWholeProjectLoading = "Prefer Whole Project Loading"
+
+-- | Labels for @SessionLoadingPreferenceConfig@ json format.
+--
+-- 'singleComponent' and 'multipleComponents' are outdated but are maintained here
+-- for backwards compatibility.
+-- We prefer 'single', 'multiNeededOnly' and 'multiWholeProject'
+singleComponent, multipleComponents, single, multiNeededOnly, multiWholeProject :: T.Text
+singleComponent = "singleComponent"
+multipleComponents = "multipleComponents"
+single = "single"
+multiNeededOnly = "multi: needed-only"
+multiWholeProject = "multi: whole-project"
+
+-- | Historical artefact!
+-- Before HLS 2.15.0.0, the 'SessionLoadingPreferenceConfig' option was called `sessionLoading` with the values
+-- `multipleComponents` and `singleComponent`.
+--
+-- With HLS 2.15.0.0, we renamed these options and also added some new ones!
+-- For backwards compatibility, we support the old naming as well using
+-- this backwards compatibility newtype.
+newtype LegacySessionLoadingPreferenceConfig = LegacySessionLoadingPreferenceConfig SessionLoadingPreferenceConfig
+
+getLegacySessionLoadingPreferenceConfig :: LegacySessionLoadingPreferenceConfig -> SessionLoadingPreferenceConfig
+getLegacySessionLoadingPreferenceConfig (LegacySessionLoadingPreferenceConfig conf) = conf
 
 instance ToJSON SessionLoadingPreferenceConfig where
     toJSON PreferSingleComponentLoading =
-        String "singleComponent"
+        String single
     toJSON PreferMultiComponentLoading =
-        String "multipleComponents"
+        String multiNeededOnly
+    toJSON PreferMultiWholeProjectLoading =
+        String multiWholeProject
 
 instance FromJSON SessionLoadingPreferenceConfig where
-    parseJSON (String val) = case val of
-        "singleComponent"    -> pure PreferSingleComponentLoading
-        "multipleComponents" -> pure PreferMultiComponentLoading
-        _ -> A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
-            (A.parseFail $ "Expected one of \"singleComponent\" or \"multipleComponents\" but got " <> T.unpack val )
+    parseJSON (String val)
+        | single            == val = pure PreferSingleComponentLoading
+        | multiNeededOnly   == val = pure PreferMultiComponentLoading
+        | multiWholeProject == val = pure PreferMultiWholeProjectLoading
+        | otherwise = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ unwords ["Expected one of " ++ expected ++  " but got", T.unpack val] )
+      where
+        expected = T.unpack $ T.intercalate ", " $ map (\ t -> "\'" <> t <> "\'") [single, multiNeededOnly, multiWholeProject]
+    parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.typeMismatch "String" o)
+
+instance FromJSON LegacySessionLoadingPreferenceConfig where
+    parseJSON (String val)
+        | singleComponent    == val = pure $ LegacySessionLoadingPreferenceConfig PreferSingleComponentLoading
+        | multipleComponents == val = pure $ LegacySessionLoadingPreferenceConfig PreferMultiComponentLoading
+        | otherwise = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ "Expected one of " ++ expected ++ " but got " <> T.unpack val )
+      where
+        expected = T.unpack $ T.intercalate ", " $ map (\ t -> "\'" <> t <> "\'") [singleComponent, multipleComponents]
     parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
             (A.typeMismatch "String" o)
 
