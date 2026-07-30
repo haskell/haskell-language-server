@@ -17,6 +17,7 @@ import qualified Data.Aeson          as A
 import           Data.Aeson.Lens     (_String)
 import qualified Data.Aeson.Types    as A
 import           Data.Default
+import           Data.Functor        ((<&>))
 import qualified Data.Map.Strict     as Map
 import           Data.Maybe          (fromMaybe)
 import qualified Data.Text           as T
@@ -45,13 +46,14 @@ parseConfig idePlugins defValue = A.withObject "settings" $ \o ->
     <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
     <*> loadingPref o
     <*> o .:? "linkSourceTo"                            .!= linkSourceTo defValue
-    <*> o .:? "linkDocTo"                               .!=
-        linkDocTo defValue
+    <*> o .:? "linkDocTo"                               .!= linkDocTo defValue
     <*> A.explicitParseFieldMaybe (parsePlugins idePlugins) o "plugin" .!= plugins defValue
     where
       loadingPref o =
-        (o .:? "componentsLoading"
-        <|> o .:? "sessionLoading") .!= componentsLoading defValue
+            -- We can support "componentsLoading" and the legacy "sessionLoading" option.
+            (o .:? "componentsLoading" .!= componentsLoading defValue)
+        <|> (o .:? "sessionLoading"    .!= LegacySessionLoadingPreferenceConfig (componentsLoading defValue)
+             <&> getLegacySessionLoadingPreferenceConfig)
 
 -- | Parse the 'PluginConfig'.
 --   Since we need to fall back to default values if we do not find one in the input,

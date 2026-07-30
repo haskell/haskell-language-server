@@ -22,7 +22,10 @@ module Ide.Types
 , IdeNotification(..)
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
-, Config(..), PluginConfig(..), CheckParents(..), SessionLoadingPreferenceConfig(..)
+, Config(..), PluginConfig(..), CheckParents(..)
+, SessionLoadingPreferenceConfig(..)
+, LegacySessionLoadingPreferenceConfig(..)
+, getLegacySessionLoadingPreferenceConfig
 , OptLinkTo(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
@@ -78,7 +81,6 @@ import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
 import           Data.Kind                     (Type)
-import qualified Data.List                     as List
 import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
@@ -251,12 +253,28 @@ instance Pretty SessionLoadingPreferenceConfig where
     pretty PreferMultiWholeProjectLoading = "Prefer Whole Project Loading"
 
 -- | Labels for @SessionLoadingPreferenceConfig@ json format.
+--
+-- 'singleComponent' and 'multipleComponents' are outdated but are maintained here
+-- for backwards compatibility.
+-- We prefer 'single', 'multiNeededOnly' and 'multiWholeProject'
 singleComponent, multipleComponents, single, multiNeededOnly, multiWholeProject :: T.Text
 singleComponent = "singleComponent"
 multipleComponents = "multipleComponents"
 single = "single"
 multiNeededOnly = "multi: needed-only"
 multiWholeProject = "multi: whole-project"
+
+-- | Historical artefact!
+-- Before HLS 2.15.0.0, the 'SessionLoadingPreferenceConfig' option was called `sessionLoading` with the values
+-- `multipleComponents` and `singleComponent`.
+--
+-- With HLS 2.15.0.0, we renamed these options and also added some new ones!
+-- For backwards compatibility, we support the old naming as well using
+-- this backwards compatibility newtype.
+newtype LegacySessionLoadingPreferenceConfig = LegacySessionLoadingPreferenceConfig SessionLoadingPreferenceConfig
+
+getLegacySessionLoadingPreferenceConfig :: LegacySessionLoadingPreferenceConfig -> SessionLoadingPreferenceConfig
+getLegacySessionLoadingPreferenceConfig (LegacySessionLoadingPreferenceConfig conf) = conf
 
 instance ToJSON SessionLoadingPreferenceConfig where
     toJSON PreferSingleComponentLoading =
@@ -268,19 +286,24 @@ instance ToJSON SessionLoadingPreferenceConfig where
 
 instance FromJSON SessionLoadingPreferenceConfig where
     parseJSON (String val)
-        | val `elem` [singleComponent, single] = pure PreferSingleComponentLoading
-        | val `elem` [multipleComponents, multiNeededOnly] = pure PreferMultiComponentLoading
-        | val == multiWholeProject = pure PreferMultiWholeProjectLoading
+        | single            == val = pure PreferSingleComponentLoading
+        | multiNeededOnly   == val = pure PreferMultiComponentLoading
+        | multiWholeProject == val = pure PreferMultiWholeProjectLoading
         | otherwise = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
-            (A.parseFail $ unwords ["Expected one of", expected,  "but got", T.unpack val] )
-          where
-            expected = concat ["[", List.intercalate ", " fields, "]"]
-            fields = map show
-              [single, multiNeededOnly, multiWholeProject]
-              ++
-              [ show old_value ++ " (deprecated)"
-              | old_value <- [singleComponent,multipleComponents]
-              ]
+            (A.parseFail $ unwords ["Expected one of " ++ expected ++  " but got", T.unpack val] )
+      where
+        expected = T.unpack $ T.intercalate ", " $ map (\ t -> "\'" <> t <> "\'") [single, multiNeededOnly, multiWholeProject]
+    parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.typeMismatch "String" o)
+
+instance FromJSON LegacySessionLoadingPreferenceConfig where
+    parseJSON (String val)
+        | singleComponent    == val = pure $ LegacySessionLoadingPreferenceConfig PreferSingleComponentLoading
+        | multipleComponents == val = pure $ LegacySessionLoadingPreferenceConfig PreferMultiComponentLoading
+        | otherwise = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
+            (A.parseFail $ "Expected one of " ++ expected ++ " but got " <> T.unpack val )
+      where
+        expected = T.unpack $ T.intercalate ", " $ map (\ t -> "\'" <> t <> "\'") [singleComponent, multipleComponents]
     parseJSON o = A.prependFailure "parsing SessionLoadingPreferenceConfig failed, "
             (A.typeMismatch "String" o)
 
