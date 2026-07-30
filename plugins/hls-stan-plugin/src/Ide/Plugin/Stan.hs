@@ -11,6 +11,10 @@ import qualified Data.HashMap.Strict         as HM
 import           Data.Maybe                  (mapMaybe)
 import qualified Data.Text                   as T
 import           Development.IDE
+import           Development.IDE.Core.RuleInput (IsFileInput (inputFilePath),
+                                                 ProjectHaskellInput, RuleInput,
+                                                 toProjectHaskellInput,
+                                                 toSomeFileInput)
 import           Development.IDE.Core.Rules  (getHieFile)
 import qualified Development.IDE.Core.Shake  as Shake
 import           Development.IDE.GHC.Compat  (HieFile (..))
@@ -101,15 +105,17 @@ instance Hashable GetStanDiagnostics
 
 instance NFData GetStanDiagnostics
 
+type instance RuleInput GetStanDiagnostics = ProjectHaskellInput
 type instance RuleResult GetStanDiagnostics = ()
 
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
-    \GetStanDiagnostics file -> do
+    \GetStanDiagnostics input -> do
+      let file = inputFilePath input
       config <- getPluginConfigAction plId
       if plcGlobalOn config && plcDiagnosticsOn config then do
-          maybeHie <- getHieFile file
+          maybeHie <- getHieFile (SomeFileHaskellInput % SomeProjectHaskellInput input)
           case maybeHie of
             Nothing -> return ([], Nothing)
             Just hie -> do
@@ -163,7 +169,7 @@ rules recorder plId = do
 
   action $ do
     files <- getFilesOfInterestUntracked
-    void $ uses GetStanDiagnostics $ HM.keys files
+    void $ uses GetStanDiagnostics $ mapMaybe (toProjectHaskellInput . inputFilePath) (HM.keys files)
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations

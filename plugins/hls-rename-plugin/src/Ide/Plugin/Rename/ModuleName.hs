@@ -45,6 +45,10 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        useWithStale, (<+>))
 import           Development.IDE.Core.FileStore       (getFileContents)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
+                                                       ProjectHaskellInput,
+                                                       classifyAsHaskell,
+                                                       toSomeFileInput, SomeHaskellInput (SomeProjectHaskellInput), SomeFileInput (SomeFileHaskellInput))
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        getSessionDynFlags,
@@ -101,18 +105,18 @@ data Action = Replace
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
 action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (HandlerM c) [Action]
 action recorder state uri = do
-    nfp <- getNormalizedFilePathE  uri
+    input <- classifyAsHaskell uri
     fp <- uriToFilePathE uri
 
-    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents nfp
+    contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput input)
     let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
-    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
+    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state input fp
     logWith recorder Debug (CorrectNames correctNames)
     let bestName = minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
     logWith recorder Debug (BestName bestName)
 
-    statedNameMaybe <- liftIO $ codeModuleName state nfp
+    statedNameMaybe <- liftIO $ codeModuleName state input
     logWith recorder Debug (ModuleName $ snd <$> statedNameMaybe)
     case (bestName, statedNameMaybe) of
       (Just bestName, Just (nameRange, statedName))
@@ -127,11 +131,11 @@ action recorder state uri = do
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
-pathModuleNames recorder state normFilePath filePath
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> ProjectHaskellInput -> FilePath -> ExceptT PluginError IO [T.Text]
+pathModuleNames recorder state input filePath
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
-      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
+      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession input
       srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
@@ -164,9 +168,9 @@ pathModuleNames recorder state normFilePath filePath
         . dropExtension
 
 -- | The module name, as stated in the module
-codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
-codeModuleName state nfp = runMaybeT $ do
-  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
+codeModuleName :: IdeState -> ProjectHaskellInput -> IO (Maybe (Range, T.Text))
+codeModuleName state input = runMaybeT $ do
+  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule input
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
   pure (range, T.pack $ moduleNameString m)

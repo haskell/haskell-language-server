@@ -24,11 +24,13 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Development.IDE                  hiding (pluginHandlers)
 import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
+import           Development.IDE.Core.RuleInput   (toProjectHaskellInput)
 import           Development.IDE.GHC.Compat       (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat       as D
 import qualified Development.IDE.GHC.Compat.Util  as S
 import           GHC.LanguageExtensions.Type
-import           Ide.Plugin.Error                 (PluginError (PluginInternalError))
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError, PluginInvalidParams),
+                                                   handleMaybe)
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
@@ -65,9 +67,10 @@ properties =
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
 provider recorder plId ideState token typ contents fp _ = ExceptT $ pluginWithIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
+  input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput fp
   fileOpts <-
       maybe [] (fromDyn . hsc_dflags . hscEnv)
-          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)
+          <$> liftIO (runAction "Ormolu" ideState $ use GhcSession input)
   useCLI <- liftIO $ runAction "Ormolu" ideState $ usePropertyAction #external plId properties
 
   if useCLI

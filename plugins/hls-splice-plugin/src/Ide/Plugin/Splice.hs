@@ -40,6 +40,9 @@ import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput         (IsFileInput (inputFilePath),
+                                                         ProjectHaskellInput,
+                                                         toProjectHaskellInput)
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util       as Util
@@ -99,10 +102,10 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
     rio <- askRunInIO
     let reportEditor :: ReportEditor
         reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
-        expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
-        expandManually fp = do
+        expandManually :: ProjectHaskellInput -> ExceptT PluginError IO WorkspaceEdit
+        expandManually input = do
             mresl <-
-                liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
+                liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck input
             (TcModuleResult {..}, _) <-
                 maybe
                 (throwError $ PluginInternalError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
@@ -114,8 +117,8 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                 , "trying to expand manually, but note that it is less rigorous."
                 ]
             pm <- runActionE "expandTHSplice.fallback.GetParsedModule" ideState $
-                        useE GetParsedModule fp
-            (ps, hscEnv, _dflags) <- setupHscEnv ideState fp pm
+                        useE GetParsedModule input
+            (ps, hscEnv, _dflags) <- setupHscEnv ideState input pm
 
             manualCalcEdit
                 clientCapabilities
@@ -128,8 +131,8 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
                 _eStyle
                 params
 
-        withTypeChecked fp TcModuleResult {..} = do
-            (ps, _hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
+        withTypeChecked input TcModuleResult {..} = do
+            (ps, _hscEnv, dflags) <- setupHscEnv ideState input tmrParsed
             let Splices {..} = tmrTopLevelSplices
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
@@ -175,13 +178,14 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
     res <- liftIO $ runMaybeT $ do
 
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
+            nfp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
+            input <- MaybeT $ pure $ toProjectHaskellInput nfp
             eedits <-
-                ( lift . runExceptT . withTypeChecked fp
+                ( lift . runExceptT . withTypeChecked input
                         =<< MaybeT
-                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck fp)
+                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck input)
                     )
-                    <|> lift (runExceptT $ expandManually fp)
+                    <|> lift (runExceptT $ expandManually input)
 
             case eedits of
                 Left err -> do
@@ -205,12 +209,12 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
 setupHscEnv
     :: IdeState
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> ParsedModule
     -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
-setupHscEnv ideState fp pm = do
+setupHscEnv ideState input pm = do
     hscEnvEq <- runActionE "expandTHSplice.fallback.ghcSessionDeps" ideState $
-                    useE GhcSessionDeps fp
+                    useE GhcSessionDeps input
     let ps = annotateParsedSource pm
         hscEnv0 = hscEnv hscEnvEq
         modSum = pm_mod_summary pm
@@ -461,11 +465,12 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
     verTxtDocId <- liftIO $ runAction "splice.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
+            nfp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
+            input <- MaybeT $ pure $ toProjectHaskellInput nfp
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
-                    use GetParsedModule fp
-            let spn = rangeToRealSrcSpan fp ran
+                    use GetParsedModule input
+            let spn = rangeToRealSrcSpan (inputFilePath input) ran
                 mouterSplice = something' (detectSplice spn) pm_parsed_source
             mcmds <- forM mouterSplice $
                 \(spliceSpan, spliceContext) ->

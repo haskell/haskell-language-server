@@ -26,6 +26,8 @@ import           Development.IDE                      (DocAndTyThingMap (DKMap),
                                                        useWithStaleFast)
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
+import           Development.IDE.Core.RuleInput       (SomeHaskellInput (SomeProjectHaskellInput),
+                                                       classifyAsHaskell)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan,
@@ -52,7 +54,6 @@ import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
 import           GHC.Iface.Ext.Utils                  (smallestContainingSatisfying)
 import           GHC.Types.Name.Env                   (lookupNameEnv)
 import           GHC.Types.SrcLoc                     (isRealSubspanOf)
-import           Ide.Plugin.Error                     (getNormalizedFilePathE)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers),
                                                        PluginId,
                                                        PluginMethodHandler,
@@ -108,10 +109,10 @@ Here is a brief description of the algorithm of finding relevant bits from HIE A
 -}
 signatureHelpProvider :: PluginMethodHandler IdeState Method_TextDocumentSignatureHelp
 signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdentifier uri) position _mProgreeToken mSignatureHelpContext) = do
-  nfp <- getNormalizedFilePathE uri
+  input <- classifyAsHaskell uri
   results <- runIdeActionE "signatureHelp.ast" (shakeExtras ideState) $ do
     -- see Note [Stale Results in Signature Help]
-    (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst nfp
+    (HAR {hieAst, hieKind}, positionMapping) <- useWithStaleFastE GetHieAst (SomeProjectHaskellInput input)
     case fromCurrentPosition positionMapping position of
       Nothing -> pure []
       Just oldPosition -> do
@@ -127,7 +128,7 @@ signatureHelpProvider ideState _pluginId (SignatureHelpParams (TextDocumentIdent
             )
   (docMap, argDocMap) <- runIdeActionE "signatureHelp.docMap" (shakeExtras ideState) $ do
     -- see Note [Stale Results in Signature Help]
-    mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap nfp
+    mResult <- ExceptT $ Right <$> useWithStaleFast GetDocMap input
     case mResult of
       Just (DKMap docMap _tyThingMap argDocMap, _positionMapping) -> pure (docMap, argDocMap)
       Nothing -> pure (mempty, mempty)

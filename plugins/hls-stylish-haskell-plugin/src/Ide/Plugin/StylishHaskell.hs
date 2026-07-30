@@ -16,11 +16,13 @@ import qualified Data.Text                        as T
 import           Development.IDE                  hiding (getExtensions,
                                                    pluginHandlers)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput   (toProjectHaskellInput)
 import           Development.IDE.GHC.Compat       (ModSummary (ms_hspp_opts),
                                                    extensionFlags)
 import qualified Development.IDE.GHC.Compat.Util  as Util
 import           GHC.LanguageExtensions.Type
-import           Ide.Plugin.Error                 (PluginError (PluginInternalError))
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError, PluginInvalidParams),
+                                                   handleMaybe)
 import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
@@ -51,7 +53,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
 provider recorder ide _token typ contents fp _opts = do
-  (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary fp
+  input <- handleMaybe (PluginInvalidParams "Expected project Haskell file") $ toProjectHaskellInput fp
+  (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary input
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
   mergedConfig <- liftIO $ getMergedConfig dyn config
