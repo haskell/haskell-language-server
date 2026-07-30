@@ -1,10 +1,14 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
 import           Control.Exception             (displayException)
+#if MIN_VERSION_base(4,20,0)
+import qualified Control.Exception.Backtrace   as Backtrace
+#endif
 import           Control.Monad.IO.Class        (liftIO)
 import           Data.Bifunctor                (first)
 import           Data.Function                 ((&))
@@ -45,6 +49,9 @@ instance Pretty Log where
 
 main :: IO ()
 main = do
+#if MIN_VERSION_base(4,20,0)
+    Backtrace.setBacktraceMechanismState Backtrace.IPEBacktrace True
+#endif
     stderrRecorder <- makeDefaultStderrRecorder Nothing
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things
