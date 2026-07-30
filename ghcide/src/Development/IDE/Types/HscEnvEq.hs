@@ -12,6 +12,7 @@ import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force, rwhnf)
 import           Control.Exception               (evaluate, mask, throwIO)
+import qualified Control.Exception               as Exc
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
 import           Data.IORef
@@ -56,14 +57,14 @@ newHscEnvEq hscEnv' = do
 #if MIN_VERSION_ghc(9,11,0)
     let hscEnv = hscEnv'
                { hsc_FC = FinderCache
-                        { flushFinderCaches = \_ -> error "GHC should never call flushFinderCaches outside the driver"
+                        { flushFinderCaches = \_ -> throwIO $ Exc.ErrorCall "flushFinderCaches: GHC should never call flushFinderCaches outside the driver"
 #if MIN_VERSION_ghc(9,13,0)
                         , addToFinderCache  = \im val -> do
 #else
                         , addToFinderCache  = \(GWIB im _) val -> do
 #endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
-                            then error "tried to add home module to FC"
+                            then throwIO $ Exc.ErrorCall "addToFinderCache: tried to add home module to FC"
                             else atomicModifyIORef' mod_cache $ \c -> (extendInstalledModuleEnv c im val, ())
 #if MIN_VERSION_ghc(9,13,0)
                         , lookupFinderCache = \im -> do
@@ -71,9 +72,9 @@ newHscEnvEq hscEnv' = do
                         , lookupFinderCache = \(GWIB im _) -> do
 #endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
-                            then error ("tried to lookup home module from FC" ++ showSDocUnsafe (ppr (im, hsc_all_home_unit_ids hscEnv')))
+                            then throwIO $ Exc.ErrorCall ("lookupFinderCache: tried to lookup home module from FC: " ++ showSDocUnsafe (ppr (im, hsc_all_home_unit_ids hscEnv')))
                             else lookupInstalledModuleEnv <$> readIORef mod_cache <*> pure im
-                        , lookupFileCache = \fp -> error ("not used by HLS" ++ fp)
+                        , lookupFileCache = \fp -> throwIO $ Exc.ErrorCall ("lookupFileCache: Called without using setFileCacheHook for target: " ++ fp)
                         }
                 }
 
