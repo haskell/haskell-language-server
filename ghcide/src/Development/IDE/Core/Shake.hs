@@ -4,10 +4,10 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ImplicitParams        #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -229,10 +229,7 @@ instance Pretty Log where
         , "Took:" <+> pretty (showDuration seconds) ]
     LogBuildSessionFinish e -> case e of
       Nothing -> "Finished build session"
-      Just e -> vcat
-        [ "Finished build session"
-        , pretty (displayException e)
-        ]
+      Just e -> "Finished build session:" <+> prettyBuildSessionFinishException e
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
@@ -1357,6 +1354,13 @@ displayExcContext (SomeException _exc) =
 #else
     Just $ displayException (SomeException _exc)
 #endif
+
+prettyBuildSessionFinishException :: SomeException -> Doc ann
+prettyBuildSessionFinishException exc = case fromException exc of
+  Nothing -> case displayExcContext exc of
+    Nothing  -> pretty (displayException exc)
+    Just ctx -> pretty ctx
+  Just AsyncCancelled -> viaShow AsyncCancelled -- We don't want to see the stack trace for a cancelled build session
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
