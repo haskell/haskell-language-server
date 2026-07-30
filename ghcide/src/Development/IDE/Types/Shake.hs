@@ -82,6 +82,7 @@ fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
+fromKey _ = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
 fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
@@ -91,6 +92,7 @@ fromKeyType (Key k)
   , Q (_, f) <- k
   = Just (SomeTypeRep a, f)
   | otherwise = Nothing
+fromKeyType _ = Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = newKey $ Q (k, emptyFilePath)

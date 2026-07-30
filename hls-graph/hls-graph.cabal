@@ -70,6 +70,7 @@ library
   autogen-modules:    Paths_hls_graph
   hs-source-dirs:     src
   build-depends:
+    , mtl ^>=2.3.1
     , aeson
     , async                 >=2.0
     , base                  >=4.12    && <5
@@ -92,6 +93,7 @@ library
     , transformers
     , unliftio
     , unordered-containers
+    , prettyprinter
 
   if flag(embed-files)
     cpp-options:   -DFILE_EMBED

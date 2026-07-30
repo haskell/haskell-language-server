@@ -518,6 +518,14 @@ data IsFileOfInterest = IsFileOfInterest
 instance Hashable IsFileOfInterest
 instance NFData   IsFileOfInterest
 
+-- | A no-file rule that triggers the IDE "kick" action
+data Kick = Kick
+    deriving (Eq, Show, Generic)
+instance Hashable Kick
+instance NFData   Kick
+
+type instance RuleResult Kick = ()
+
 data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
     deriving (Eq, Show, Generic)
 instance Hashable GetModSummaryWithoutTimestamps

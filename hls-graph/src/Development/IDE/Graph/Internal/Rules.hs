@@ -42,12 +42,14 @@ addRule f = do
             v <- f (fromJust $ cast a :: key) b c
             v <- liftIO $ evaluate v
             pure $ Value . toDyn <$> v
+        f2 (DirectKey a) _ _ = error $ "DirectKey " ++ show a ++ " has no associated rule"
 
 runRule
     :: TheRules -> Key -> Maybe BS.ByteString -> RunMode -> Action (RunResult Value)
 runRule rules key@(Key t) bs mode = case Map.lookup (typeOf t) rules of
     Nothing -> liftIO $ errorIO $ "Could not find key: " ++ show key
     Just x  -> unwrapDynamic x key bs mode
+runRule _ (DirectKey a) _ _ = error $ "DirectKey " ++ show a ++ " has no associated rule"
 
 runRules :: Dynamic -> Rules () -> IO (TheRules, [Action ()])
 runRules rulesExtra (Rules rules) = do

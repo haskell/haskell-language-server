@@ -18,6 +18,7 @@ module Development.IDE.Graph(
     -- * Actions for inspecting the keys in the database
     getDirtySet,
     getKeysAndVisitedAge,
+
     module Development.IDE.Graph.KeyMap,
     module Development.IDE.Graph.KeySet,
     ) where
