@@ -8,6 +8,9 @@ import           Data.Char                        (isAlpha)
 import qualified Data.Text                        as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput   (ProjectHaskellInput,
+                                                   SomeFileInput (SomeFileHaskellInput),
+                                                   SomeHaskellInput (SomeProjectHaskellInput))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util  (fsLit)
 import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
@@ -42,14 +45,14 @@ toMethodName n
 --   if the module parsed success.
 insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> Extension
     -> ExceptT PluginError m [TextEdit]
 insertPragmaIfNotPresent state nfp pragma = do
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GhcSession" state
         $ useWithStaleE GhcSession nfp
     fileContents <- liftIO $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
-        $ getFileContents nfp
+        $ getFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput nfp)
     (pm, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
         $ useWithStaleE GetParsedModuleWithComments nfp
     let exts = getExtensions pm

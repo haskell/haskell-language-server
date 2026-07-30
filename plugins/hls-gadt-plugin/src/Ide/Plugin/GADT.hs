@@ -22,6 +22,11 @@ import           Development.IDE.GHC.Compat
 
 import           Data.Maybe                       (mapMaybe)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
+                                                   ProjectHaskellInput,
+                                                   SomeFileInput (SomeFileHaskellInput),
+                                                   SomeHaskellInput (SomeProjectHaskellInput),
+                                                   classifyAsHaskell)
 import           Development.IDE.Spans.Pragmas    (getFirstPragma,
                                                    insertNewPragma)
 import           GHC.Generics                     (Generic)
@@ -53,39 +58,40 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state _ ToGADTParams{..} = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE uri
-    (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
+    input <- withExceptT GhcidePluginErrors $ classifyAsHaskell uri
+    (decls, exts) <- getInRangeH98DeclsAndExts state range input
     (L ann decl) <- case decls of
         [d] -> pure d
         _   -> throwError $ UnexpectedNumberOfDeclarations (Prelude.length decls)
     deps <- withExceptT GhcidePluginErrors
         $ runActionE (T.unpack pId' <> ".GhcSessionDeps") state
-        $ useE GhcSessionDeps nfp
+        $ useE GhcSessionDeps input
     (hsc_dflags . hscEnv -> df) <- pure deps
     txt <- withExceptT (PrettyGadtError . T.pack) $ liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
         $ maybeToEither FailedToFindDataDeclRange
         $ srcSpanToRange $ locA ann
-    pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nfp
+    pragma <- withExceptT GhcidePluginErrors
+        $ getFirstPragma pId state (SomeFileHaskellInput $ SomeProjectHaskellInput input)
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ pluginSendRequest
             SMethod_WorkspaceApplyEdit
-            (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
+            (ApplyWorkspaceEditParams Nothing (workSpaceEdit input (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
 
     pure $ InR Null
     where
-        workSpaceEdit nfp edits = WorkspaceEdit
+        workSpaceEdit input edits = WorkspaceEdit
             (pure $ Map.fromList
-                [(filePathToUri $ fromNormalizedFilePath nfp,
+                [(filePathToUri $ fromNormalizedFilePath (inputFilePath input),
                 edits)])
                  Nothing Nothing
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE (doc ^. L.uri)
-    (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
+    input <- withExceptT GhcidePluginErrors $ classifyAsHaskell (doc ^. L.uri)
+    (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range input
     let actions = map (mkAction . printOutputable . tyClDeclLName . unLoc) inRangeH98Decls
     pure $ InL actions
     where
@@ -108,7 +114,7 @@ codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT ha
 getInRangeH98DeclsAndExts :: (MonadIO m) =>
     IdeState
     -> Range
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> ExceptT GadtPluginError m ([LTyClDecl GP], [Extension])
 getInRangeH98DeclsAndExts state range nfp = do
     pm <- withExceptT GhcidePluginErrors

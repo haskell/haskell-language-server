@@ -26,6 +26,9 @@ import           Data.Maybe                                   (fromMaybe,
                                                                maybeToList)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
+import           Development.IDE.Core.RuleInput                 (SomeFileInput (SomeFileHaskellInput),
+                                                                 SomeHaskellInput (SomeProjectHaskellInput),
+                                                                 toProjectHaskellInput)
 import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.PluginUtils             (activeDiagnosticsInRange)
@@ -56,9 +59,12 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 
 runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range _) codeAction
-    | Just nfp <- toNormalizedFilePath' <$> uriToFilePath uri = do
-        let runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure (Just nfp)) >>= MaybeT . use key
-        caaGhcSession <- onceIO $ runRule GhcSession
+    | Just nfp <- toNormalizedFilePath' <$> uriToFilePath uri
+    , Just input <- toProjectHaskellInput nfp = do
+        let runRule key ruleInput = runAction ("GhcideCodeActions." <> show key) state $ use key ruleInput
+            someHaskellInput = SomeProjectHaskellInput input
+            someFileInput = SomeFileHaskellInput someHaskellInput
+        caaGhcSession <- onceIO $ runRule GhcSession input
         caaExportsMap <-
             onceIO $
             caaGhcSession >>= \case
@@ -68,18 +74,18 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
                     pure $ localExports <> pkgExports
                 _ -> pure mempty
         caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions
-        caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
+        caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments input
         caaContents <-
             onceIO $
-            runRule GetFileContents <&> \case
+            runRule GetFileContents someFileInput <&> \case
                 Just (_, mbContents) -> fmap Rope.toText mbContents
                 Nothing       -> Nothing
         caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
-        caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
-        caaTmr <- onceIO $ runRule TypeCheck
-        caaHar <- onceIO $ runRule GetHieAst
-        caaBindings <- onceIO $ runRule GetBindings
-        caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
+        caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource input
+        caaTmr <- onceIO $ runRule TypeCheck input
+        caaHar <- onceIO $ runRule GetHieAst someHaskellInput
+        caaBindings <- onceIO $ runRule GetBindings input
+        caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs input
         diags <- concat . maybeToList <$> activeDiagnosticsInRange (shakeExtras state) nfp _range
         results <- liftIO $
             sequence

@@ -19,6 +19,8 @@ import qualified Data.Text                        as T
 import           Data.Unique                      (hashUnique, newUnique)
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils (useMT)
+import           Development.IDE.Core.RuleInput   (ProjectHaskellInput,
+                                                   RuleInput)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (newUnique, (<+>))
 import           Development.IDE.GHC.Compat.Util  (bagToList)
@@ -75,6 +77,7 @@ instance Show ClassInstancesResult where
 instance NFData ClassInstancesResult where
     rnf = rwhnf
 
+type instance RuleInput GetClassInstances = ProjectHaskellInput
 type instance RuleResult GetClassInstances = ClassInstancesResult
 
 -- |The necessary data to execute our code lens
@@ -114,6 +117,7 @@ instance Show InstanceBindLensResult where
 instance NFData InstanceBindLensResult where
     rnf = rwhnf
 
+type instance RuleInput GetInstanceBindLens = ProjectHaskellInput
 type instance RuleResult GetInstanceBindLens = InstanceBindLensResult
 
 data Log

@@ -25,6 +25,9 @@ import qualified Data.Text                        as T
 import           Development.IDE
 import           Development.IDE.Core.FileStore   (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
+                                                   ProjectHaskellInput,
+                                                   classifyAsHaskell)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error (TcRnMessage (..),
                                                    _TcRnMessage,
@@ -46,7 +49,7 @@ import           Language.LSP.Protocol.Types
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
     caps <- lift pluginGetClientCapabilities
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    nfp <- classifyAsHaskell (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
         $ useE GetParsedModule nfp
     (hsc_dflags . hscEnv -> df) <- runActionE "classplugin.addMethodPlaceholders.GhcSessionDeps" state
@@ -84,8 +87,8 @@ addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
-    activeDiagnosticsInRange (shakeExtras state) nfp caRange
+    nfp <- classifyAsHaskell (verTxtDocId ^. L.uri)
+    activeDiagnosticsInRange (shakeExtras state) (inputFilePath nfp) caRange
         >>= \case
         Nothing -> pure $ InL []
         Just fileDiags -> do
@@ -96,7 +99,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
             mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
-            :: NormalizedFilePath
+            :: ProjectHaskellInput
             -> VersionedTextDocumentIdentifier
             -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]

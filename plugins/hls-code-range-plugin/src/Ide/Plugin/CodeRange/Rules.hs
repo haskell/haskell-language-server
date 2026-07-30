@@ -37,6 +37,10 @@ import qualified Data.Map.Strict                    as Map
 import           Data.Vector                        (Vector)
 import qualified Data.Vector                        as V
 import           Development.IDE
+import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
+                                                   ProjectHaskellInput,
+                                                   RuleInput,
+                                                   SomeHaskellInput (SomeProjectHaskellInput))
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat.Util
@@ -161,16 +165,17 @@ data GetCodeRange = GetCodeRange
 instance Hashable GetCodeRange
 instance NFData   GetCodeRange
 
+type instance RuleInput GetCodeRange = ProjectHaskellInput
 type instance RuleResult GetCodeRange = CodeRange
 
 codeRangeRule :: Recorder (WithPriority Log) -> Rules ()
 codeRangeRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetCodeRange file -> handleError recorder $ do
+    define (cmapWithPrio LogShake recorder) $ \GetCodeRange input -> handleError recorder $ do
         -- We need both 'HieAST' (for basic AST) and api annotations (for comments and some keywords).
         -- See https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
-        HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
+        HAR{hieAst, refMap} <- lift $ use_ GetHieAst (SomeProjectHaskellInput input)
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
-            getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
+            getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath . inputFilePath) input
         let (codeRange, warnings) = runWriter (buildCodeRange ast refMap)
         traverse_ (logWith recorder Warning) warnings
 

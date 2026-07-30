@@ -12,6 +12,9 @@ import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput       (SomeFileInput (SomeFileHaskellInput),
+                                                       SomeHaskellInput (SomeProjectHaskellInput),
+                                                       classifyAsHaskell)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.Pragmas        (getFirstPragma,
                                                        insertNewPragma)
@@ -28,7 +31,7 @@ import           Language.LSP.Protocol.Types
 -- lenses matched to a unique id
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLens state _plId clp = do
-    nfp <-  getNormalizedFilePathE $ clp ^. L.textDocument . L.uri
+    nfp <- classifyAsHaskell $ clp ^. L.textDocument . L.uri
     (InstanceBindLensResult (InstanceBindLens{lensRange}), pm)
         <- runActionE "classplugin.GetInstanceBindLens" state
             -- Using stale results means that we can almost always return a
@@ -42,7 +45,7 @@ codeLens state _plId clp = do
 -- The code lens resolve method matches a title to each unique id
 codeLensResolve:: ResolveFunction IdeState Int Method_CodeLensResolve
 codeLensResolve state plId cl uri uniqueID = do
-    nfp <-  getNormalizedFilePathE uri
+    nfp <- classifyAsHaskell uri
     (InstanceBindLensResult (InstanceBindLens{lensDetails}), pm)
         <- runActionE "classplugin.GetInstanceBindLens" state
             $ useWithStaleE GetInstanceBindLens nfp
@@ -68,7 +71,7 @@ codeLensResolve state plId cl uri uniqueID = do
 -- specified unique id.
 codeLensCommandHandler :: PluginId -> CommandFunction IdeState InstanceBindLensCommand
 codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandEdit} = do
-    nfp <-  getNormalizedFilePathE commandUri
+    nfp <- classifyAsHaskell commandUri
     (InstanceBindLensResult (InstanceBindLens{lensEnabledExtensions}), _)
         <- runActionE "classplugin.GetInstanceBindLens" state
             $ useWithStaleE GetInstanceBindLens nfp
@@ -76,7 +79,7 @@ codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandE
     -- have the InstanceSigs extension enabled
     mbPragma <- if InstanceSigs `elem` lensEnabledExtensions
                 then pure Nothing
-                else Just <$> getFirstPragma plId state nfp
+                else Just <$> getFirstPragma plId state (SomeFileHaskellInput $ SomeProjectHaskellInput nfp)
     let -- By mapping over our Maybe NextPragmaInfo value, we only compute this
         -- edit if we actually need to.
         pragmaInsertion =

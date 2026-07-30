@@ -27,6 +27,8 @@ import           Development.IDE                      (Action,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
+import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
+                                                       classifyAsHaskell)
 import           Ide.Logger                           (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
@@ -43,8 +45,7 @@ import           Language.LSP.Protocol.Message        (Method (Method_TextDocume
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
-                                                       NormalizedFilePath, Null,
-                                                       Position (..),
+                                                       Null, Position (..),
                                                        Range (_start),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
@@ -68,14 +69,14 @@ instance Pretty Log where
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler _ ide _ FoldingRangeParams{..} =
     do
-        filePath <- getNormalizedFilePathE uri
+        filePath <- classifyAsHaskell uri
         foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges filePath
         pure . InL $ foldingRanges
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
+getFoldingRanges :: ProjectHaskellInput -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
     codeRange <- useE GetCodeRange file
     pure $ findFoldingRanges codeRange
@@ -83,7 +84,7 @@ getFoldingRanges file = do
 selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentSelectionRange
 selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
    do
-        filePath <- getNormalizedFilePathE uri
+        filePath <- classifyAsHaskell uri
         mapExceptT liftIO $ getSelectionRanges ide filePath positions
   where
     uri :: Uri
@@ -93,7 +94,7 @@ selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
     positions = _positions
 
 
-getSelectionRanges :: IdeState -> NormalizedFilePath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
+getSelectionRanges :: IdeState -> ProjectHaskellInput -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
 getSelectionRanges ide file positions = do
     (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them
