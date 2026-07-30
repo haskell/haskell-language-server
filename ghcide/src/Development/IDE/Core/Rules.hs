@@ -702,8 +702,15 @@ typeCheckRuleDefinition hsc pm fp = do
            { getLinkables = unliftIO unlift . uses_ GetLinkable
            , getModuleGraph = unliftIO unlift $ useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph fp
            }
+  -- This 'setFileCacheHook' is neccessary to work correctly
+  -- with ghc plugins.
+  -- In particular, with plugins we load objects, and in doing so we consult the fileCacheHook to record the hash of the object.
+  --
+  -- See issue https://github.com/haskell/haskell-language-server/issues/4675 for details
+  -- and https://github.com/ucsd-progsys/lh-plugin-demo for a reproducer.
+  hsc_env <- setFileCacheHook hsc
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc dets pm
+    typecheckModule defer hsc_env dets pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
