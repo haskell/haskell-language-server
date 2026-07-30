@@ -7,6 +7,7 @@
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ImplicitParams        #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -86,6 +87,9 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
+#if MIN_VERSION_ghc(9,10,0)
+import           Control.Exception.Context              (displayExceptionContext)
+#endif
 import           Control.Lens                           ((%~), (&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -108,8 +112,8 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.List.Extra                        (foldl', partition,
-                                                         takeEnd)
+import qualified Data.List                              as List
+import           Data.List.Extra                        (partition, takeEnd)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
 import qualified Data.SortedList                        as SL
@@ -820,7 +824,7 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
                 keys <- ioActionBetweenShakeSession
                 -- it is every important to update the dirty keys after we enter the critical section
                 -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> List.foldl' (flip insertKeySet) x keys
                 res <- shakeDatabaseProfile shakeDb
                 backlog <- readTVarIO $ dirtyKeys shakeExtras
                 queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -1285,7 +1289,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1329,6 +1333,30 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+
+    prettyRuleAbortedByException key file e = T.pack $ unlines $
+        [ "Rule execution aborted due to exception"
+        , ""
+        , "Rule: " <> show key
+        , "Target: " <> fromNormalizedFilePath file
+        , "Message: " <> show e
+        ] <>
+        [ unlines
+            [ "Context:"
+            , ctx
+            ]
+        | Just ctx <- [displayExcContext e]
+        ]
+
+displayExcContext :: SomeException -> Maybe String
+displayExcContext (SomeException _exc) =
+#if MIN_VERSION_ghc(9,10,0)
+    case displayExceptionContext ?exceptionContext of
+      "" -> Nothing
+      dc -> Just dc
+#else
+    Just $ displayException (SomeException _exc)
+#endif
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
