@@ -204,7 +204,11 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
             [L _ (HsParTy EpAnn{anns=AnnParen{ap_close}} _)] -> Just ap_close
 #endif
             _ -> Nothing
-        ctxt' = over _last (first addComma) $ map dropHsParTy ctxt
+        -- Drop parens only for a lone constraint. In a multi-constraint context
+        -- an element's parens may be required.
+        ctxt' = over _last (first addComma) $ case ctxt of
+            [c] -> [dropHsParTy c]
+            _   -> ctxt
     return $ L l $ it{hst_ctxt = L l'' $ ctxt' ++ [constraint]}
   go (L _ HsForAllTy{hst_body}) = go hst_body
   go (L _ (HsParTy _ ty)) = go ty
