@@ -4,8 +4,9 @@ module Progress (tests) where
 import           Control.Concurrent.STM
 import           Data.Foldable                          (for_)
 import qualified Data.HashMap.Strict                    as Map
-import           Development.IDE                        (NormalizedFilePath)
 import           Development.IDE.Core.ProgressReporting
+import           Development.IDE.Core.RuleInput        (SomeFileInput,
+                                                        toSomeFileInput)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
 import           Test.Tasty
@@ -18,7 +19,7 @@ tests = testGroup "Progress"
 
 data InProgressModel = InProgressModel {
     done, todo :: Int,
-    current    :: Map.HashMap NormalizedFilePath Int
+    current    :: Map.HashMap SomeFileInput Int
 }
 
 reportProgressTests :: TestTree
@@ -35,7 +36,7 @@ reportProgressTests = testGroup "recordProgress"
         decrease = recordProgressModel "A" succ increase
         done = recordProgressModel "A" pred decrease
         recordProgressModel key change state =
-            model state $ \st -> recordProgress st key change
+            model state $ \st -> recordProgress st (toSomeFileInput key) change
         model stateModelIO k = do
             state <- fromModel =<< stateModelIO
             _ <- k state

@@ -193,6 +193,13 @@ parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
 parseActions :: CI String -> [SomeFileInput] -> Action (Either Text [Bool])
+parseActions action fps
+    | action == fromString "typecheck"
+    , Just pFiles <- traverse projectFile fps =
+        fmap (Right . map isJust) (uses TypeCheck pFiles)
+  where
+    projectFile (SomeFileHaskellInput (SomeProjectHaskellInput pFile)) = Just pFile
+    projectFile _ = Nothing
 parseActions action fps = sequence <$> traverse (parseAction action) fps
 
 -- | a command that blocks forever. Used for testing
