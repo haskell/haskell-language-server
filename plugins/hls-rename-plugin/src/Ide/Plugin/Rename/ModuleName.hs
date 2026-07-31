@@ -15,6 +15,8 @@ module Ide.Plugin.Rename.ModuleName (
     codeLens,
     updateModuleNameCommand,
     command,
+    potentialModuleNames,
+    codeModuleName,
 ) where
 
 import           Control.Monad                        (forM_, void)
@@ -102,12 +104,11 @@ data Action = Replace
 action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (HandlerM c) [Action]
 action recorder state uri = do
     nfp <- getNormalizedFilePathE  uri
-    fp <- uriToFilePathE uri
 
     contents <- liftIO $ runAction "ModuleName.getFileContents" state $ getFileContents nfp
     let emptyModule = maybe True (T.null . T.strip . Rope.toText) contents
 
-    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
+    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp
     logWith recorder Debug (CorrectNames correctNames)
     let bestName = minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
     logWith recorder Debug (BestName bestName)
@@ -127,33 +128,34 @@ action recorder state uri = do
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
-pathModuleNames recorder state normFilePath filePath
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> ExceptT PluginError IO [T.Text]
+pathModuleNames recorder state nfp
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
-      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
+      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession nfp
       srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
-
+      potentialModuleNames recorder state filePath srcPaths
       -- Append a `pathSeparator` to make the path looks like a directory,
       --   and then we can drop it uniformly.
       -- See https://github.com/haskell/haskell-language-server/pull/3092 for details.
-      let paths = map (normalise . (<> pure pathSeparator)) srcPaths
-      logWith recorder Debug (NormalisedPaths paths)
-
-      -- TODO, this can be avoid if the filePath is already absolute,
-      -- we can avoid the toAbsolute call in the future.
-      -- see Note [Root Directory]
-      let mdlPath = (toAbsolute $ rootDir state) filePath
-      logWith recorder Debug (AbsoluteFilePath mdlPath)
-
-      let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
-      pure (map moduleNameFrom suffixes)
   where
-    firstLetter :: (Char -> Bool) -> FilePath -> Bool
-    firstLetter _ []       = False
-    firstLetter pred (c:_) = pred c
+    filePath = fromNormalizedFilePath nfp
 
+potentialModuleNames :: Recorder (WithPriority Log) -> IdeState -> [Char] -> [FilePath] -> ExceptT PluginError IO [T.Text]
+potentialModuleNames recorder state filePath srcPaths = do
+    let paths = map (normalise . (<> pure pathSeparator)) srcPaths
+    logWith recorder Debug (NormalisedPaths paths)
+
+    -- TODO, this can be avoid if the filePath is already absolute,
+    -- we can avoid the toAbsolute call in the future.
+    -- see Note [Root Directory]
+    let mdlPath = (toAbsolute $ rootDir state) filePath
+    logWith recorder Debug (AbsoluteFilePath mdlPath)
+
+    let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
+    pure (map moduleNameFrom suffixes)
+  where
     moduleNameFrom =
       T.pack
         . intercalate "."
@@ -162,6 +164,10 @@ pathModuleNames recorder state normFilePath filePath
         . filter (firstLetter isUpper)
         . splitDirectories
         . dropExtension
+
+firstLetter :: (Char -> Bool) -> FilePath -> Bool
+firstLetter _ []       = False
+firstLetter pred (c:_) = pred c
 
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
