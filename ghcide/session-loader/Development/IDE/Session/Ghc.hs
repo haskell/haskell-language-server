@@ -262,7 +262,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
     where
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
-          args <- liftIO $ expandResponse [f]
+          args <- liftIO $ expandResponse [rebaseResponseFile compRoot f]
           -- The reponse files may contain arguments like "+RTS",
           -- and hie-bios doesn't expand the response files of @-unit@ arguments.
           -- Thus, we need to do the stripping here.
@@ -308,6 +308,13 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
 
 normaliseImportsPaths :: DynFlags -> DynFlags
 normaliseImportsPaths dflags = dflags { importPaths = fmap normalise (importPaths dflags)}
+
+-- | Rebase a relative response-file path onto the component root, so
+-- 'expandResponse' does not resolve it against the process CWD.
+rebaseResponseFile :: FilePath -> String -> String
+rebaseResponseFile root arg = case arg of
+  '@' : path -> '@' : toAbsolute root path
+  _          -> arg
 
 addComponentInfo ::
   MonadUnliftIO m =>

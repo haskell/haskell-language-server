@@ -434,7 +434,6 @@ runWithExtraFilesMultiComponent sesLoading dirName action = do
         { testPluginDescriptor = dummyPlugin
         , testDirLocation = Right vfs
         , testConfigCaps = lspTestCaps
-        , testShiftRoot = True
         , testDisableKick = True
         , testLspConfig = lspConfig
         }

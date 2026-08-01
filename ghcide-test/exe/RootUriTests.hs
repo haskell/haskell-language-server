@@ -33,7 +33,6 @@ tests = testCase "use rootUri" . runTest "dirA" "dirB" $ \dir -> do
             , testDirLocation = Right $ mkIdeTestFs [copyDir "rootUri"]
             , testServerRoot = Just dir1
             , testClientRoot = Just dir2
-            , testShiftRoot = True
         }
 
 
