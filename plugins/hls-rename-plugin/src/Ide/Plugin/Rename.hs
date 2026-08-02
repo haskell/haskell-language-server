@@ -20,8 +20,7 @@ import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List.NonEmpty                    (NonEmpty ((:|)),
-                                                        groupWith)
+import           Data.List.NonEmpty                    (NonEmpty ((:|)), groupAllWith)
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
@@ -285,8 +284,8 @@ removeGenerated HAR{..} =
     -- is generated from HieASTs containing GeneratedInfo
     sourceOnlyRefMap = generateReferencesMap $ getAsts sourceOnlyAsts
 
-collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
-collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
+collectWith :: (Hashable a, Ord b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
+collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupAllWith f . HS.toList
 
 -- | A variant 'getNamesAtPoint' that does not expect a 'PositionMapping'
 getNamesAtPoint' :: HieASTs a -> Position -> [Name]
