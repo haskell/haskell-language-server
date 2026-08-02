@@ -226,7 +226,7 @@ refsAtName state nfp name = do
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
             -- See Note [Generated references]
-            filter (\(refRow HieDb.:. _) -> refIsGenerated refRow) <$>
+            filter (\(refRow HieDb.:. _) -> not $ refIsGenerated refRow) <$>
             findReferences
                 hieDb
                 True
