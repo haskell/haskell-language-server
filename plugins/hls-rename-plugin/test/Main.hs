@@ -15,6 +15,8 @@ import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (Null))
 import           System.FilePath
 import           Test.Hls
+import           Development.IDE.Test (referenceReady)
+import qualified Data.Text.IO                as TIO
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -27,6 +29,7 @@ tests = testGroup "Rename"
     [ prepareRenameTests
     , renameTests
     , moduleNameTests
+    , crossModuleTests
     ]
 
 prepareRenameTests :: TestTree
@@ -164,6 +167,24 @@ renameTests = testGroup "Identifier"
         -- Make sure renaming succeeds
         rename doc (Position 3 0) "foo'"
     ]
+
+crossModuleTests :: TestTree
+crossModuleTests =
+    testGroup
+        "CrossModule"
+        [ testCase "Term used in two modules" $ runRenameSession "" $ do
+            defDoc <- openDoc "CrossModuleDefinition.hs" "haskell"
+            useDoc <- openDoc "CrossModuleUsage.hs" "haskell"
+            void $ skipManyTill anyMessage $ referenceReady (((==) "CrossModuleUsage.hs") . takeFileName)
+            rename defDoc (Position 3 0) "succInt"
+            assertGolden "CrossModuleDefinition" defDoc
+            assertGolden "CrossModuleUsage" useDoc
+        ]
+  where
+    assertGolden path doc = do
+        actual <- documentContents doc
+        expected <- liftIO $ TIO.readFile (testDataDir </> path <.> "expected" <.> "hs")
+        liftIO $ assertEqual path expected actual
 
 moduleNameTests :: TestTree
 moduleNameTests =
