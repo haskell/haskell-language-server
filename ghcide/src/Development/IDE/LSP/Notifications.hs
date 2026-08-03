@@ -21,7 +21,8 @@ import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict                   as HM
 import qualified Data.HashSet                          as S
 import qualified Data.Text                             as Text
-import           Development.IDE.Core.FileExists       (modifyFileExists,
+import           Development.IDE.Core.FileExists       (allExtensions,
+                                                        modifyFileExists,
                                                         watchedGlobs)
 import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         resetFileStore,
@@ -37,6 +38,8 @@ import           Development.IDE.Types.Location
 import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
+import           System.Directory                      (doesFileExist)
+import           System.FilePath                       (takeExtension)
 
 data Log
   = LogShake Shake.Log
@@ -71,8 +74,11 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=True}
+          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $ do
+            -- An unsaved file is not on disk, so the session loader never saw
+            -- it. Register it so imports of it can be resolved.
+            ks <- updateKnownTargets (shakeExtras ide) [file] []
+            (<> ks) <$> addFileOfInterest ide file Modified{firstOpen=True}
       logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
@@ -94,9 +100,13 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               let msg = "Closed text document: " <> getUri _uri
+              -- A file that was only ever open in the editor stops existing
+              -- when it is closed
+              onDisk <- doesFileExist (fromNormalizedFilePath file)
               setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
                 scheduleGarbageCollection ide
-                deleteFileOfInterest ide file
+                ks <- updateKnownTargets (shakeExtras ide) [] [file | not onDisk]
+                (<> ks) <$> deleteFileOfInterest ide file
               logWith recorder Debug $ LogClosedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWatchedFiles $
@@ -115,10 +125,17 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         unless (null fileEvents') $ do
             let msg = show fileEvents'
             logWith recorder Debug $ LogWatchedFileEvents (Text.pack msg)
+            exts <- allExtensions <$> getIdeOptionsIO (shakeExtras ide)
+            let sourceFiles c =
+                  [ nfp | (nfp, c') <- fileEvents', c' == c
+                  , takeExtension (fromNormalizedFilePath nfp) `elem` map ('.':) exts ]
             setSomethingModified (VFSModified vfs) ide msg $ do
                 ks1 <- resetFileStore ide fileEvents'
                 ks2 <- modifyFileExists ide fileEvents'
-                return (ks1 <> ks2)
+                ks3 <- updateKnownTargets (shakeExtras ide)
+                         (sourceFiles FileChangeType_Created)
+                         (sourceFiles FileChangeType_Deleted)
+                return (ks1 <> ks2 <> ks3)
 
   , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeWorkspaceFolders $
       \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do

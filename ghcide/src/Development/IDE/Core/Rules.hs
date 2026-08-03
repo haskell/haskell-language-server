@@ -642,7 +642,9 @@ getFileHashRule recorder =
 
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
-  fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
+  -- Only the files of the project: a file no component claims has no session to
+  -- be compiled in. See Note [Files that are not targets]
+  fs <- toTargetFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
 #if MIN_VERSION_ghc(9,13,0)
@@ -688,7 +690,7 @@ the map).
 
 computeModulesPaths :: HscEnvEq -> Action ModuleToFilenames
 computeModulesPaths env_eq = do
-  KnownTargets knownTargets <- useNoFile_ GetKnownTargets
+  knownTargets <- useNoFile_ GetKnownTargets
   opt <- getIdeOptions
   let env = hscEnv env_eq
       exts = optExtensions opt
@@ -696,7 +698,7 @@ computeModulesPaths env_eq = do
       -- Files known to HLS, whether or not they exist on disk yet
       knownPaths =
         [ (p, splitDirectories p)
-        | p <- map fromNormalizedFilePath $ HS.toList $ mconcat (HM.elems knownTargets)
+        | p <- map fromNormalizedFilePath $ HS.toList $ toKnownFiles knownTargets
         ]
 
   unit_maps <- forM (hugElts $ hsc_HUG env) $ \(u, hue) -> do
