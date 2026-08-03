@@ -18,8 +18,9 @@ module Development.IDE.Import.FindImports
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
+import qualified Data.HashSet                      as HS
 import           Data.List                         (intercalate, isSuffixOf,
-                                                    sortOn)
+                                                    sort, sortOn)
 import           Data.List.NonEmpty                (NonEmpty)
 import qualified Data.List.NonEmpty                as NE
 import           Data.Map.Strict                   (Map)
@@ -81,18 +82,20 @@ modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms
 -- see 'locateModuleFile' for how we decide which unit an import actually
 -- resolves to.
 data ModuleToFilenames = ModuleToFilenames {
-  -- | "normal" files (e.g. @.hs@)
-  moduleMap       :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
-  -- | "boot" files (e.g. @.hs-boot@)
-  moduleMapSource :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
-  -- | Fingerprint of the two maps, for early cutoff
-  mtfFingerprint  :: !Fingerprint
+  -- | Modules and the unit, source pairs they correspond to
+  moduleMap      :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
+  -- | Boot files we know exist. If you want to check if a boot file exists,
+  -- check this field for precisely the -boot file corresponding to the non-boot
+  -- file you have already resolved.
+  bootFiles      :: HS.HashSet NormalizedFilePath,
+  -- | Fingerprint of the two, for early cutoff
+  mtfFingerprint :: !Fingerprint
 }
   deriving Generic
 
--- | The fingerprint is strict and computing it forces both maps, so there is
--- nothing left to force. Deep forcing here would traverse the maps again for
--- every file of the session.
+-- | The fingerprint is strict and computing it forces the map and the set, so
+-- there is nothing left to force. Deep forcing here would traverse them again
+-- for every file of the session.
 instance NFData ModuleToFilenames where
   rnf = rwhnf
 
@@ -101,17 +104,19 @@ instance Show ModuleToFilenames where
 
 mkModuleToFilenames
     :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath))
-    -> UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath))
+    -> HS.HashSet NormalizedFilePath
     -> ModuleToFilenames
-mkModuleToFilenames normal source =
-    ModuleToFilenames normal source (fingerprintFingerprints [fp normal, fp source])
+mkModuleToFilenames normal boots =
+    ModuleToFilenames normal boots (fingerprintFingerprints [fpMap normal, fpSet boots])
   where
-    fp m = fingerprintFingerprints
+    fpMap m = fingerprintFingerprints
       [ fingerprintString $ intercalate "\0" $
           moduleNameString mn :
           concat [ [unitIdString u, fromNormalizedFilePath p] | (u, p) <- NE.toList provs ]
       | (mn, provs) <- sortOn (moduleNameString . fst) (nonDetEltsUFM (getUniqMap m))
       ]
+    fpSet s = fingerprintString $ intercalate "\0" $
+      sort $ map fromNormalizedFilePath $ HS.toList s
 
 data LocateResult
   = LocateNotFound
@@ -147,16 +152,14 @@ mkUnitVisibility (i, flags) = (i, UnitVisibility reexports (hiddenModules flags)
 -- a file for it. A unit that is not in the list is not visible to the importer.
 locateModuleFile
   :: ModuleToFilenames
-  -> Bool
   -> ModuleName
   -> [(UnitId, Maybe UnitVisibility)]
      -- ^ Units to search, in priority order. 'Nothing' for the importing unit,
      -- whose own reexports and hidden modules do not apply to it.
   -> LocateResult
-locateModuleFile ModuleToFilenames{moduleMap, moduleMapSource} isSource modName = go
+locateModuleFile ModuleToFilenames{moduleMap} modName = go
   where
-    providers = maybe [] NE.toList $
-      lookupUniqMap (if isSource then moduleMapSource else moduleMap) modName
+    providers = maybe [] NE.toList $ lookupUniqMap moduleMap modName
 
     go [] = LocateNotFound
     go ((uid, mbVisibility) : units)
@@ -202,14 +205,24 @@ locateModule moduleMaps env unit_visibility modName mbPkgName isSource = do
     moduleNotFound = return $ Left $ notFoundErr env modName $ LookupNotFound []
 
     lookupIn onNotFound units =
-      case locateModuleFile moduleMaps isSource (unLoc modName) units of
+      case locateModuleFile moduleMaps (unLoc modName) units of
         LocateNotFound -> onNotFound
         -- Look again from the perspective of the unit reexporting the module,
         -- under the name it has there
         LocateFoundReexport uid realName ->
           locateModule moduleMaps (hscSetActiveUnitId uid env) unit_visibility
             (const realName <$> modName) noPkgQual isSource
-        LocateFoundFile uid file -> toModLocation uid file
+        LocateFoundFile uid file
+          -- The search only ever finds source files. A SOURCE import takes the
+          -- boot file next to the source file we found, and fails if there is
+          -- none, we do not go looking anywhere else.
+          | isSource -> maybe moduleNotFound (toModLocation uid) (bootFile file)
+          | otherwise -> toModLocation uid file
+
+    bootFile file
+      | boot `HS.member` bootFiles moduleMaps = Just boot
+      | otherwise = Nothing
+      where boot = toNormalizedFilePath' $ fromNormalizedFilePath file <> "-boot"
 
     -- The units an unqualified import may come from: the current unit first,
     -- then its dependencies, in the given order, which decides who wins when
@@ -227,7 +240,8 @@ locateModule moduleMaps env unit_visibility modName mbPkgName isSource = do
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
-        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
+            loc' = if isSource then addBootSuffixLocnOut loc else loc
+        return $ Right $ FileImport $ ArtifactsLocation file (Just loc') (not isSource) (Just genMod)
 
     lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of
