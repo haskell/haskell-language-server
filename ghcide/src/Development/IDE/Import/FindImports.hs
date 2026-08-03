@@ -13,14 +13,18 @@ module Development.IDE.Import.FindImports
   , isBootLocation
   , ModuleToFilenames(..)
   , mkModuleToFilenames
+  , mkReexports
   ) where
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
 import           Data.List                         (find, intercalate,
-                                                    isSuffixOf)
+                                                    isSuffixOf, sortOn)
+import           Data.List.NonEmpty                (NonEmpty)
+import qualified Data.List.NonEmpty                as NE
 import           Data.Map.Strict                   (Map)
 import qualified Data.Map.Strict                   as Map
+import           Data.Maybe                        (listToMaybe)
 import qualified Data.Set                          as S
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
@@ -70,27 +74,35 @@ modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
--- | Represents a mapping from module name to the associated unit and filepath
+-- | For each module name, the units that provide it and the exact location
+-- where the unit has it.
+-- see 'locateModuleFile' for how we decide which unit an import actually
+-- resolves to.
 data ModuleToFilenames = ModuleToFilenames {
   -- | "normal" files (e.g. @.hs@)
-  moduleMap       :: Map ModuleName (UnitId, NormalizedFilePath),
+  moduleMap       :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
   -- | "boot" files (e.g. @.hs-boot@)
-  moduleMapSource :: Map ModuleName (UnitId, NormalizedFilePath),
+  moduleMapSource :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
   -- | Fingerprint of the two maps, for early cutoff
   mtfFingerprint  :: !Fingerprint
 }
-  deriving (Show, NFData, Generic)
+  deriving (NFData, Generic)
+
+instance Show ModuleToFilenames where
+  show mtf = "ModuleToFilenames " ++ show (mtfFingerprint mtf)
 
 mkModuleToFilenames
-    :: Map ModuleName (UnitId, NormalizedFilePath)
-    -> Map ModuleName (UnitId, NormalizedFilePath)
+    :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath))
+    -> UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath))
     -> ModuleToFilenames
 mkModuleToFilenames normal source =
     ModuleToFilenames normal source (fingerprintFingerprints [fp normal, fp source])
   where
     fp m = fingerprintFingerprints
-      [ fingerprintString (intercalate "\0" [moduleNameString mn, unitIdString u, fromNormalizedFilePath p])
-      | (mn, (u, p)) <- Map.toList m
+      [ fingerprintString $ intercalate "\0" $
+          moduleNameString mn :
+          concat [ [unitIdString u, fromNormalizedFilePath p] | (u, p) <- NE.toList provs ]
+      | (mn, provs) <- sortOn (moduleNameString . fst) (nonDetEltsUFM (getUniqMap m))
       ]
 
 data LocateResult
@@ -98,15 +110,29 @@ data LocateResult
   | LocateFoundReexport UnitId
   | LocateFoundFile UnitId NormalizedFilePath
 
--- | locate a module in the file system. Where we go from *daml to Haskell
-locateModuleFile :: ModuleToFilenames -> Bool -> ModuleName -> [(UnitId, S.Set ModuleName)] -> LocateResult
-locateModuleFile ModuleToFilenames{moduleMap, moduleMapSource} isSource modName uid_reexports = do
-  case Map.lookup modName (if isSource then moduleMapSource else moduleMap) of
+-- | Locate a module in the file system.
+--
+-- Only the given units are searched, in the given order, and we pick the
+-- first one providing the module. A unit outside the list is not visible
+-- here.
+locateModuleFile
+  :: ModuleToFilenames
+  -> Bool
+  -> ModuleName
+  -> [(UnitId, S.Set ModuleName)] -- ^ units to search, in priority order, with their reexports
+  -> LocateResult
+locateModuleFile ModuleToFilenames{moduleMap, moduleMapSource} isSource modName unit_reexports =
+  case mbFile of
+    Just (uid, file) -> LocateFoundFile uid file
     Nothing ->
-      case find (\(_ , reexports) -> S.member modName reexports) uid_reexports of
+      case find (\(_ , reexports) -> S.member modName reexports) unit_reexports of
         Just (uid,_) -> LocateFoundReexport uid
         Nothing      -> LocateNotFound
-    Just (uid, file) -> LocateFoundFile uid file
+  where
+    providers = maybe [] NE.toList $
+      lookupUniqMap (if isSource then moduleMapSource else moduleMap) modName
+    mbFile = listToMaybe
+      [ (uid, file) | (uid, _) <- unit_reexports, Just file <- [lookup uid providers] ]
 
 -- | This function is used to map a package name to a set of reexports.
 mkReexports :: (UnitId, DynFlags) -> (UnitId, (S.Set ModuleName))
@@ -122,49 +148,44 @@ locateModule
     :: MonadIO m
     => ModuleToFilenames
     -> HscEnv
-    -> [(UnitId, DynFlags)] -- ^ Import directories
+    -> Map UnitId (S.Set ModuleName)   -- ^ Reexported modules of each home unit
     -> Located ModuleName              -- ^ Module name
     -> PkgQual                -- ^ Package name
     -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)
-locateModule moduleMaps env comp_info modName mbPkgName isSource = do
+locateModule moduleMaps env unit_reexports modName mbPkgName isSource = do
   case mbPkgName of
     -- 'ThisPkg' just means some home module, not the current unit
     ThisPkg uid
-      | Just reexports <- lookup uid reexportedModulesFromHomeUnits
-          -> lookupLocal uid moduleMaps reexports
+      | Just reexports <- Map.lookup uid unit_reexports
+          -> lookupLocal uid reexports
       | otherwise -> return $ Left $ notFoundErr env modName $ LookupNotFound []
     -- if a package name is given we only go look for a package
     OtherPkg uid
-      | Just reexports <- lookup uid reexportedModulesFromHomeUnits
-          -> lookupLocal uid moduleMaps reexports
+      | Just reexports <- Map.lookup uid unit_reexports
+          -> lookupLocal uid reexports
       | otherwise -> lookupInPackageDB
     NoPkgQual -> do
-
-      -- Reexports for current unit have to be empty because they only apply to other units depending on the
-      -- current unit. If we set the reexports to be the actual reexports then we risk looping forever trying
-      -- to find the module from the perspective of the current unit.
-      let mbFile = locateModuleFile moduleMaps isSource (unLoc modName) homeUnitDependsReexportedModules
-
+      let mbFile = locateModuleFile moduleMaps isSource (unLoc modName) searchUnits
       case mbFile of
         LocateNotFound -> lookupInPackageDB
         -- Lookup again with the perspective of the unit reexporting the file
-        LocateFoundReexport uid -> locateModule moduleMaps (hscSetActiveUnitId uid env) comp_info modName noPkgQual isSource
+        LocateFoundReexport uid -> locateModule moduleMaps (hscSetActiveUnitId uid env) unit_reexports modName noPkgQual isSource
         LocateFoundFile uid file -> toModLocation uid file
   where
     dflags = hsc_dflags env
-    reexportedModulesFromHomeUnits = map mkReexports comp_info
 
-    homeUnitDependsReexportedModules =
-      -- Instead of bringing all the units into scope, only bring into scope the units
-      -- this one depends on.
-      -- This way if you have multiple units with the same module names, we won't get confused
-      -- For example if unit a imports module M from unit B, when there is also a module M in unit C,
-      -- and unit a only depends on unit b, without this logic there is the potential to get confused
-      -- about which module unit a imports.
-      -- Without multi-component support it is hard to recontruct the dependency environment so
-      -- unit a will have both unit b and unit c in scope.
-      map (\uid -> mkReexports (uid, homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue))) hpt_deps
+    -- The units an unqualified import may come from: the current unit first,
+    -- then its dependencies, in the given order, which decides who wins when
+    -- several provide the module.
+    -- The current unit's reexports have to be empty because they only apply to
+    -- units depending on it, and using them here would loop, looking for the
+    -- module from the perspective of the unit we are already in.
+    searchUnits = (homeUnitId_ dflags, S.empty) :
+      [ (uid, reexports)
+      | uid <- hpt_deps
+      , Just reexports <- [Map.lookup uid unit_reexports]
+      ]
 
     ue = hsc_unit_env env
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
@@ -176,12 +197,12 @@ locateModule moduleMaps env comp_info modName mbPkgName isSource = do
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
-    lookupLocal uid moduleMaps reexports = do
+    lookupLocal uid reexports = do
       let mbFile = locateModuleFile moduleMaps isSource (unLoc modName) [(uid, reexports)]
       case mbFile of
         LocateNotFound -> return $ Left $ notFoundErr env modName $ LookupNotFound []
         -- Lookup again with the perspective of the unit reexporting the file
-        LocateFoundReexport uid' -> locateModule moduleMaps (hscSetActiveUnitId uid' env) comp_info modName noPkgQual isSource
+        LocateFoundReexport uid' -> locateModule moduleMaps (hscSetActiveUnitId uid' env) unit_reexports modName noPkgQual isSource
         LocateFoundFile uid' file -> toModLocation uid' file
 
     lookupInPackageDB = do

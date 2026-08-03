@@ -187,6 +187,36 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
       expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
+  , testWithDummyPluginEmpty' "import path order determines module file" $ \dir -> do
+      -- GHC searches import paths in order: with -isrcA -isrcB, a module
+      -- present in both directories must resolve to the file in srcA.
+      liftIO $ do
+        atomicFileWriteString (dir </> "hie.yaml")
+          "cradle: {direct: {arguments: [\"-isrcA\", \"-isrcB\", \"T\", \"C\"]}}"
+        createDirectoryIfMissing True (dir </> "srcA")
+        createDirectoryIfMissing True (dir </> "srcB")
+        atomicFileWriteString (dir </> "srcA" </> "C.hs") $ unlines
+          [ "module C where"
+          , "cA :: ()"
+          , "cA = ()"
+          ]
+        atomicFileWriteString (dir </> "srcB" </> "C.hs") $ unlines
+          [ "module C where"
+          , "cB :: ()"
+          , "cB = ()"
+          ]
+        atomicFileWriteString (dir </> "srcA" </> "T.hs") $ unlines
+          [ "module T where"
+          , "import C"
+          , "t :: ()"
+          , "t = cA"
+          ]
+      tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
+      liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
+      expectCurrentDiagnostics tdoc []
+      locs <- getDefinitions tdoc (Position 1 7)
+      assertDefsFile (dir </> "srcA" </> "C.hs") locs
   , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"

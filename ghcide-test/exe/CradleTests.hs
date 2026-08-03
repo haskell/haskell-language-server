@@ -4,7 +4,8 @@
 
 module CradleTests (tests) where
 
-import           Config                          (checkDefs, dummyPlugin,
+import           Config                          (Expect (..), assertDefsFile,
+                                                  checkDefs, dummyPlugin,
                                                   lspTestCaps, mkIdeTestFs, mkL,
                                                   runWithExtraFiles,
                                                   testWithDummyPluginEmpty')
@@ -65,6 +66,7 @@ tests = testGroup "cradle"
     , testGroup "multi-unit" (multiTests wholeProjectConf "multi-unit")
     , testGroup "sub-directory" [simpleSubDirectoryTest wholeProjectConf]
     , testGroup "multi-unit-rexport" [multiRexportTest wholeProjectConf]
+    , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests wholeProjectConf)
     ]
   , testGroup "default"
     [ testGroup "dependencies" [sessionDepsArePickedUp defComponentLoadingConf]
@@ -76,6 +78,7 @@ tests = testGroup "cradle"
     , testGroup "multi-unit" (multiTests defComponentLoadingConf "multi-unit")
     , testGroup "sub-directory" [simpleSubDirectoryTest defComponentLoadingConf]
     , testGroup "multi-unit-rexport" [multiRexportTest defComponentLoadingConf]
+    , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests defComponentLoadingConf)
     ]
   ]
 
@@ -582,6 +585,35 @@ multiRexportTest conf =
     let fooL = mkL (filePathToUri aPath) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+
+-- | Tests that import resolution respects home unit boundaries: which units
+-- are visible from the importing unit, and in which order they are searched.
+multiUnitImportResolutionTests :: SessionLoadingPreferenceConfig -> [TestTree]
+multiUnitImportResolutionTests conf =
+  [ testCase "visibility" $ runWithExtraFiles "multi-unit-visibility" $ \_dir -> do
+      setComponentsLoadingPreference conf
+      -- bbb does not depend on aaa, so aaa's module Priv must not be visible
+      bdoc <- openDoc ("bbb" </> "B.hs") "haskell"
+      expectDiagnostics [("bbb" </> "B.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
+      locs <- getDefinitions bdoc (Position 1 7)
+      checkDefs locs (pure [ExpectNoDefinitions])
+  , testCase "own unit shadows other units" $ runWithExtraFiles "multi-unit-shadow" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- M lives in unit aaa: its import of X must resolve to aaa's own X,
+      -- not the X of the unrelated unit zzz
+      mdoc <- openDoc ("aaa" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck using aaa's own X"
+      locs <- getDefinitions mdoc (Position 1 7)
+      assertDefsFile (dir </> "aaa" </> "X.hs") locs
+  , testCase "package import picks the named unit" $ runWithExtraFiles "multi-unit-pkgimport" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- the package-qualified import names unit ppp: it must resolve to
+      -- ppp's A, not qqq's
+      mdoc <- openDoc ("mmm" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck using ppp's A"
+      locs <- getDefinitions mdoc (Position 1 13)
+      assertDefsFile (dir </> "ppp" </> "A.hs") locs
+  ]
 
 sessionDepsArePickedUp :: SessionLoadingPreferenceConfig -> TestTree
 sessionDepsArePickedUp conf = testWithDummyPluginEmpty'
