@@ -344,7 +344,7 @@ getLocatedImportsRule recorder =
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
         let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
-        let unit_reexports = Map.fromList $ map mkReexports hug_dflags
+        let unit_visibility = Map.fromList $ map mkUnitVisibility hug_dflags
         let dflags = hsc_dflags env
 
         moduleMaps <- use_ GetModulesPaths file
@@ -354,7 +354,7 @@ getLocatedImportsRule recorder =
 #else
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 #endif
-            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) unit_reexports modName mbPkgName isSource
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) unit_visibility modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))

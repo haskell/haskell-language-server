@@ -1,0 +1,18 @@
+-this-package-name
+rrr
+-working-dir
+rrr
+-fbuilding-cabal-package
+-O0
+-i
+-i.
+-this-unit-id
+rrr-1.0.0-inplace
+-hide-all-packages
+-Wmissing-home-modules
+-no-user-package-db
+-reexported-module
+"Internal.Impl as Facade"
+-package
+base
+Internal.Impl
