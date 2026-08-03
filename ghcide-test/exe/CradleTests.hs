@@ -1,4 +1,5 @@
 
+{-# LANGUAGE CPP       #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs     #-}
 
@@ -605,6 +606,18 @@ multiUnitImportResolutionTests conf =
       assertTypeCheckSuccess mdoc "M should typecheck using aaa's own X"
       locs <- getDefinitions mdoc (Position 1 7)
       assertDefsFile (dir </> "aaa" </> "X.hs") locs
+#if MIN_VERSION_ghc(9,11,0)
+    -- Renaming reexports only exist from GHC 9.12
+  , testCase "renaming reexport resolves to the original module" $
+      runWithExtraFiles "multi-unit-reexport-rename" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- rrr reexports Internal.Impl as Facade, so importing Facade has to
+      -- find rrr's Internal.Impl, under its own name
+      mdoc <- openDoc ("mmm" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck through the renaming reexport"
+      locs <- getDefinitions mdoc (Position 1 7)
+      assertDefsFile (dir </> "rrr" </> "Internal" </> "Impl.hs") locs
+#endif
   , testCase "package import picks the named unit" $ runWithExtraFiles "multi-unit-pkgimport" $ \dir -> do
       setComponentsLoadingPreference conf
       -- the package-qualified import names unit ppp: it must resolve to
