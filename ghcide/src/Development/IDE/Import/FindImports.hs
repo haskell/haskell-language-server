@@ -3,6 +3,7 @@
 
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Development.IDE.Import.FindImports
   ( locateModule
@@ -11,11 +12,13 @@ module Development.IDE.Import.FindImports
   , modSummaryToArtifactsLocation
   , isBootLocation
   , ModuleToFilenames(..)
+  , mkModuleToFilenames
   ) where
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
-import           Data.List                         (find, isSuffixOf)
+import           Data.List                         (find, intercalate,
+                                                    isSuffixOf)
 import           Data.Map.Strict                   (Map)
 import qualified Data.Map.Strict                   as Map
 import qualified Data.Set                          as S
@@ -24,6 +27,7 @@ import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           GHC.Fingerprint
 import           GHC.Generics
 import           GHC.Types.PkgQual
 import           GHC.Unit
@@ -71,17 +75,23 @@ data ModuleToFilenames = ModuleToFilenames {
   -- | "normal" files (e.g. @.hs@)
   moduleMap       :: Map ModuleName (UnitId, NormalizedFilePath),
   -- | "boot" files (e.g. @.hs-boot@)
-  moduleMapSource :: Map ModuleName (UnitId, NormalizedFilePath)
+  moduleMapSource :: Map ModuleName (UnitId, NormalizedFilePath),
+  -- | Fingerprint of the two maps, for early cutoff
+  mtfFingerprint  :: !Fingerprint
 }
   deriving (Show, NFData, Generic)
 
--- | The mapping of one module to a file takes precedence in "import path"
--- order
-instance Semigroup ModuleToFilenames where
-  ModuleToFilenames a b <> ModuleToFilenames a' b' = ModuleToFilenames (a <> a') (b <> b')
-
-instance Monoid ModuleToFilenames where
-  mempty = ModuleToFilenames mempty mempty
+mkModuleToFilenames
+    :: Map ModuleName (UnitId, NormalizedFilePath)
+    -> Map ModuleName (UnitId, NormalizedFilePath)
+    -> ModuleToFilenames
+mkModuleToFilenames normal source =
+    ModuleToFilenames normal source (fingerprintFingerprints [fp normal, fp source])
+  where
+    fp m = fingerprintFingerprints
+      [ fingerprintString (intercalate "\0" [moduleNameString mn, unitIdString u, fromNormalizedFilePath p])
+      | (mn, (u, p)) <- Map.toList m
+      ]
 
 data LocateResult
   = LocateNotFound
@@ -90,7 +100,7 @@ data LocateResult
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: ModuleToFilenames -> Bool -> ModuleName -> [(UnitId, S.Set ModuleName)] -> LocateResult
-locateModuleFile ModuleToFilenames{..} isSource modName uid_reexports = do
+locateModuleFile ModuleToFilenames{moduleMap, moduleMapSource} isSource modName uid_reexports = do
   case Map.lookup modName (if isSource then moduleMapSource else moduleMap) of
     Nothing ->
       case find (\(_ , reexports) -> S.member modName reexports) uid_reexports of
