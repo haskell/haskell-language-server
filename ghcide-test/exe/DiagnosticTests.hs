@@ -568,7 +568,6 @@ tests = testGroup "diagnostics"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
-    aSource <- liftIO $ readFileUtf8 aPath -- x = y :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
@@ -582,10 +581,12 @@ tests = testGroup "diagnostics"
       [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
       ]
 
-    -- Open A and edit to fix the type error
-    adoc <- createDoc aPath "haskell" aSource
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
-                    T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
+    -- Open A with the type error already fixed. If we open it as it is on disk
+    -- and fix it afterwards, we race with a republish of the error: A was a
+    -- dependency, so the error was deferred, and we typecheck a file of
+    -- interest without deferring, which gives a different diagnostic.
+    _adoc <- createDoc aPath "haskell" $
+      T.unlines ["module A where", "import B", "x :: Bool", "x = y"]
 
     expectDiagnostics
       [ ( "P.hs",
