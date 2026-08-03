@@ -371,6 +371,20 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
       expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
+  , testWithDummyPluginEmpty "hs-boot without a source file is not a module" $ do
+      -- GHC looks for the source file and takes the boot file beside it, so a
+      -- boot file on its own provides nothing
+      let contentB = T.unlines
+            [ "module ModuleB where"
+            , "import {-# SOURCE #-} ModuleA"
+            ]
+      let contentAboot = T.unlines
+            [ "module ModuleA where"
+            ]
+      _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
+      _ <- createDoc "ModuleB.hs" "haskell" contentB
+      expectDiagnostics
+        [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 22), "Could not find module", Nothing)])]
   , testWithDummyPluginEmpty "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
