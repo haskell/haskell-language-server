@@ -1,0 +1,5 @@
+cradle:
+  direct:
+    arguments: ["-unit" ,"@aaa-1.0.0-inplace"
+               ,"-unit" ,"@zzz-1.0.0-inplace"
+               ]
