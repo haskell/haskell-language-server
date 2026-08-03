@@ -86,7 +86,13 @@ data ModuleToFilenames = ModuleToFilenames {
   -- | Fingerprint of the two maps, for early cutoff
   mtfFingerprint  :: !Fingerprint
 }
-  deriving (NFData, Generic)
+  deriving Generic
+
+-- | The fingerprint is strict and computing it forces both maps, so there is
+-- nothing left to force. Deep forcing here would traverse the maps again for
+-- every file of the session.
+instance NFData ModuleToFilenames where
+  rnf = rwhnf
 
 instance Show ModuleToFilenames where
   show mtf = "ModuleToFilenames " ++ show (mtfFingerprint mtf)
