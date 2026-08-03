@@ -336,7 +336,7 @@ getLocatedImportsRule recorder =
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
 #if MIN_VERSION_ghc(9,13,0)
         let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
-                   ++ [(True, NormalLevel, NoPkgQual, noLoc modName) | L _ modName <- ms_srcimps ms]
+                   ++ [(True, NormalLevel, NoPkgQual, modName) | modName <- ms_srcimps ms]
 #else
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
 #endif
