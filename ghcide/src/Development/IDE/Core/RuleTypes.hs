@@ -529,8 +529,8 @@ data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
 instance Hashable GetModSummaryWithoutTimestamps
 instance NFData   GetModSummaryWithoutTimestamps
 
--- | Scan all the import directory for existing modules and build a map from
--- module name to paths
+-- | Map from module name to paths, from scanning the session's import
+-- directories. See Note [Session representatives].
 data GetModulesPaths = GetModulesPaths
     deriving (Eq, Show, Generic)
 instance Hashable GetModulesPaths
