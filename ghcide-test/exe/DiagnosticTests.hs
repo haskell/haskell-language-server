@@ -267,6 +267,30 @@ tests = testGroup "diagnostics"
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
       assertDefsFile (dir </> "srcA" </> "C.hs") locs
+  , testWithDummyPluginEmpty' "unlistable directory hides only itself" $ \dir -> do
+      -- A directory we cannot list must not take the modules next to it down
+      -- with it. On Windows the directory stays listable and the test passes
+      -- trivially.
+      let locked = dir </> "src" </> "Locked"
+      liftIO $ do
+        createDirectoryIfMissing True locked
+        atomicFileWriteString (dir </> "hie.yaml")
+          "cradle: {direct: {arguments: [\"-isrc\", \"B\"]}}"
+        atomicFileWriteString (dir </> "src" </> "A.hs") "module A where"
+        atomicFileWriteString (dir </> "src" </> "B.hs") $ unlines
+          [ "module B where"
+          , "import A ()"
+          ]
+        setPermissions locked emptyPermissions
+      bdoc <- openDoc ("src" </> "B.hs") "haskell"
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" bdoc
+      -- Restore before asserting, so that a failure still leaves a removable
+      -- temporary directory behind
+      liftIO $ setPermissions locked
+        $ setOwnerReadable True $ setOwnerSearchable True
+        $ setOwnerWritable True emptyPermissions
+      liftIO $ assertBool "B should find A in the same directory" ideResultSuccess
+      expectCurrentDiagnostics bdoc []
   , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
