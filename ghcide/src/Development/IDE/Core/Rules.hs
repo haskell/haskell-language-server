@@ -78,7 +78,6 @@ import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Default                                 (Default, def)
-import           Data.Either
 import           Data.Foldable
 import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
@@ -175,8 +174,7 @@ import           Ide.Types                                    (DynFlagsModificat
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
-                                                               ShowMessageParams (ShowMessageParams),
-                                                               uriToNormalizedFilePath)
+                                                               ShowMessageParams (ShowMessageParams))
 import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -335,7 +333,6 @@ getParsedModuleDefinition packageState opt file ms = do
 getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
-
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
 #if MIN_VERSION_ghc(9,13,0)
         let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
@@ -345,7 +342,8 @@ getLocatedImportsRule recorder =
 #endif
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
-        let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+        let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+        let unit_reexports = Map.fromList $ map mkReexports hug_dflags
         let dflags = hsc_dflags env
 
         moduleMaps <- use_ GetModulesPaths file
@@ -355,8 +353,7 @@ getLocatedImportsRule recorder =
 #else
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 #endif
-
-            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) import_dirs modName mbPkgName isSource
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) unit_reexports modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -691,98 +688,53 @@ the map).
 
 computeModulesPaths :: HscEnvEq -> Action ModuleToFilenames
 computeModulesPaths env_eq = do
-  let env = hscEnv env_eq
-  let homeUnitGraph = hugElts $ hsc_HUG env
-  opt <- getIdeOptions
-  let exts = optExtensions opt
-  let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
-
-  res <- forM homeUnitGraph $ \(u, hue) -> do
-    res <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
-      let import_dir = normalise dir'
-      let predicate path = equalFilePath path import_dir || case takeFileName path of
-           []    -> False
-           (x:_) -> isUpper x
-      let dir_number_directories = length (splitDirectories import_dir)
-      let toModule file = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension file)))
-
-      let
-        toModTarget f = do
-          guard (takeExtension f `elem` acceptedExtensions)
-          Just (toModule f, toNormalizedFilePath' f)
-      let
-        searchImportDir = do
-          modCandidates <- liftIO (listFilesInside (pure . predicate) import_dir)
-          pure $ mapMaybe toModTarget modCandidates
-
-      -- If the directory is empty, we return an empty list of modules
-      -- using 'catch' instead of an exception which would kill the LSP
-      modules <- searchImportDir `catch` (\(_ :: IOException) -> pure [])
-      let isSourceModule (_, path) = "-boot" `isSuffixOf` fromNormalizedFilePath path
-      let (sourceModules, notSourceModules) = partition isSourceModule modules
-      pure ( fmap (u,) (Map.fromList notSourceModules)
-           , fmap (u,) (Map.fromList sourceModules)
-           )
-    pure (mconcat res)
-
-  -- Extend the current module map with all the known targets
-  (normal, source) <- extendModuleMapWithKnownTargets env_eq (mconcat res)
-  pure (mkModuleToFilenames normal source)
-
-
--- | Extend the map from module name to filepath (existing on the drive) with
--- the list of known targets provided by HLS, as well as the VFS.
---
--- These known targets are files which were recently created and not yet saved
--- to the filesystem.
-extendModuleMapWithKnownTargets
-    :: HscEnvEq
-    -> (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
-    -> Action (Map.Map ModuleName (UnitId, NormalizedFilePath), Map.Map ModuleName (UnitId, NormalizedFilePath))
-extendModuleMapWithKnownTargets env_eq (normal, source) = do
-
   KnownTargets knownTargets <- useNoFile_ GetKnownTargets
-  vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
-
-  let env = hscEnv env_eq
-  let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
   opt <- getIdeOptions
-  let exts = (optExtensions opt)
-  let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+  let env = hscEnv env_eq
+      exts = optExtensions opt
+      acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+      -- Files known to HLS, whether or not they exist on disk yet
+      knownPaths =
+        [ (p, splitDirectories p)
+        | p <- map fromNormalizedFilePath $ HS.toList $ mconcat (HM.elems knownTargets)
+        ]
 
-  let pathsFromTargetsMap = HS.toList $ mconcat (HM.elems knownTargets)
-  let pathsFromVFS = catMaybes $ map uriToNormalizedFilePath (Map.keys vfs)
+  unit_maps <- forM (hugElts $ hsc_HUG env) $ \(u, hue) -> do
+    dir_maps <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
+      let import_dir = normalise dir'
+          dirComponents = splitDirectories import_dir
+          toModule f = mkModuleName $ intercalate "." $
+            drop (length dirComponents) (splitDirectories (dropExtension f))
+          accepted f = takeExtension f `elem` acceptedExtensions
+          recurseInto path = equalFilePath path import_dir || case takeFileName path of
+            []    -> False
+            (x:_) -> isUpper x
+          firstWins = foldl'
+            (\acc (m, p) -> addToUniqMap_C (\old _ -> old) acc m p) emptyUniqMap
+          mkMaps fs =
+            let entries = [ (toModule f, toNormalizedFilePath' f) | f <- fs, accepted f ]
+                (source, normal) = partition
+                  (\(_, p) -> "-boot" `isSuffixOf` fromNormalizedFilePath p) entries
+            in (firstWins normal, firstWins source)
 
-  -- All paths known to HLS, whether or not they exist on disk.
-  let paths = pathsFromTargetsMap <> pathsFromVFS
+      -- A directory that cannot be listed provides no modules
+      scanned <- liftIO $ listFilesInside (pure . recurseInto) import_dir
+                   `catch` \(_ :: IOException) -> pure []
+      let (scanNormal, scanSource) = mkMaps scanned
+          (knownNormal, knownSource) =
+            mkMaps [ p | (p, comps) <- knownPaths, dirComponents `isPrefixOf` comps ]
+      -- Known files win within a directory: they may exist only in the editor
+      pure ( plusUniqMap_C const knownNormal scanNormal
+           , plusUniqMap_C const knownSource scanSource
+           )
+    -- The first import dir providing a module wins, matching GHC's -i order
+    let combineDirs = foldl' (plusUniqMap_C (\old _ -> old)) emptyUniqMap
+    pure (u, (combineDirs (map fst dir_maps), combineDirs (map snd dir_maps)))
 
-  let (new_module_map, new_module_map_source) = partitionEithers $ do
-        (u, dflags) <- hug_dflags
-        import_dir <- importPaths dflags
-        let dirComponents = splitDirectories import_dir
-        let dir_number_directories = length dirComponents
-
-        path <- paths
-
-        let pathString = fromNormalizedFilePath path
-        let pathComponents = splitDirectories pathString
-
-        -- Ensure this file is in the directory
-        guard $ dirComponents `isPrefixOf` pathComponents
-
-        -- Ensure that this extension is accepted
-        guard $ takeExtension pathString `elem` acceptedExtensions
-        let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
-        let isSourceModule = "-boot" `isSuffixOf` pathString
-        if isSourceModule
-        then
-          pure (Right (modName, (u, path)))
-        else
-          pure (Left (modName, (u, path)))
-
-  pure ( Map.fromList new_module_map <> normal
-       , Map.fromList new_module_map_source <> source
-       )
+  let providers u = mapUniqMap (\p -> pure (u, p))
+      combineUnits sel = foldl' (plusUniqMap_C (<>)) emptyUniqMap
+        [ providers u (sel m) | (u, m) <- unit_maps ]
+  pure $ mkModuleToFilenames (combineUnits fst) (combineUnits snd)
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do

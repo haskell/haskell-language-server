@@ -24,6 +24,7 @@ module Config(
     , pattern R
     , mkR
     , checkDefs
+    , assertDefsFile
     , mkL
     , withLongTimeout
     , lspTestCaps
@@ -167,6 +168,15 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
     let hasRange = any (\Location{_range=foundRange} -> foundRange == expectedRange) actualRanges
     unless hasRange $ liftIO $ assertFailure $
       "expected range: " <> show expectedRange <> "\nbut got ranges: " <> show defs
+
+-- | Assert that there is at least one definition and all of them point into
+-- the given file.
+assertDefsFile :: FilePath -> (Definition |? ([DefinitionLink] |? Null)) -> Session ()
+assertDefsFile expectedFile (defToLocation -> locs) = liftIO $ do
+    expected <- canonicalizeUri (filePathToUri expectedFile)
+    actual <- mapM canonicalizeUri [ uri | Location uri _ <- locs ]
+    assertBool ("expected definitions in " <> show expected <> ", got: " <> show actual)
+      (not (null actual) && all (== expected) actual)
 
 canonicalizeLocation :: Location -> IO Location
 canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*> pure range
