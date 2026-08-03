@@ -87,7 +87,11 @@ import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.IORef
 import           Data.List
+#if MIN_VERSION_ghc(9,13,0)
 import           Data.List.Extra                              (nubOrd, nubOrdOn)
+#else
+import           Data.List.Extra                              (nubOrdOn)
+#endif
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
@@ -194,7 +198,6 @@ import           System.FilePath                              (dropExtension,
                                                                splitDirectories,
                                                                takeExtension,
                                                                takeFileName)
-import qualified Data.Vector.Strict as Vector
 
 data Log
   = LogShake Shake.Log
@@ -345,7 +348,6 @@ getLocatedImportsRule recorder =
         let env = hscEnv env_eq
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
-        opt <- getIdeOptions
 
         moduleMaps <- use_ GetModulesPaths file
 
@@ -355,7 +357,7 @@ getLocatedImportsRule recorder =
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 #endif
 
-            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) import_dirs (optExtensions opt) modName mbPkgName isSource
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) import_dirs modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -666,10 +668,6 @@ getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
 getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModulesPaths file -> do
   env_eq <- use_ GhcSession file
 
-  -- I use a cache stored inside the shake extra logic
-  -- TODO: how does it behaves with respect to multiple session?
-  -- TODO: can we instead use the action cache and ensure it is only called
-  -- once for all files in the same session?
   ShakeExtras{moduleToPathCache} <- getShakeExtras
 
   cache <- liftIO (readTVarIO moduleToPathCache)
@@ -680,9 +678,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
       let homeUnitGraph = hugElts $ hsc_HUG env
       opt <- getIdeOptions
       let exts = optExtensions opt
-      let
-        acceptedExtensions =
-          Vector.fromList $ concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+      let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
 
       res <- forM homeUnitGraph $ \(u, hue) -> do
         res <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
@@ -695,7 +691,7 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 
           let
             toModTarget f = do
-              guard (takeExtension f `Vector.elem` acceptedExtensions)
+              guard (takeExtension f `elem` acceptedExtensions)
               Just (toModule f, toNormalizedFilePath' f)
           let
             searchImportDir = do
@@ -726,12 +722,6 @@ getModulesPathsRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder
 --
 -- These known targets are files which were recently created and not yet saved
 -- to the filesystem.
---
--- This code is not really efficient (O(import_dirs * known_targets)), which
--- can quickly represents millions of tests. It could be improved, but
--- everything only happen once everytime known_targets is updated (which only
--- happen when the project start or when a file is added) and the code is not
--- doing any IO.
 extendModuleMapWithKnownTargets
     :: NormalizedFilePath -> ModuleToFilenames ->
        Action ModuleToFilenames
@@ -745,16 +735,12 @@ extendModuleMapWithKnownTargets file moduleMap = do
   let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
   opt <- getIdeOptions
   let exts = (optExtensions opt)
-  let acceptedExtensions =
-        Vector.fromList $ concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+  let acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
 
   let pathsFromTargetsMap = HS.toList $ mconcat (HM.elems knownTargets)
   let pathsFromVFS = catMaybes $ map uriToNormalizedFilePath (Map.keys vfs)
 
-  -- This is the list of all paths known by HLS right now.
-  -- It includes paths which are from the known targets and path which are stored in the VFS
-  -- TODO: this is really unclear, but it seems that pathsFromTargetsMap are
-  -- subject to race condition with boot files and pathsFromVFS may not contain all the files
+  -- All paths known to HLS, whether or not they exist on disk.
   let paths = pathsFromTargetsMap <> pathsFromVFS
 
   let (new_module_map, new_module_map_source) = partitionEithers $ do
@@ -772,7 +758,7 @@ extendModuleMapWithKnownTargets file moduleMap = do
         guard $ dirComponents `isPrefixOf` pathComponents
 
         -- Ensure that this extension is accepted
-        guard $ takeExtension pathString `Vector.elem` acceptedExtensions
+        guard $ takeExtension pathString `elem` acceptedExtensions
         let modName = mkModuleName (intercalate "." $ drop dir_number_directories (splitDirectories (dropExtension pathString)))
         let isSourceModule = "-boot" `isSuffixOf` pathString
         if isSourceModule
@@ -886,7 +872,6 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
-        -- TODO: this is responsible for a LOT of allocations
 
         -- add the deps to the Shake graph
         let addDependency fp = do
