@@ -1,0 +1,5 @@
+cradle:
+  direct:
+    arguments: ["-unit" ,"@mmm-1.0.0-inplace"
+               ,"-unit" ,"@rrr-1.0.0-inplace"
+               ]
