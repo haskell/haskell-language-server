@@ -1,6 +1,8 @@
 cradle:
   direct:
     arguments:
+      - "CrossModuleDefinition"
+      - "CrossModuleUsage"
       - "DataConstructor"
       - "ExportedFunction"
       - "FieldPuns"

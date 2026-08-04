@@ -21,7 +21,7 @@ import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
-                                                        groupWith)
+                                                        groupAllWith)
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
@@ -226,7 +226,7 @@ refsAtName state nfp name = do
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
             -- See Note [Generated references]
-            filter (\(refRow HieDb.:. _) -> refIsGenerated refRow) <$>
+            filter (\(refRow HieDb.:. _) -> not $ refIsGenerated refRow) <$>
             findReferences
                 hieDb
                 True
@@ -285,8 +285,8 @@ removeGenerated HAR{..} =
     -- is generated from HieASTs containing GeneratedInfo
     sourceOnlyRefMap = generateReferencesMap $ getAsts sourceOnlyAsts
 
-collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
-collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
+collectWith :: (Hashable a, Ord b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
+collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupAllWith f . HS.toList
 
 -- | A variant 'getNamesAtPoint' that does not expect a 'PositionMapping'
 getNamesAtPoint' :: HieASTs a -> Position -> [Name]
