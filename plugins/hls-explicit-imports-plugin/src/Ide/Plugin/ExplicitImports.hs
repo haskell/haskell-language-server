@@ -382,11 +382,9 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
     ImportMap currIm <- MaybeT $ use GetImportMap nfp
     for currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
-      projectPath <- MaybeT $ pure $ toProjectInput path
-      ImportMap importIm <- MaybeT $ use GetImportMap projectPath
+      ImportMap importIm <- MaybeT $ use GetImportMap path
       for importIm $ \impPath -> do
-        projectImpPath <- MaybeT $ pure $ toProjectInput impPath
-        imp_hir <- MaybeT $ use GetModIface projectImpPath
+        imp_hir <- MaybeT $ use GetModIface impPath
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports
@@ -427,10 +425,6 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
                       { forLens = (\ImportAction{..} -> (iaRange, (iaUniqueId, iaResType))) <$> rangeAndUnique
                       , forCodeActions = RM.fromList iaRange rangeAndUnique
                       , forResolve =  IM.fromList ((\(u, (r, (te, ty))) -> (u, ImportEdit r te ty)) <$> uniqueAndRangeAndText) }
-  where
-    toProjectInput :: SomeHaskellInput -> Maybe ProjectHaskellInput
-    toProjectInput (SomeProjectHaskellInput input) = Just input
-    toProjectInput _                               = Nothing
 
 --------------------------------------------------------------------------------
 

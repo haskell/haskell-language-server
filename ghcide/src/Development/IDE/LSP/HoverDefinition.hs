@@ -20,8 +20,7 @@ import           Control.Monad.Except           (ExceptT)
 import           Control.Monad.IO.Class
 import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
-import           Development.IDE.Core.RuleInput  (toSomeFileInput,
-                                                  toSomeHaskellInput)
+import           Development.IDE.Core.RuleInput  (toSomeHaskellInput)
 import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
                                                  runIdeAction)
@@ -54,8 +53,8 @@ gotoTypeDefinition :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPos
 gotoImplementation :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) (MessageResult Method_TextDocumentImplementation)
 documentHighlight  :: Recorder (WithPriority Log) -> IdeState -> TextDocumentPositionParams -> ExceptT PluginError (HandlerM c) ([DocumentHighlight] |? Null)
 gotoDefinition = request "Definition" toSomeHaskellInput getDefinition (InR (InR Null)) (InL . Definition . InR . map fst)
-gotoTypeDefinition = request "TypeDefinition" (Just . toSomeFileInput) getTypeDefinition (InR (InR Null)) (InL . Definition . InR . map fst)
-gotoImplementation = request "Implementation" (Just . toSomeFileInput) getImplementationDefinition (InR (InR Null)) (InL . Definition . InR)
+gotoTypeDefinition = request "TypeDefinition" toSomeHaskellInput getTypeDefinition (InR (InR Null)) (InL . Definition . InR . map fst)
+gotoImplementation = request "Implementation" toSomeHaskellInput getImplementationDefinition (InR (InR Null)) (InL . Definition . InR)
 hover          = request "Hover" toSomeHaskellInput getAtPoint (InR Null) foundHover
 documentHighlight = request "DocumentHighlight" toSomeHaskellInput highlightAtPoint (InR Null) InL
 

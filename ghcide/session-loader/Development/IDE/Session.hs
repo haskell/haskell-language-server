@@ -543,7 +543,7 @@ insertFileMapping state hieYaml ncfp =
   STM.insert hieYaml ncfp (filesMap state)
 
 -- | Same as 'insertFileMapping', but never overwrites an existing value.
-insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> ProjectHaskellInput -> STM ()
 insertFileMappingIfMissing state hieYaml ncfp =
   STM.focus (Focus.alter (<|> Just hieYaml)) ncfp (filesMap state)
 
@@ -609,7 +609,7 @@ getExtraFilesToLoad state hieYaml cfp = do
   filterM ownedByThisCradle (Set.toList candidates)
   where
     ownedByThisCradle file = do
-      owner <- atomically $ STM.lookup (toNormalizedFilePath' file) (filesMap state)
+      owner <- atomically $ STM.lookup (ProjectHaskellInput (toNormalizedFilePath' file)) (filesMap state)
       pure $ owner == Just hieYaml
 
 -- | We allow users to specify a loading strategy.

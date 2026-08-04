@@ -8,6 +8,8 @@ import           Control.Monad
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
+import           Development.IDE.Core.RuleInput (IsFileInput (inputFilePath),
+                                                 RuleInput, SomeFileInput)
 import           Development.IDE      (RuleResult, action, define,
                                        getFilesOfInterestUntracked,
                                        getPluginConfigAction, ideErrorText,
@@ -88,7 +90,7 @@ genericConfigTests = testGroup "generic plugin config"
                     files <- getFilesOfInterestUntracked
                     void $ uses_ GetTestDiagnostics $ HM.keys files
               define mempty $ \GetTestDiagnostics file -> do
-                let diags = [ideErrorText file "testplugin"]
+                let diags = [ideErrorText (inputFilePath file) "testplugin"]
                 return (diags,Nothing)
           }
         -- A config that disables the plugin initially
@@ -104,6 +106,7 @@ data GetTestDiagnostics = GetTestDiagnostics
     deriving (Eq, Show, Generic)
 instance Hashable GetTestDiagnostics
 instance NFData   GetTestDiagnostics
+type instance RuleInput GetTestDiagnostics = SomeFileInput
 type instance RuleResult GetTestDiagnostics = ()
 
 expectDiagnosticsFail

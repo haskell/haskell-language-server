@@ -249,25 +249,24 @@ someInputFilePathMaybe input =
 
 -- Helpers that convert NFP to typed rules
 toProjectHaskellInput :: NormalizedFilePath -> Maybe ProjectHaskellInput
-toProjectHaskellInput nfp
-    | isProjectHaskellInput nfp = Just (ProjectHaskellInput nfp)
-    | otherwise = Nothing
+toProjectHaskellInput nfp = case toSomeFileInput nfp of
+    SomeFileHaskellInput (SomeProjectHaskellInput input) -> Just input
+    _ -> Nothing
 
 toNonProjectHaskellInput :: NormalizedFilePath -> Maybe NonProjectHaskellInput
-toNonProjectHaskellInput nfp
-    | isNonProjectHaskellInput nfp = Just (NonProjectHaskellInput nfp)
-    | otherwise = Nothing
+toNonProjectHaskellInput nfp = case toSomeFileInput nfp of
+    SomeFileHaskellInput (SomeNonProjectHaskellInput input) -> Just input
+    _ -> Nothing
 
 toCabalInput :: NormalizedFilePath -> Maybe CabalInput
-toCabalInput nfp
-    | isCabalInput nfp = Just (CabalInput nfp)
-    | otherwise = Nothing
+toCabalInput nfp = case toSomeFileInput nfp of
+    SomeFileCabalInput input -> Just input
+    _ -> Nothing
 
 toSomeHaskellInput :: NormalizedFilePath -> Maybe SomeHaskellInput
-toSomeHaskellInput nfp
-    | isNonProjectHaskellInput nfp = Just (SomeNonProjectHaskellInput (NonProjectHaskellInput nfp))
-    | isProjectHaskellInput nfp = Just (SomeProjectHaskellInput (ProjectHaskellInput nfp))
-    | otherwise = Nothing
+toSomeHaskellInput nfp = case toSomeFileInput nfp of
+    SomeFileHaskellInput input -> Just input
+    _ -> Nothing
 
 toSomeFileInput :: NormalizedFilePath -> SomeFileInput
 toSomeFileInput nfp

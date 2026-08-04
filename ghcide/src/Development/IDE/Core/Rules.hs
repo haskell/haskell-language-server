@@ -271,7 +271,7 @@ getParsedModuleRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput input) ms
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt input ms
 
 withoutOptHaddock :: ModSummary -> ModSummary
 withoutOptHaddock = withoutOption Opt_Haddock
@@ -289,8 +289,8 @@ getParsedModuleWithCommentsRule :: Recorder (WithPriority Log) -> Rules ()
 getParsedModuleWithCommentsRule recorder =
   -- The parse diagnostics are owned by the GetParsedModule rule
   -- For this reason, this rule does not produce any diagnostics
-  defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments file -> do
-    ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary file
+  defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments input -> do
+    ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary input
     opt <- getIdeOptions
 
     let ms' = withoutOptHaddock $ withOption Opt_KeepRawTokenStream ms
@@ -298,7 +298,7 @@ getParsedModuleWithCommentsRule recorder =
     let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput file) ms''
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt input ms''
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
@@ -310,7 +310,7 @@ getModifyDynFlags f = do
 getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
-    -> SomeFileInput
+    -> ProjectHaskellInput
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt input ms = do
     let fp = fromNormalizedFilePath (inputFilePath input)
@@ -584,7 +584,7 @@ getHieAstRuleDefinition f hsc tmr = do
 getImportMapRule :: Recorder (WithPriority Log) -> Rules ()
 getImportMapRule recorder = define (cmapWithPrio LogShake recorder) $ \GetImportMap f -> do
   im <- use GetLocatedImports f
-  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . SomeProjectHaskellInput . artifactFilePath <$> mfp) fileImports
+  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
 
 -- | Ensure that go to definition doesn't block on startup
@@ -1066,7 +1066,7 @@ regenerateHiFile sess input ms compNeeded = do
     opt <- getIdeOptions
 
     -- By default, we parse with `-haddock` unless 'OptHaddockParse' is overwritten.
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt (SomeFileHaskellInput $ SomeProjectHaskellInput input) ms
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt input ms
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do

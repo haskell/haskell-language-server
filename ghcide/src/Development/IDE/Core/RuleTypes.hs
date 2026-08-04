@@ -140,7 +140,7 @@ instance NFData   GetImportMap
 type instance RuleResult GetImportMap = ImportMap
 type instance RuleInput GetImportMap = ProjectHaskellInput
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName SomeHaskellInput -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName ProjectHaskellInput -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 

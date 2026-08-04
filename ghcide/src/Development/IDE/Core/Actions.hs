@@ -110,39 +110,33 @@ getDefinition file pos = runMaybeT $ do
       SomeProjectHaskellInput pFile -> fst <$> useWithStaleFastMT GetImportMap pFile
 
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
-    locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
+    locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts (fmap SomeProjectHaskellInput imports) hf pos'
     mapMaybeM (\(location, identifier) -> do
       fixedLocation <- MaybeT $ toCurrentLocation mapping (SomeFileHaskellInput file) location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
 
-getTypeDefinition :: SomeFileInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getTypeDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getTypeDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    haskellFile <- MaybeT $ pure $ case file of
-      SomeFileHaskellInput fp -> Just fp
-      _ -> Nothing
-    (hf, mapping) <- useWithStaleFastMT GetHieAst haskellFile
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping (SomeFileHaskellInput file) location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
-getImplementationDefinition :: SomeFileInput -> Position -> IdeAction (Maybe [Location])
+getImplementationDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [Location])
 getImplementationDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    haskellFile <- MaybeT $ pure $ case file of
-      SomeFileHaskellInput hFile -> Just hFile
-      _ -> Nothing
-    (hf, mapping) <- useWithStaleFastMT GetHieAst haskellFile
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'
-    traverse (MaybeT . toCurrentLocation mapping file) locs
+    traverse (MaybeT . toCurrentLocation mapping (SomeFileHaskellInput file)) locs
 
 highlightAtPoint :: SomeHaskellInput -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
