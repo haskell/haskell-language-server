@@ -155,7 +155,8 @@ launchHaskellLanguageServer recorder parsedArgs = do
 
       let
         hlsBin = "haskell-language-server-" ++ ghcVersion
-        candidates' = [hlsBin, "haskell-language-server"]
+        ghcupBin = "haskell-language-server-" ++ ghcVersion ++ "~" ++ hlsVersion
+        candidates' = [hlsBin, ghcupBin, "haskell-language-server"]
         candidates = map (++ exeExtension) candidates'
 
       liftIO $ hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
