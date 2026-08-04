@@ -9,14 +9,14 @@ import           Data.Aeson                  (KeyValue ((.=)))
 import           Data.Functor                (void)
 import qualified Data.Map                    as M
 import           Data.Text                   (Text, pack)
+import qualified Data.Text.IO                as TIO
+import           Development.IDE.Test        (referenceReady)
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename           as Rename
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (Null))
 import           System.FilePath
 import           Test.Hls
-import           Development.IDE.Test (referenceReady)
-import qualified Data.Text.IO                as TIO
 
 main :: IO ()
 main = defaultTestRunner tests
