@@ -20,7 +20,8 @@ import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List.NonEmpty                    (NonEmpty ((:|)), groupAllWith)
+import           Data.List.NonEmpty                    (NonEmpty ((:|)),
+                                                        groupAllWith)
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
