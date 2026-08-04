@@ -21,6 +21,7 @@ import qualified Data.Text                         as T
 import           Data.Text.Encoding                (encodeUtf8)
 import           Data.Word                         (Word16)
 import           Debug.Trace.Flags                 (userTracingEnabled)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Graph             (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
@@ -31,7 +32,6 @@ import           Ide.Types                         (PluginId (..))
 import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
                                                     beginSpan, endSpan, setTag,
                                                     withSpan)
-import Development.IDE.Core.RuleInput (SomeInput)
 withTrace :: (MonadMask m, MonadIO m) => String -> ((String -> String -> m ()) -> m a) -> m a
 withTrace name act
   | userTracingEnabled

@@ -17,7 +17,7 @@ import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Data.Traversable                 (for)
 import           Development.IDE                  hiding (line)
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath), RuleInput, SomeFileInput, toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake       (toKnownFiles)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.Core.Text        (lineAt)

@@ -40,9 +40,7 @@ import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput         (IsFileInput (inputFilePath),
-                                                         ProjectHaskellInput,
-                                                         toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util       as Util
@@ -64,7 +62,8 @@ import           Data.Foldable                         (Foldable (foldl'))
 import           GHC.Data.Bag                          (Bag)
 
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Parser.Annotation                 (EpAnn (..), EpToken (..))
+import           GHC.Parser.Annotation                 (EpAnn (..),
+                                                        EpToken (..))
 #elif MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
 #else

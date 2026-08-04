@@ -130,14 +130,7 @@ import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
-import           Development.IDE.Core.RuleInput        (InputFingerprint (..),
-                                                        IsFileInput (inputFilePath),
-                                                        IsInput (inputFingerprint),
-                                                        NoInput (..),
-                                                        RuleInput, SomeFileInput, SomeHaskellInput, SomeInput,
-                                                        fromInput,
-                                                        toSomeFileInput,
-                                                        toInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Options          as Options
 import qualified Language.LSP.Protocol.Message          as LSP
@@ -408,7 +401,7 @@ addPersistentRule :: IdeRule k v => k -> (RuleInput k -> IdeAction (Maybe (v,Pos
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
   let getVal' input = case fromInput input of
-        Nothing -> pure Nothing
+        Nothing        -> pure Nothing
         Just ruleInput -> fmap (fmap (first3 toDyn)) $ getVal ruleInput
   void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) getVal'
 
@@ -531,7 +524,7 @@ lastValue :: IdeRule k v => k -> RuleInput k -> Action (Maybe (v, PositionMappin
 lastValue key input = do
     s <- getShakeExtras
     case fromInput (toInput input) of
-      Nothing -> pure Nothing
+      Nothing     -> pure Nothing
       Just input' -> liftIO $ lastValueIO s key input'
 
 mappingForVersion
@@ -1222,7 +1215,7 @@ data RuleBody k v
   | RuleNoDiagnostics (k -> RuleInput k -> Action (Maybe BS.ByteString, Maybe v))
   | RuleWithCustomNewnessCheck
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
-    , build :: k -> RuleInput k -> Action (Maybe BS.ByteString, Maybe v)
+    , build        :: k -> RuleInput k -> Action (Maybe BS.ByteString, Maybe v)
     }
   | RuleWithOldValue (k -> RuleInput k -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 

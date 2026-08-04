@@ -49,6 +49,7 @@ import           Data.List.NonEmpty                 (NonEmpty (..), nonEmpty)
 import qualified Data.List.NonEmpty                 as NonEmpty
 import           Data.Maybe
 import           Data.Tuple.Extra                   hiding (first, second)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util    (Fingerprint)
 import qualified Development.IDE.GHC.Compat.Util    as Util
@@ -59,7 +60,6 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics                       (Generic)
 import           Prelude                            hiding (mod)
-import           Development.IDE.Core.RuleInput     (ProjectHaskellInput)
 
 
 -- | The imports for a given module.

@@ -37,10 +37,7 @@ import qualified Data.Map.Strict                    as Map
 import           Data.Vector                        (Vector)
 import qualified Data.Vector                        as V
 import           Development.IDE
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput,
-                                                   RuleInput,
-                                                   SomeHaskellInput (SomeProjectHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat.Util

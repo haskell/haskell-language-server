@@ -14,9 +14,7 @@ import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput               (CabalInput,
-                                                                IsFileInput (inputFilePath),
-                                                                classifyAsCabal)
+import           Development.IDE.Core.RuleInput
 import qualified Distribution.Fields                           as Syntax
 import           Distribution.PackageDescription               (Benchmark (..),
                                                                 BuildInfo (..),

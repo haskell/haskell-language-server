@@ -15,8 +15,7 @@ import qualified Data.List.NonEmpty                 as NE
 import qualified Data.Map.Strict                    as Map
 import           Data.Maybe
 import qualified Data.Text                          as T
-import           Development.IDE.Core.RuleInput      (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput (..))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake         hiding (Log, knownTargets,
                                                      withHieDb)
 import qualified Development.IDE.GHC.Compat         as Compat

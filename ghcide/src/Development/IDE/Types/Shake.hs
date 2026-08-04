@@ -24,7 +24,7 @@ import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (toInput, IsInput, SomeInput, NoInput(..), RuleInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key, RuleResult, newKey,
                                                        pattern Key)

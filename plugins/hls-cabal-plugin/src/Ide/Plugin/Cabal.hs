@@ -19,11 +19,7 @@ import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.FileStore                (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput               (CabalInput,
-                                                                IsFileInput (inputFilePath),
-                                                                SomeFileInput (SomeFileCabalInput),
-                                                                classifyAsCabal,
-                                                                toCabalInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake                    (restartShakeSession)
 import           Development.IDE.Graph                         (Key)
 import           Development.IDE.LSP.HoverDefinition           (foundHover)

@@ -33,10 +33,10 @@ import           Development.IDE                      (Action, IdeRule,
                                                        rangeToRealSrcSpan,
                                                        realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake           as IDE
 import           Development.IDE.GHC.Compat           (RealSrcSpan, srcSpanFile)
 import           Development.IDE.GHC.Compat.Util      (unpackFS)
-import Development.IDE.Core.RuleInput (RuleInput)
 
 
 ------------------------------------------------------------------------------

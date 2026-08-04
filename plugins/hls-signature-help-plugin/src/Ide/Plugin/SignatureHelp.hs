@@ -26,9 +26,8 @@ import           Development.IDE                      (DocAndTyThingMap (DKMap),
                                                        useWithStaleFast)
 import           Development.IDE.Core.PluginUtils     (runIdeActionE,
                                                        useWithStaleFastE)
-import           Development.IDE.Core.RuleInput       (SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell)
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan,
                                                        getSourceNodeIds,

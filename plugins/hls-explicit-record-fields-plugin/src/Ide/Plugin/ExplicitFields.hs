@@ -46,14 +46,10 @@ import           Development.IDE                      (IdeState,
                                                        srcSpanToLocation,
                                                        srcSpanToRange, viaShow)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       RuleInput,
-                                                       SomeFileInput (SomeFileHaskellInput),
-                                                       SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell)
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentPosition,
                                                        toCurrentRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),

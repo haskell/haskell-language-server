@@ -30,8 +30,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Functor                   (($>))
 import qualified Data.Text                      as T
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Core.RuleInput (SomeFileInput)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus

@@ -32,6 +32,7 @@ import           Data.Aeson                               (toJSON)
 import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes, mapMaybe)
 import           Development.IDE.Core.ProgressReporting
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake               hiding (Log)
 import qualified Development.IDE.Core.Shake               as Shake
@@ -49,10 +50,6 @@ import           Ide.Logger                               (Pretty (pretty),
                                                            logWith)
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
-import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
-                                                           SomeFileInput,
-                                                           toProjectHaskellInput,
-                                                           toSomeHaskellInput)
 
 data Log = LogShake Shake.Log
   deriving Show

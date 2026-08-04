@@ -41,11 +41,9 @@ import           Data.Maybe
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
-import           Development.IDE.Core.RuleInput                    (SomeFileInput (SomeFileHaskellInput),
-                                                                    SomeHaskellInput (SomeProjectHaskellInput),
-                                                                    toProjectHaskellInput)
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
 import           Development.IDE.Core.FileStore                    (getUriContents)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service

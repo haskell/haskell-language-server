@@ -7,19 +7,19 @@
 
 module Ide.Plugin.SemanticTokens.Types where
 
-import           Control.DeepSeq               (NFData (rnf), rwhnf)
-import qualified Data.Array                    as A
-import           Data.Default                  (Default (def))
-import           Data.Text                     (Text)
-import           Development.IDE               (Pretty (pretty), RuleResult)
-import           Development.IDE.Core.RuleInput (ProjectHaskellInput, RuleInput)
-import qualified Development.IDE.Core.Shake    as Shake
-import           Development.IDE.GHC.Compat    hiding (loc)
-import           Development.IDE.Graph.Classes (Hashable)
-import           GHC.Generics                  (Generic)
-import           GHC.Iface.Ext.Types           (TypeIndex)
-import           Ide.Plugin.Error              (PluginError)
-import           Language.Haskell.TH.Syntax    (Lift)
+import           Control.DeepSeq                (NFData (rnf), rwhnf)
+import qualified Data.Array                     as A
+import           Data.Default                   (Default (def))
+import           Data.Text                      (Text)
+import           Development.IDE                (Pretty (pretty), RuleResult)
+import           Development.IDE.Core.RuleInput
+import qualified Development.IDE.Core.Shake     as Shake
+import           Development.IDE.GHC.Compat     hiding (loc)
+import           Development.IDE.Graph.Classes  (Hashable)
+import           GHC.Generics                   (Generic)
+import           GHC.Iface.Ext.Types            (TypeIndex)
+import           Ide.Plugin.Error               (PluginError)
+import           Language.Haskell.TH.Syntax     (Lift)
 import           Language.LSP.Protocol.Types
 
 

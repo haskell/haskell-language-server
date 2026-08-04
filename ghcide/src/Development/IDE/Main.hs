@@ -43,15 +43,12 @@ import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..)
 import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
                                                            kick,
                                                            setFilesOfInterest)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
 import           Development.IDE.Core.RuleTypes           (GenerateCore (GenerateCore),
                                                            GetHieAst (GetHieAst),
                                                            TypeCheck (TypeCheck))
-import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
-                                                           toProjectHaskellInput,
-                                                           toSomeFileInput,
-                                                           toSomeHaskellInput)
 import           Development.IDE.Core.Service             (initialise,
                                                            runAction)
 import qualified Development.IDE.Core.Service             as Service

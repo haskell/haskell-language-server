@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs            #-}
 module Development.IDE.Core.PluginUtils
 (-- * Wrapped Action functions
   runActionE
@@ -44,9 +44,7 @@ import qualified Data.Text                            as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (IsFileInput,
-                                                       RuleInput,
-                                                       toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Service         (runAction)
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
                                                        IdeState (shakeExtras),

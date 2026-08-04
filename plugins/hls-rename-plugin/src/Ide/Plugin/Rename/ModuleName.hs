@@ -45,11 +45,8 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        useWithStale, (<+>))
 import           Development.IDE.Core.FileStore       (getFileContents)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput,
-                                                       classifyAsHaskell,
-                                                       toSomeFileInput, SomeHaskellInput (SomeProjectHaskellInput), SomeFileInput (SomeFileHaskellInput))
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        getSessionDynFlags,
                                                        hsmodName, importPaths,

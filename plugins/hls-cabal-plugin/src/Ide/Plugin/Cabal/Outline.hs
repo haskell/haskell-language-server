@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Cabal.Outline where
 
@@ -11,7 +10,7 @@ import           Control.Monad.IO.Class
 import           Data.Maybe
 import qualified Data.Text                               as T
 import           Data.Text.Encoding                      (decodeUtf8)
-import           Development.IDE.Core.RuleInput           (toCabalInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake              (IdeState (shakeExtras),
                                                           runIdeAction,

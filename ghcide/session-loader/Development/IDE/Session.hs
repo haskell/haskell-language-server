@@ -43,9 +43,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                           as T
 import           Data.Version
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput (..),
-                                                       toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
                                                       withHieDb)

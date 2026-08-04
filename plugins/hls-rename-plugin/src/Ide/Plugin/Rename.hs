@@ -30,10 +30,7 @@ import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput,
-                                                       SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service          hiding (Log)
 import           Development.IDE.Core.Shake            hiding (Log)

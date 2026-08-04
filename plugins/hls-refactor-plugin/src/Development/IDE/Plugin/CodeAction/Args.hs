@@ -26,12 +26,10 @@ import           Data.Maybe                                   (fromMaybe,
                                                                maybeToList)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Development.IDE.Core.RuleInput                 (SomeFileInput (SomeFileHaskellInput),
-                                                                 SomeHaskellInput (SomeProjectHaskellInput),
-                                                                 toProjectHaskellInput)
 import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.PluginUtils             (activeDiagnosticsInRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint

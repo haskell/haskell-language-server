@@ -119,28 +119,28 @@ instance Pretty PluginError where
 
 -- |Converts to ErrorCode used in LSP ResponseErrors
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
-toErrorCode (PluginInternalError _)    = InR ErrorCodes_InternalError
-toErrorCode (PluginInvalidParams _)    = InR ErrorCodes_InvalidParams
+toErrorCode (PluginInternalError _)      = InR ErrorCodes_InternalError
+toErrorCode (PluginInvalidParams _)      = InR ErrorCodes_InvalidParams
 toErrorCode (PluginUnsupportedUriType _) = InR ErrorCodes_InvalidParams
-toErrorCode (PluginInvalidUserState _) = InL LSPErrorCodes_RequestFailed
+toErrorCode (PluginInvalidUserState _)   = InL LSPErrorCodes_RequestFailed
 -- PluginRequestRefused should never be a argument to `toResponseError`, as
 -- it should be dealt with in `extensiblePlugins`, but this is here to make
 -- this function complete
-toErrorCode (PluginRequestRefused _)   = InR ErrorCodes_MethodNotFound
-toErrorCode (PluginRuleFailed _)       = InL LSPErrorCodes_RequestFailed
-toErrorCode PluginStaleResolve         = InL LSPErrorCodes_ContentModified
+toErrorCode (PluginRequestRefused _)     = InR ErrorCodes_MethodNotFound
+toErrorCode (PluginRuleFailed _)         = InL LSPErrorCodes_RequestFailed
+toErrorCode PluginStaleResolve           = InL LSPErrorCodes_ContentModified
 
 -- |Converts to a logging priority. In addition to being used by the logger,
 -- `combineResponses` currently uses this to  choose which response to return,
 -- so care should be taken in changing it.
 toPriority :: PluginError -> Priority
-toPriority (PluginInternalError _)    = Error
-toPriority (PluginInvalidParams _)    = Warning
+toPriority (PluginInternalError _)      = Error
+toPriority (PluginInvalidParams _)      = Warning
 toPriority (PluginUnsupportedUriType _) = Warning
-toPriority (PluginInvalidUserState _) = Debug
-toPriority (PluginRequestRefused _)   = Debug
-toPriority (PluginRuleFailed _)       = Debug
-toPriority PluginStaleResolve         = Debug
+toPriority (PluginInvalidUserState _)   = Debug
+toPriority (PluginRequestRefused _)     = Debug
+toPriority (PluginRuleFailed _)         = Debug
+toPriority PluginStaleResolve           = Debug
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return

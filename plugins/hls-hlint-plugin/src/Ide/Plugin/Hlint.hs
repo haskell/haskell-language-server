@@ -50,11 +50,7 @@ import           Development.IDE                                    hiding
                                                                      getExtensions)
 import           Development.IDE.Core.Compile                       (sourceParser)
 import           Development.IDE.Core.FileStore                     (getVersionedTextDoc)
-import           Development.IDE.Core.RuleInput                     (IsFileInput (inputFilePath),
-                                                                     NoInput, ProjectHaskellInput,
-                                                                     RuleInput, classifyAsHaskell,
-                                                                     toProjectHaskellInput,
-                                                                     toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)

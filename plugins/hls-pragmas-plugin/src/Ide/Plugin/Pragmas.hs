@@ -30,9 +30,7 @@ import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
 import           Development.IDE.Core.FileStore           (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
-                                                           classifyAsHaskell,
-                                                           toSomeFileInput, SomeHaskellInput (SomeProjectHaskellInput), SomeFileInput (SomeFileHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error         (GhcHint (SuggestExtension),
                                                            LanguageExtensionHint (..),

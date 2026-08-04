@@ -27,9 +27,7 @@ import           Development.IDE                   (FileDiagnostic,
                                                     fdStructuredMessageL,
                                                     logWith, realSrcSpanToRange)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput,
-                                                   classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes    (GetParsedModule (GetParsedModule))
 import           Development.IDE.GHC.Compat        hiding (vcat)
 import           Development.IDE.GHC.Compat.Error  (_MismatchMessage,

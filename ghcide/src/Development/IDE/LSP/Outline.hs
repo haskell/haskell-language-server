@@ -14,7 +14,7 @@ import           Data.Functor
 import           Data.Generics                  hiding (Prefix)
 import           Data.List.NonEmpty             (nonEmpty)
 import           Data.Maybe
-import           Development.IDE.Core.RuleInput  (toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat

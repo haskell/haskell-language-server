@@ -178,7 +178,7 @@ withProjectFile _ _ = pure $ Right False
 
 withHaskellFile :: SomeFileInput -> (SomeHaskellInput -> Action (Either Text Bool)) -> Action (Either Text Bool)
 withHaskellFile (SomeFileHaskellInput hFile) action = action hFile
-withHaskellFile _ _ = pure $ Right False
+withHaskellFile _ _                                 = pure $ Right False
 
 parseAction :: CI String -> SomeFileInput -> Action (Either Text Bool)
 parseAction "typecheck" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use TypeCheck pFile

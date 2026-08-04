@@ -21,10 +21,7 @@ import           Development.IDE.Core.LookupMod       (lookupMod)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       SomeFileInput (SomeFileHaskellInput),
-                                                       SomeHaskellInput (SomeProjectHaskellInput, SomeNonProjectHaskellInput),
-                                                       toSomeHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
@@ -58,7 +55,7 @@ getAtPoint file pos = runMaybeT $ do
   shakeExtras <- lift askShake
   projectFile <- MaybeT $ pure $ case file of
     SomeNonProjectHaskellInput _ -> Nothing
-    SomeProjectHaskellInput fp -> Just fp
+    SomeProjectHaskellInput fp   -> Just fp
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession projectFile
   modSummary <- fst <$> useWithStaleFastMT GetModSummary projectFile
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap projectFile)

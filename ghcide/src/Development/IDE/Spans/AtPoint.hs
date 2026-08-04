@@ -70,6 +70,7 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake           (ShakeExtras (..),
                                                        runIdeAction)
 import           Development.IDE.Types.Shake          (WithHieDb)
@@ -96,8 +97,6 @@ import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       SomeHaskellInput)
 
 -- | HieFileResult for files of interest, along with the position mappings
 newtype FOIReferences = FOIReferences (HM.HashMap SomeHaskellInput (HieAstResult, PositionMapping))

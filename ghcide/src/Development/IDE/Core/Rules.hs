@@ -107,12 +107,7 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
-                                                               ProjectHaskellInput,
-                                                               SomeFileInput (SomeFileHaskellInput),
-                                                               SomeHaskellInput (SomeProjectHaskellInput),
-                                                               toProjectHaskellInput,
-                                                               toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service                 hiding (Log,
                                                                LogShake)
@@ -169,7 +164,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId, getVirtualFileFromVFS)
+                                                               PluginId,
+                                                               getVirtualFileFromVFS)
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
@@ -541,7 +537,7 @@ persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \input -> runMaybeT $ do
   projectInput <- MaybeT $ pure $ case input of
     SomeProjectHaskellInput projectInput -> Just projectInput
-    _ -> Nothing
+    _                                    -> Nothing
   let file = inputFilePath projectInput
   res <- readHieFileForSrcFromDisk recorder projectInput
   vfsRef <- asks vfsVar
@@ -1370,10 +1366,10 @@ getHieFile :: SomeFileInput -> Action (Maybe HieFile)
 getHieFile input = runMaybeT $ do
   haskellInput <- MaybeT $ pure $ case input of
     SomeFileHaskellInput fp -> Just fp
-    _ -> Nothing
+    _                       -> Nothing
   projectInput <- MaybeT $ pure $ case haskellInput of
     SomeProjectHaskellInput fp -> Just fp
-    _ -> Nothing
+    _                          -> Nothing
   HAR {hieAst} <- MaybeT $ use GetHieAst haskellInput
   tmr <- MaybeT $ use TypeCheck projectInput
   ghc <- MaybeT $ use GhcSession projectInput

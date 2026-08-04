@@ -44,8 +44,9 @@ import           Development.IDE                      hiding (pluginHandlers,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
+                                                       RuleInput,
                                                        SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell, RuleInput)
+                                                       classifyAsHaskell)
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes

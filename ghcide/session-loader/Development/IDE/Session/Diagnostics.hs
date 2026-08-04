@@ -9,8 +9,7 @@ import           Data.List
 import           Data.List.Extra                   (split)
 import           Data.Maybe
 import qualified Data.Text                         as T
-import           Development.IDE.Core.RuleInput (IsFileInput (inputFilePath),
-                                       ProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics

@@ -38,12 +38,8 @@ import           Development.IDE                          (Action,
                                                            toNormalizedFilePath')
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules               (toIdeResult)
-import           Development.IDE.Core.RuleInput           (classifyAsHaskell,
-                                                           IsFileInput (inputFilePath),
-                                                           ProjectHaskellInput,
-                                                           SomeHaskellInput (SomeProjectHaskellInput),
-                                                           toSomeFileInput, SomeFileInput (SomeFileHaskellInput))
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
                                                            getShakeExtras,

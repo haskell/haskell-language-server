@@ -5,8 +5,7 @@ import           Control.Concurrent.STM
 import           Data.Foldable                          (for_)
 import qualified Data.HashMap.Strict                    as Map
 import           Development.IDE.Core.ProgressReporting
-import           Development.IDE.Core.RuleInput        (SomeFileInput,
-                                                        toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
 import           Test.Tasty

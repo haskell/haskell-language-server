@@ -22,6 +22,7 @@ import           Data.Maybe
 import           Development.IDE.Core.FileStore        hiding (Log, LogShake)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
@@ -39,8 +40,6 @@ import           Language.LSP.Server                   hiding (getVirtualFile)
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
-import           Development.IDE.Core.RuleInput        (IsFileInput (inputFilePath),
-                                                        SomeFileInput)
 
 {- Note [File existence cache and LSP file watchers]
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

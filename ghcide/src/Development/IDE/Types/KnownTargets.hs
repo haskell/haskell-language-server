@@ -13,9 +13,9 @@ import           Data.HashMap.Strict
 import qualified Data.HashMap.Strict            as HMap
 import           Data.HashSet
 import qualified Data.HashSet                   as HSet
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat     (ModuleName)
 import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Core.RuleInput (ProjectHaskellInput)
 import           GHC.Generics
 
 -- | A mapping of module name to known files

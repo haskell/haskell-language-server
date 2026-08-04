@@ -7,7 +7,7 @@ module Context where
 
 import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as Text
-import           Development.IDE.Core.RuleInput               (CabalInput (CabalInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Plugin.Completions.Types    (PosPrefixInfo (..))
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Paths

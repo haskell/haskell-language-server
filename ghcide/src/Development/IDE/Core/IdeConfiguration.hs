@@ -19,12 +19,12 @@ import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
 import           Data.Text                      (isPrefixOf)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types
 import           System.FilePath                (isRelative)
-import Development.IDE.Core.RuleInput (SomeFileInput, IsFileInput (inputFilePath))
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration

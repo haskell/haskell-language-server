@@ -1,12 +1,11 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 module Development.IDE.Core.RuleInput
     ( RuleInput
@@ -36,20 +35,18 @@ module Development.IDE.Core.RuleInput
     ) where
 
 import           Control.DeepSeq
-import           Control.Monad.Trans.Except            (ExceptT, throwE)
+import           Control.Monad.Trans.Except  (ExceptT, throwE)
 import           Data.Hashable
-import           Data.List                             (isInfixOf)
-import qualified Data.Text                             as T
+import           Data.List                   (isInfixOf)
+import qualified Data.Text                   as T
 import           Data.Typeable
-import           GHC.Generics                          (Generic)
-import           Ide.Plugin.Error                      (PluginError (..))
-import           Language.LSP.Protocol.Types           (NormalizedFilePath,
-                                                        Uri,
-                                                        fromNormalizedFilePath,
-                                                        toNormalizedUri,
-                                                        uriToNormalizedFilePath)
-import           System.FilePath                       (normalise,
-                                                        takeExtension)
+import           GHC.Generics                (Generic)
+import           Ide.Plugin.Error            (PluginError (..))
+import           Language.LSP.Protocol.Types (NormalizedFilePath, Uri,
+                                              fromNormalizedFilePath,
+                                              toNormalizedUri,
+                                              uriToNormalizedFilePath)
+import           System.FilePath             (normalise, takeExtension)
 
 -- | Map each rule with an input type consumed by that rule
 type family RuleInput k
@@ -70,8 +67,8 @@ instance Eq InputFingerprint where
   _ == _ = False
 
 instance Hashable InputFingerprint where
-  hashWithSalt s InputNoFile = hashWithSalt s (0 :: Int)
-  hashWithSalt s (InputFile p) = hashWithSalt s (1 :: Int, p)
+  hashWithSalt s InputNoFile    = hashWithSalt s (0 :: Int)
+  hashWithSalt s (InputFile p)  = hashWithSalt s (1 :: Int, p)
   hashWithSalt s (InputValue a) = hashWithSalt s (2 :: Int, hash a)
 
 -- RuleInput : IsInput and SomeInput
@@ -114,7 +111,7 @@ instance NFData NoInput
 instance IsInput NoInput where
     fromInput input = case inputFingerprint input of
         InputNoFile -> Just NoInput
-        _ -> Nothing
+        _           -> Nothing
     inputFingerprint :: NoInput -> InputFingerprint
     inputFingerprint _ = InputNoFile
 
@@ -142,8 +139,8 @@ instance IsInput SomeFileInput where
     fromInput input = toSomeFileInput <$> someInputFilePathMaybe input
     inputFingerprint = fileInputFingerprint
 instance IsFileInput SomeFileInput where
-    inputFilePath (SomeFileHaskellInput input) = inputFilePath input
-    inputFilePath (SomeFileCabalInput input) = inputFilePath input
+    inputFilePath (SomeFileHaskellInput input)       = inputFilePath input
+    inputFilePath (SomeFileCabalInput input)         = inputFilePath input
     inputFilePath (SomeFileNormalizedFilePath input) = inputFilePath input
 instance IsInput NormalizedFilePath where
     fromInput = someInputFilePathMaybe
@@ -190,7 +187,7 @@ instance IsInput SomeHaskellInput where
     fromInput input = someInputFilePathMaybe input >>= toSomeHaskellInput
     inputFingerprint = fileInputFingerprint
 instance IsFileInput SomeHaskellInput where
-  inputFilePath (SomeProjectHaskellInput input) = inputFilePath input
+  inputFilePath (SomeProjectHaskellInput input)    = inputFilePath input
   inputFilePath (SomeNonProjectHaskellInput input) = inputFilePath input
 
 instance IsHaskellInput SomeHaskellInput
@@ -245,28 +242,28 @@ someInputFilePathMaybe :: SomeInput -> Maybe NormalizedFilePath
 someInputFilePathMaybe input =
     case inputFingerprint input of
         InputFile path -> Just path
-        _ -> Nothing
+        _              -> Nothing
 
 -- Helpers that convert NFP to typed rules
 toProjectHaskellInput :: NormalizedFilePath -> Maybe ProjectHaskellInput
 toProjectHaskellInput nfp = case toSomeFileInput nfp of
     SomeFileHaskellInput (SomeProjectHaskellInput input) -> Just input
-    _ -> Nothing
+    _                                                    -> Nothing
 
 toNonProjectHaskellInput :: NormalizedFilePath -> Maybe NonProjectHaskellInput
 toNonProjectHaskellInput nfp = case toSomeFileInput nfp of
     SomeFileHaskellInput (SomeNonProjectHaskellInput input) -> Just input
-    _ -> Nothing
+    _                                                       -> Nothing
 
 toCabalInput :: NormalizedFilePath -> Maybe CabalInput
 toCabalInput nfp = case toSomeFileInput nfp of
     SomeFileCabalInput input -> Just input
-    _ -> Nothing
+    _                        -> Nothing
 
 toSomeHaskellInput :: NormalizedFilePath -> Maybe SomeHaskellInput
 toSomeHaskellInput nfp = case toSomeFileInput nfp of
     SomeFileHaskellInput input -> Just input
-    _ -> Nothing
+    _                          -> Nothing
 
 toSomeFileInput :: NormalizedFilePath -> SomeFileInput
 toSomeFileInput nfp
@@ -280,7 +277,7 @@ classifyUri :: Monad m => Uri -> ExceptT PluginError m NormalizedFilePath
 classifyUri uri =
     case uriToNormalizedFilePath (toNormalizedUri uri) of
         Just nfp -> pure nfp
-        Nothing -> throwE (PluginUnsupportedUriType uri)
+        Nothing  -> throwE (PluginUnsupportedUriType uri)
 
 classifyAs
     :: Monad m

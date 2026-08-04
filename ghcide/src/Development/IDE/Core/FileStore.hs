@@ -41,10 +41,7 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
-import           Development.IDE.Core.RuleInput               (IsFileInput (inputFilePath),
-                                                               ProjectHaskellInput,
-                                                               SomeFileInput (SomeFileHaskellInput),
-                                                               toSomeFileInput, SomeHaskellInput (SomeProjectHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake

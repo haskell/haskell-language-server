@@ -25,15 +25,11 @@ import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
-import           Development.IDE                      (IdeState,
-                                                       Pretty (..), Range,
-                                                       Recorder (..), Rules,
-                                                       WithPriority (..),
+import           Development.IDE                      (IdeState, Pretty (..),
+                                                       Range, Recorder (..),
+                                                       Rules, WithPriority (..),
                                                        realSrcSpanToRange)
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput,
-                                                       RuleInput, classifyAsHaskell,
-                                                       toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
 import           Development.IDE.Core.Shake           (define, useWithStale)
@@ -50,11 +46,10 @@ import           Development.IDE.GHC.Compat           (Extension (OverloadedReco
                                                        getLoc, hs_valds,
                                                        parenthesizeHsExpr,
                                                        pattern RealSrcSpan,
-                                                       unLoc
+                                                       unLoc)
 #if __GLASGOW_HASKELL__ >= 913
-                                                       , unLocWithUserRdr
+import           Development.IDE.GHC.Compat           (unLocWithUserRdr)
 #endif
-                                                       )
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
 import           Development.IDE.Graph                (RuleResult)
@@ -300,11 +295,13 @@ getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 -- "selector selector2.record2"
 #if __GLASGOW_HASKELL__ >= 911
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> XExpr (HsRecSelRn _)) re) =
-#else
-getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
-#endif
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#else
+getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
+    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
+      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#endif
 -- Record selection where the field is being applied with the "$" operator:
 -- "selector $ record"
 #if __GLASGOW_HASKELL__ >= 913

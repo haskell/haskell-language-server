@@ -43,8 +43,7 @@ import           Data.List.NonEmpty              (NonEmpty)
 import           Data.Map.Strict                 (Map)
 import           Data.String                     (IsString (..))
 import qualified Data.Text                       as T
-import           Development.IDE                 (Range,
-                                                  RuleResult)
+import           Development.IDE
 import           Development.IDE.Core.RuleInput  (ProjectHaskellInput,
                                                   RuleInput)
 import qualified Development.IDE.Core.Shake      as Shake

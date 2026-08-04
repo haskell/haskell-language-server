@@ -20,12 +20,12 @@ import           Control.Monad.Except           (ExceptT)
 import           Control.Monad.IO.Class
 import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
-import           Development.IDE.Core.RuleInput  (toSomeHaskellInput)
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
                                                  runIdeAction)
 import           Development.IDE.Types.Location
-import           GHC.Iface.Ext.Types           (Identifier)
+import           GHC.Iface.Ext.Types            (Identifier)
 import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Types

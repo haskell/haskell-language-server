@@ -40,6 +40,7 @@ import           GHC.Iface.Ext.Utils                          (RefMap)
 
 import           Data.ByteString                              (ByteString)
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
@@ -49,11 +50,6 @@ import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
 import           Language.LSP.Protocol.Types                  (Int32)
-import           Development.IDE.Core.RuleInput               (NoInput,
-                                                               ProjectHaskellInput,
-                                                               RuleInput,
-                                                               SomeFileInput,
-                                                               SomeHaskellInput)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
