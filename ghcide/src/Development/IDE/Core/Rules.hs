@@ -1132,9 +1132,15 @@ getLinkableRule recorder =
 #if MIN_VERSION_ghc(9,11,0)
         mkLinkable t mod l = Linkable t mod (pure l)
         dotO o = DotO o ModuleObject
+        keepLinkables t mod =
+          [ mkLinkable t mod (DotA "dummy")
+          , mkLinkable t mod (CoreBindings (error "keepLinkables: bytecode forced"))
+          ]
 #else
         mkLinkable t mod l = LM t mod [l]
         dotO = DotO
+        -- An empty part list is treated as bytecode by isObjectLinkable
+        keepLinkables t mod = [mkLinkable t mod (DotA "dummy"), LM t mod []]
 #endif
     case hirCoreFp of
       Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
@@ -1183,9 +1189,11 @@ getLinkableRule recorder =
               --just before returning it to be loaded. This has a substantial effect on recompile
               --times as the number of loaded modules and splices increases.
               --
-              --We use a dummy DotA linkable part to fake a NativeCode linkable.
-              --The unload function doesn't care about the exact linkable parts.
-              unload (hscEnv session) (map (\(mod', time') -> mkLinkable time' mod' (DotA "dummy")) $ moduleEnvToList to_keep)
+              --The keep list is split into native code and bytecode halves and loaded
+              --linkables only match entries of their own kind, hence one entry of each
+              --per module. unload only cares about the module and time, not the
+              --contents, therefore the dummies.
+              unload (hscEnv session) (concatMap (\(mod', time') -> keepLinkables time' mod') $ moduleEnvToList to_keep)
               return (to_keep, ())
         return (fileHash <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash))
 
