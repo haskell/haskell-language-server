@@ -5,7 +5,14 @@ module TIOError where
 
 import           Control.Exception
 
-{-
+{- We do not see the error value constructor.
+
+>>> throwIO (TypeError "Doh")
+Doh
+-}
+
+{- Do we capture `stderr` repeatedly?
+
 >>> throwIO (TypeError "Doh")
 Doh
 -}
