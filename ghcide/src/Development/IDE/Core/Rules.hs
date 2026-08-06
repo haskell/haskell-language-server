@@ -1137,12 +1137,13 @@ versionToUTCTime (Fingerprint a b) =
 
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
-  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithOldValue $ \GetLinkable f old_value -> do
     HiFileResult{hirModSummary, hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
     let obj_file  = ml_obj_file (ms_location hirModSummary)
         core_file = ml_core_file (ms_location hirModSummary)
 #if MIN_VERSION_ghc(9,11,0)
         mkLinkable t mod l = Linkable t mod (pure l)
+        setLinkableTime t (Linkable _ mod l) = Linkable t mod l
         dotO o = DotO o ModuleObject
         keepLinkables t mod =
           [ mkLinkable t mod (DotA "dummy")
@@ -1150,6 +1151,7 @@ getLinkableRule recorder =
           ]
 #else
         mkLinkable t mod l = LM t mod [l]
+        setLinkableTime t (LM _ mod l) = LM t mod l
         dotO = DotO
         -- An empty part list is treated as bytecode by isObjectLinkable
         keepLinkables t mod = [mkLinkable t mod (DotA "dummy"), LM t mod []]
@@ -1179,10 +1181,19 @@ getLinkableRule recorder =
         --
         -- Fine because GHC only checks the UTCTime for equality
         let vtime = versionToUTCTime version
-        -- Can't use `GetModificationTime` rule because the core file was possibly written in this
-        -- very session, so the results aren't reliable
-        core_t <- liftIO $ getModTime core_file
+        let m_old_lr = case old_value of
+              Shake.Succeeded _ v -> Just v
+              Shake.Stale _ _ v   -> Just v
+              Shake.Failed _      -> Nothing
         (warns, hmi) <- case linkableType of
+          -- Bytecode is a function of the core file alone, so if our core file
+          -- is unchanged we can reuse the old bytecode. Only its identity
+          -- changed, and it is relinked when it is next loaded.
+          BCOLinkable
+            | Just old_lr <- m_old_lr
+            , linkableHash old_lr == fileHash
+            , Just bc <- homeModInfoByteCode (linkableHomeMod old_lr)
+            -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justBytecode $ setLinkableTime vtime bc))
           -- Bytecode needs to be regenerated from the core file
           BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vtime
           -- Object code can be read from the disk
@@ -1190,6 +1201,9 @@ getLinkableRule recorder =
             -- object file is up to date if it is newer than the core file
             -- Can't use a rule like 'GetModificationTime' or 'GetFileExists' because 'coreFileToLinkable' will write the object file, and
             -- thus bump its modification time, forcing this rule to be rerun every time.
+            -- Can't use `GetModificationTime` for the core file either, because it was
+            -- possibly written in this very session, so the results aren't reliable
+            core_t <- liftIO $ getModTime core_file
             exists <- liftIO $ doesFileExist obj_file
             mobj_time <- liftIO $
               if exists
