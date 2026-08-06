@@ -104,6 +104,9 @@ data LinkableResult
   { linkableHomeMod :: !HomeModInfo
   , linkableHash    :: !ByteString
   -- ^ The hash of the core file
+  , linkableVersion :: !ByteString
+  -- ^ Fingerprint of the core file and the versions of all transitive
+  -- dependencies, identifying the code the linkable links against
   }
 
 instance Show LinkableResult where
