@@ -132,7 +132,9 @@ getModificationTimeImpl missingFileDiags file = do
                 then -- the file is watched so we can rely on FileWatched notifications,
                         -- but also need a dependency on IsFileOfInterest to reinstall
                         -- alwaysRerun when the file becomes VFS
-                    void (use_ IsFileOfInterest file)
+                    case file of
+                        SomeFileHaskellInput x -> void (use_ IsFileOfInterest x)
+                        _                      -> pure ()
                 else if isInterface file
                     then -- interface files are tracked specially using the closed world assumption
                         pure ()
@@ -229,7 +231,9 @@ getFileModTimeContents f = do
     modTime <- case modificationTime fv of
       Just t -> pure t
       Nothing -> do
-        foi <- use_ IsFileOfInterest f
+        foi <- case f of
+          SomeFileHaskellInput x -> use_ IsFileOfInterest x
+          _                      -> pure NotFOI
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do

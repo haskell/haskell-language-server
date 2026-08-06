@@ -21,10 +21,7 @@ import qualified Data.Set                       as S
 import qualified Data.Text                      as T
 import           Data.Tuple.Extra
 import           Development.IDE
-import           Development.IDE.Core.RuleInput (IsFileInput (inputFilePath),
-                                                 SomeHaskellInput,
-                                                 classifyAsSomeHaskell,
-                                                 toSomeHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint

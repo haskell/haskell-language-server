@@ -72,11 +72,7 @@ import           Debug.Trace
 import           Development.IDE.Core.FileStore               (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
-import           Development.IDE.Core.RuleInput              (IsFileInput (inputFilePath),
-                                                              ProjectHaskellInput,
-                                                              SomeFileInput,
-                                                              SomeHaskellInput,
-                                                              toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.WorkerThread            (writeTaskQueue)

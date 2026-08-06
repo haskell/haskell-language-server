@@ -20,10 +20,7 @@ import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (idDelta)
-import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       RuleInput,
-                                                       SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat

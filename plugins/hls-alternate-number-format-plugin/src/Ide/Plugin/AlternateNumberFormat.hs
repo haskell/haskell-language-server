@@ -13,12 +13,7 @@ import           Development.IDE                  (GetParsedModule (GetParsedMod
                                                    define, realSrcSpanToRange,
                                                    use)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput,
-                                                   RuleInput,
-                                                   SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput),
-                                                   classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
 import           Development.IDE.GHC.Util         (getExtensions)

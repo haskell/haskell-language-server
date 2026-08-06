@@ -442,7 +442,7 @@ rawDependencyInformation fs = do
     checkAlreadyProcessed :: ProjectHaskellInput -> RawDepM FilePathId -> RawDepM FilePathId
     checkAlreadyProcessed nfp k = do
       (rawDepInfo, _, _) <- get
-      maybe k return (lookupPathToId (rawPathIdMap rawDepInfo) nfp)
+      maybe k return (pathToId (rawPathIdMap rawDepInfo) nfp)
 
     modifyRawDepInfo :: (RawDependencyInformation -> RawDependencyInformation) -> RawDepM ()
     modifyRawDepInfo f = modify (\(rd, ss, inputs) -> (f rd, ss, inputs))
@@ -475,7 +475,7 @@ rawDependencyInformation fs = do
       if not artifactIsSource
         then
           let msource_mod_id = toProjectHaskellInput (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath $ inputFilePath artifactFilePath)
-                                >>= lookupPathToId (rawPathIdMap pm)
+                                >>= pathToId (rawPathIdMap pm)
           in case msource_mod_id of
                Just source_mod_id -> insertBootId source_mod_id (FilePathId boot_mod_id) bm
                Nothing -> bm
@@ -486,7 +486,7 @@ rawDependencyInformation fs = do
 
 immediateReverseDependencyInputs :: ProjectHaskellInput -> DependencyInformation -> Maybe [ProjectHaskellInput]
 immediateReverseDependencyInputs file DependencyInformation{..} = do
-  FilePathId cur_id <- lookupPathToId depPathIdMap file
+  FilePathId cur_id <- pathToId depPathIdMap file
   pure $
     map (idToPath depPathIdMap . FilePathId) $
       maybe mempty IntSet.toList $
@@ -496,7 +496,7 @@ reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles input -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
         DependencyInformation{..} <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph input
-        case lookupPathToId depPathIdMap input of
+        case pathToId depPathIdMap input of
           -- The header of the file does not parse, so it can't be part of any import cycles.
           Nothing -> pure []
           Just fileId ->
@@ -559,7 +559,7 @@ getHieAstRuleDefinition f hsc tmr = do
 #endif
   let file = inputFilePath f
   se <- getShakeExtras
-  isFoi <- use_ IsFileOfInterest (toSomeFileInput file)
+  isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
@@ -635,7 +635,7 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck input -> do
     pm <- use_ GetParsedModule input
     hsc  <- hscEnv <$> use_ GhcSessionDeps input
-    foi <- use_ IsFileOfInterest (toSomeFileInput (inputFilePath input))
+    foi <- use_ IsFileOfInterest (SomeProjectHaskellInput input)
     -- We should only call the typecheck rule for files of interest.
     -- Keeping typechecked modules in memory for other files is
     -- very expensive.
@@ -1005,7 +1005,7 @@ generateCoreRule recorder =
 
 getModIfaceRule :: Recorder (WithPriority Log) -> Rules ()
 getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModIface f -> do
-  fileOfInterest <- use_ IsFileOfInterest (toSomeFileInput (inputFilePath f))
+  fileOfInterest <- use_ IsFileOfInterest (SomeProjectHaskellInput f)
   res <- case fileOfInterest of
     IsFOI status -> do
       -- Never load from disk for files of interest

@@ -19,9 +19,7 @@ import           Control.Monad.IO.Class
 import           Data.List                         (find, isSuffixOf)
 import           Data.Maybe
 import qualified Data.Set                          as S
-import           Development.IDE.Core.RuleInput    (IsFileInput (inputFilePath),
-                                                    ProjectHaskellInput,
-                                                    toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()

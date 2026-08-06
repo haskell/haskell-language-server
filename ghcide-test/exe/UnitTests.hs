@@ -13,7 +13,7 @@ import           Data.List.Extra
 import           Data.String                                  (IsString (fromString))
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.FileStore               (getModTime)
-import           Development.IDE.Core.RuleInput               (ProjectHaskellInput (ProjectHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Import.DependencyInformation (DependencyInformation (..),
                                                                FilePathId (..),
                                                                PathIdMap (..),

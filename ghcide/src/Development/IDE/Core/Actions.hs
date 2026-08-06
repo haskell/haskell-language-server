@@ -146,7 +146,7 @@ highlightAtPoint file pos = runMaybeT $ do
 refsAtPoint :: SomeHaskellInput -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
-    fs <- mapMaybe (toSomeHaskellInput . inputFilePath) . HM.keys <$> getFilesOfInterestUntracked
+    fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
     AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
 

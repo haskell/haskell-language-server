@@ -24,8 +24,7 @@ import           Development.IDE                  (GhcSession (..), IdeState,
                                                    getFileContents, hscEnv,
                                                    runAction, srcSpanToRange)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Ide.Plugin.Error                 (PluginError (..),

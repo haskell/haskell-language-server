@@ -16,7 +16,7 @@ import qualified Data.Text                        as T
 import           Development.IDE                  hiding (getExtensions,
                                                    pluginHandlers)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat       (ModSummary (ms_hspp_opts),
                                                    extensionFlags)
 import qualified Development.IDE.GHC.Compat.Util  as Util

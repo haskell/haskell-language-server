@@ -42,9 +42,7 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentRange,
                                                        toCurrentRange)
-import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       RuleInput,
-                                                       toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules           (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes       (TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service         (getDiagnostics)

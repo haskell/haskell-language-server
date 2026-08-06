@@ -27,8 +27,7 @@ import           Development.IDE                      (Action,
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
-import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Ide.Logger                           (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),

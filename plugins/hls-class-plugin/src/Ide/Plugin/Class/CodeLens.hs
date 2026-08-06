@@ -12,9 +12,7 @@ import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput       (SomeFileInput (SomeFileHaskellInput),
-                                                       SomeHaskellInput (SomeProjectHaskellInput),
-                                                       classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.Pragmas        (getFirstPragma,
                                                        insertNewPragma)

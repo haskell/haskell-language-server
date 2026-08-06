@@ -44,8 +44,7 @@ import           Data.Map.Strict                 (Map)
 import           Data.String                     (IsString (..))
 import qualified Data.Text                       as T
 import           Development.IDE
-import           Development.IDE.Core.RuleInput  (ProjectHaskellInput,
-                                                  RuleInput)
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake      as Shake
 import qualified Development.IDE.GHC.Compat.Core as Core
 import           Development.IDE.Graph.Classes

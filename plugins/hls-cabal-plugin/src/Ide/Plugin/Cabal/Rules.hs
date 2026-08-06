@@ -16,9 +16,7 @@ import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as Encoding
 import           Data.Text.Utf16.Rope.Mixed        as Rope
 import           Development.IDE                   as D
-import           Development.IDE.Core.RuleInput    (CabalInput,
-                                                    IsFileInput (inputFilePath),
-                                                    SomeFileInput (SomeFileCabalInput))
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake        as Shake
 import qualified Distribution.CabalSpecVersion     as Cabal
 import qualified Distribution.Fields               as Syntax

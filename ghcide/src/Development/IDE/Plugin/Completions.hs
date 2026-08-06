@@ -23,9 +23,7 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileStore           (getUriContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleInput           (IsFileInput (inputFilePath),
-                                                           toProjectHaskellInput,
-                                                           toSomeHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
 import           Development.IDE.Core.Shake               hiding (Log,

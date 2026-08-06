@@ -24,8 +24,7 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),

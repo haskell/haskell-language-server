@@ -14,8 +14,7 @@ where
 import           Control.Lens                      ((&), (.~))
 import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic)
-import           Development.IDE.Core.RuleInput    (CabalInput,
-                                                    IsFileInput (inputFilePath))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
                                                     ideErrorWithSource)
 import           Distribution.Fields               (showPError, showPWarning)

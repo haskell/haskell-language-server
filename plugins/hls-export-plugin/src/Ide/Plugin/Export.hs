@@ -12,11 +12,7 @@ import qualified Data.Text                        as T
 import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput,
-                                                   SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput),
-                                                   classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake       (getDiagnostics)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error (_TcRnUnusedTopBind,

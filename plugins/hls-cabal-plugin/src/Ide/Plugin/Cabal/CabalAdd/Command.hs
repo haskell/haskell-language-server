@@ -29,8 +29,7 @@ import           Data.Text.Encoding                (encodeUtf8)
 import qualified Data.Text.Encoding                as T
 import           Data.Text.Utf16.Rope.Mixed        as Rope
 import           Development.IDE.Core.FileStore    (getFileContents)
-import           Development.IDE.Core.RuleInput    (CabalInput (CabalInput),
-                                                    SomeFileInput (SomeFileCabalInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules        (IdeState)
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (useWithStale)

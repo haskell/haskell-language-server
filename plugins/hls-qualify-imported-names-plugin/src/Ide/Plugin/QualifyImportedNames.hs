@@ -26,9 +26,7 @@ import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE                  (spanContainsRange)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput),
-                                                   classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileContents),
                                                    GetHieAst (GetHieAst),
                                                    HieAstResult (HAR, refMap),

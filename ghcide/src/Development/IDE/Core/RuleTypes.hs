@@ -414,7 +414,7 @@ instance Hashable IsFileOfInterestResult
 instance NFData   IsFileOfInterestResult
 
 type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
-type instance RuleInput IsFileOfInterest = SomeFileInput
+type instance RuleInput IsFileOfInterest = SomeHaskellInput
 
 data ModSummaryResult = ModSummaryResult
   { msrModSummary  :: !ModSummary

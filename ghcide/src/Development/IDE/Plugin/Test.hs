@@ -30,12 +30,7 @@ import           Data.Proxy
 import           Data.String
 import           Data.Text                            (Text, pack)
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
-import           Development.IDE.Core.RuleInput       (IsFileInput (inputFilePath),
-                                                       ProjectHaskellInput,
-                                                       SomeFileInput (SomeFileHaskellInput),
-                                                       SomeHaskellInput (SomeProjectHaskellInput),
-                                                       toProjectHaskellInput,
-                                                       toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake

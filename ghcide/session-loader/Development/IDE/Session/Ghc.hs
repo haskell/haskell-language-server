@@ -512,7 +512,7 @@ fromTargetId is exts (GHC.TargetModule modName) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    let locs = fmap (ProjectHaskellInput . toNormalizedFilePath') fps
+    let locs = mapMaybe (toProjectHaskellInput . toNormalizedFilePath') fps
     return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do

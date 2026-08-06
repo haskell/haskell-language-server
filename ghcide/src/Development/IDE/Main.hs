@@ -441,7 +441,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 projectHaskellFiles = mapMaybe toProjectHaskellInput normalizedFiles
                 haskellFiles = mapMaybe toSomeHaskellInput normalizedFiles
                 typecheckFiles = map (fromNormalizedFilePath . inputFilePath) projectHaskellFiles
-            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toSomeFileInput) normalizedFiles
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) ) haskellFiles
             results <- runAction "User TypeCheck" ide $ uses TypeCheck projectHaskellFiles
             _results <- runAction "GetHie" ide $ uses GetHieAst haskellFiles
             _results <- runAction "GenerateCore" ide $ uses GenerateCore projectHaskellFiles

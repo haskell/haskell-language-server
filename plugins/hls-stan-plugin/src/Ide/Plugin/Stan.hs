@@ -168,7 +168,7 @@ rules recorder plId = do
 
   action $ do
     files <- getFilesOfInterestUntracked
-    void $ uses GetStanDiagnostics $ mapMaybe (toProjectHaskellInput . inputFilePath) (HM.keys files)
+    void $ uses GetStanDiagnostics $ mapMaybe toProjectHaskellInput (inputFilePath <$> HM.keys files)
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations

@@ -16,8 +16,7 @@ import qualified Data.HashMap.Strict               as HashMap
 import           Data.Proxy
 import qualified Data.Text                         ()
 import           Development.IDE                   as D
-import           Development.IDE.Core.RuleInput    (CabalInput, RuleInput,
-                                                    SomeFileInput (SomeFileCabalInput))
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake        as Shake
 import           Development.IDE.Graph             (Key, alwaysRerun)
 import           Development.IDE.Types.Shake       (toKey)
@@ -108,7 +107,7 @@ deleteFileOfInterest recorder state f = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   files <- modifyVar' var $ HashMap.delete f
   log' Debug $ LogFOI files
-  return [toKey IsFileOfInterest (SomeFileCabalInput f)]
+  return [toKey IsCabalFileOfInterest f]
  where
   log' = logWith recorder
 

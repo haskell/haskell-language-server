@@ -51,8 +51,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
-import           Development.IDE.Core.RuleInput       (ProjectHaskellInput,
-                                                       RuleInput)
+import           Development.IDE.Core.RuleInput
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Functor.Classes

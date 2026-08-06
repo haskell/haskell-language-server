@@ -9,7 +9,7 @@ import           Control.Lens                    ((^.))
 import           Data.Hashable
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
-import           Development.IDE.Core.RuleInput  (CabalInput, RuleInput)
+import           Development.IDE.Core.RuleInput
 import qualified Distribution.Fields             as Syntax
 import qualified Distribution.PackageDescription as PD
 import qualified Distribution.Parsec.Position    as Syntax

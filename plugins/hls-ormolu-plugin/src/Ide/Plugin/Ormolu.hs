@@ -24,7 +24,7 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Development.IDE                  hiding (pluginHandlers)
 import           Development.IDE.Core.PluginUtils (mkFormattingHandlers)
-import           Development.IDE.Core.RuleInput   (toProjectHaskellInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat       (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat       as D
 import qualified Development.IDE.GHC.Compat.Util  as S

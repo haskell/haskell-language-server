@@ -16,7 +16,6 @@ module Development.IDE.Import.DependencyInformation
   , PathIdMap (..)
   , emptyPathIdMap
   , getPathId
-  , lookupPathToId
   , insertImport
   , pathToId
   , idToPath
@@ -116,9 +115,6 @@ insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.inse
 pathToId :: PathIdMap -> ProjectHaskellInput -> Maybe FilePathId
 pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.!? path
 
-lookupPathToId :: PathIdMap -> ProjectHaskellInput -> Maybe FilePathId
-lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup path pathToIdMap
-
 idToPath :: PathIdMap -> FilePathId -> ProjectHaskellInput
 idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
 
@@ -169,7 +165,7 @@ data DependencyInformation =
 lookupFingerprint :: ProjectHaskellInput -> DependencyInformation -> FilePathIdMap Fingerprint -> Maybe Fingerprint
 lookupFingerprint fileId DependencyInformation {..} depFingerprintMap =
   do
-    FilePathId cur_id <- lookupPathToId depPathIdMap fileId
+    FilePathId cur_id <- pathToId depPathIdMap fileId
     IntMap.lookup cur_id depFingerprintMap
 
 newtype ShowableModule =
@@ -365,7 +361,7 @@ partitionSCC []                  = ([], [])
 -- | Transitive reverse dependencies of a file
 transitiveReverseDependencies :: ProjectHaskellInput -> DependencyInformation -> Maybe [ProjectHaskellInput]
 transitiveReverseDependencies file DependencyInformation{..} = do
-    FilePathId cur_id <- lookupPathToId depPathIdMap file
+    FilePathId cur_id <- pathToId depPathIdMap file
     return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
     go :: Int -> IntSet -> IntSet
@@ -378,7 +374,7 @@ transitiveReverseDependencies file DependencyInformation{..} = do
 -- | Immediate reverse dependencies of a file
 immediateReverseDependencies :: ProjectHaskellInput -> DependencyInformation -> Maybe [ProjectHaskellInput]
 immediateReverseDependencies file DependencyInformation{..} = do
-  FilePathId cur_id <- lookupPathToId depPathIdMap file
+  FilePathId cur_id <- pathToId depPathIdMap file
   return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
 -- | returns all transitive dependencies in topological order.

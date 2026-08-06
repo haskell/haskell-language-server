@@ -44,7 +44,7 @@ import Ide.Logger
 import Ide.Plugin.Error
 
 import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.RuleInput (classifyAsHaskell)
+import Development.IDE.Core.RuleInput
 import Development.IDE.Core.Service hiding (Log)
 import Development.IDE.Core.Shake hiding (Log)
 import Development.IDE.GHC.Compat

@@ -1,6 +1,3 @@
--- Copyright (c) 2019 The DAML Authors. All rights reserved.
--- SPDX-License-Identifier: Apache-2.0
-
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -51,7 +48,9 @@ import           System.FilePath             (normalise, takeExtension)
 -- | Map each rule with an input type consumed by that rule
 type family RuleInput k
 
--- | Describes identity which is used to compare and hash rule inputs
+-- | Identity of RuleInputs.
+--
+-- Used to efficiently compare and hash rule inputs.
 data InputFingerprint
   = InputNoFile
   | InputFile !NormalizedFilePath
@@ -224,6 +223,7 @@ instance IsHaskellInput NonProjectHaskellInput
 isCabalInput :: NormalizedFilePath -> Bool
 isCabalInput = (== ".cabal") . takeExtension . fromNormalizedFilePath
 
+-- TODO:  needs to be unified with optExtensions
 isHaskellFilePath :: NormalizedFilePath -> Bool
 isHaskellFilePath fp = takeExtension (fromNormalizedFilePath fp) `elem`
     [".hs", ".lhs", ".hs-boot", ".lhs-boot"]

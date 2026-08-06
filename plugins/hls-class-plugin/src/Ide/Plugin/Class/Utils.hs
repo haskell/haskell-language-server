@@ -8,9 +8,7 @@ import           Data.Char                        (isAlpha)
 import qualified Data.Text                        as T
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (ProjectHaskellInput,
-                                                   SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput))
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util  (fsLit)
 import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,

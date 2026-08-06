@@ -30,10 +30,7 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
-import           Development.IDE.Core.RuleInput        (IsFileInput (inputFilePath),
-                                                        SomeFileInput (SomeFileHaskellInput),
-                                                        SomeHaskellInput (SomeProjectHaskellInput),
-                                                        toSomeFileInput)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
@@ -64,8 +61,8 @@ instance Pretty Log where
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
-whenUriFile :: Uri -> (SomeFileInput -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toSomeFileInput . toNormalizedFilePath'
+whenUriFile :: Uri -> (SomeHaskellInput -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri >>= toSomeHaskellInput . toNormalizedFilePath') act
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
@@ -77,7 +74,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
           case file of
-            SomeFileHaskellInput (SomeProjectHaskellInput projectFile) ->
+            SomeProjectHaskellInput projectFile ->
               setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False projectFile action
             _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
       logWith recorder Debug $ LogOpenedTextDocument _uri
@@ -88,7 +85,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         whenUriFile _uri $ \file -> do
           let action = addFileOfInterest ide file Modified{firstOpen=False}
           case file of
-            SomeFileHaskellInput (SomeProjectHaskellInput projectFile) ->
+            SomeProjectHaskellInput projectFile ->
               setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False projectFile action
             _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
         logWith recorder Debug $ LogModifiedTextDocument _uri
@@ -98,7 +95,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         whenUriFile _uri $ \file -> do
             let action = addFileOfInterest ide file OnDisk
             case file of
-              SomeFileHaskellInput (SomeProjectHaskellInput projectFile) ->
+              SomeProjectHaskellInput projectFile ->
                 setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True projectFile action
               _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
         logWith recorder Debug $ LogSavedTextDocument _uri
@@ -124,7 +121,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
                 , Just fp <- [uriToFilePath uri]
                 , let nfp = toNormalizedFilePath fp
                 , let input = toSomeFileInput nfp
-                , not $ HM.member input filesOfInterest
+                , let haskellInput = toSomeHaskellInput nfp
+                , not $ maybe False (flip HM.member filesOfInterest) haskellInput
                 ]
         unless (null fileEvents') $ do
             let msg = show fileEvents'

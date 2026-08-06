@@ -22,11 +22,7 @@ import           Development.IDE.GHC.Compat
 
 import           Data.Maybe                       (mapMaybe)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.RuleInput   (IsFileInput (inputFilePath),
-                                                   ProjectHaskellInput,
-                                                   SomeFileInput (SomeFileHaskellInput),
-                                                   SomeHaskellInput (SomeProjectHaskellInput),
-                                                   classifyAsHaskell)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Spans.Pragmas    (getFirstPragma,
                                                    insertNewPragma)
 import           GHC.Generics                     (Generic)

@@ -19,8 +19,7 @@ import qualified Data.Text                        as T
 import           Data.Unique                      (hashUnique, newUnique)
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils (useMT)
-import           Development.IDE.Core.RuleInput   (ProjectHaskellInput,
-                                                   RuleInput)
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (newUnique, (<+>))
 import           Development.IDE.GHC.Compat.Util  (bagToList)

@@ -58,7 +58,7 @@ instance Pretty Log where
   pretty = \case
     LogShake msg -> pretty msg
 
-newtype OfInterestVar = OfInterestVar (Var (HashMap SomeFileInput FileOfInterestStatus))
+newtype OfInterestVar = OfInterestVar (Var (HashMap SomeHaskellInput FileOfInterestStatus))
 
 instance IsIdeGlobal OfInterestVar
 
@@ -87,24 +87,24 @@ instance IsIdeGlobal GarbageCollectVar
 ------------------------------------------------------------
 -- Exposed API
 
-getFilesOfInterest :: IdeState -> IO( HashMap SomeFileInput FileOfInterestStatus)
+getFilesOfInterest :: IdeState -> IO( HashMap SomeHaskellInput FileOfInterestStatus)
 getFilesOfInterest state = do
     OfInterestVar var <- getIdeGlobalState state
     readVar var
 
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-setFilesOfInterest :: IdeState -> HashMap SomeFileInput FileOfInterestStatus -> IO ()
+setFilesOfInterest :: IdeState -> HashMap SomeHaskellInput FileOfInterestStatus -> IO ()
 setFilesOfInterest state files = do
     OfInterestVar var <- getIdeGlobalState state
     writeVar var files
 
-getFilesOfInterestUntracked :: Action (HashMap SomeFileInput FileOfInterestStatus)
+getFilesOfInterestUntracked :: Action (HashMap SomeHaskellInput FileOfInterestStatus)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
-addFileOfInterest :: IdeState -> SomeFileInput -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: IdeState -> SomeHaskellInput -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     (prev, files) <- modifyVar var $ \dict -> do
@@ -113,16 +113,16 @@ addFileOfInterest state f v = do
     if prev /= Just v
     then do
         logWith (ideLogger state) Debug $
-            LogSetFilesOfInterest (filesOfInterestToNormalizedList files)
+            LogSetFilesOfInterest (listFilesOfInterestStatus files)
         return [toKey IsFileOfInterest f]
     else return []
 
-deleteFileOfInterest :: IdeState -> SomeFileInput -> IO [Key]
+deleteFileOfInterest :: IdeState -> SomeHaskellInput -> IO [Key]
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
     logWith (ideLogger state) Debug $
-        LogSetFilesOfInterest (filesOfInterestToNormalizedList files)
+        LogSetFilesOfInterest (listFilesOfInterestStatus files)
     return [toKey IsFileOfInterest f]
 scheduleGarbageCollection :: IdeState -> IO ()
 scheduleGarbageCollection state = do
@@ -136,7 +136,6 @@ kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
     let normalizedFiles = map inputFilePath files
-        haskellFiles = mapMaybe (toSomeHaskellInput . inputFilePath) files
         projectHaskellFiles = mapMaybe (toProjectHaskellInput . inputFilePath) files
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $
@@ -149,7 +148,7 @@ kick = do
 
     -- Update the exports map
     results <- uses GenerateCore projectHaskellFiles
-            <* uses GetHieAst haskellFiles
+            <* uses GetHieAst files
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
             <* uses NonLocalCompletions projectHaskellFiles
@@ -167,7 +166,7 @@ kick = do
     signal (Proxy @"kick/done")
 
 -- | Convert the files-of-interest map to a list keyed by normalized file path.
-filesOfInterestToNormalizedList :: HashMap SomeFileInput FileOfInterestStatus -> [(NormalizedFilePath, FileOfInterestStatus)]
-filesOfInterestToNormalizedList = fmap firstFilePath . HashMap.toList
+listFilesOfInterestStatus  :: HashMap SomeHaskellInput FileOfInterestStatus -> [(NormalizedFilePath, FileOfInterestStatus)]
+listFilesOfInterestStatus  = fmap firstFilePath . HashMap.toList
   where
     firstFilePath (file, status) = (inputFilePath file, status)
