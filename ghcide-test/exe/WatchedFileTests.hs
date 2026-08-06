@@ -6,8 +6,6 @@ module WatchedFileTests (tests) where
 import           Config                          (mkIdeTestFs,
                                                   testWithDummyPlugin',
                                                   testWithDummyPluginEmpty')
-import           Control.Lens                    ((^.))
-import qualified Language.LSP.Protocol.Lens      as L
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
@@ -78,9 +76,13 @@ tests = testGroup "watched files"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
         expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'", Just "GHC-83865")])]
-      , testWithDummyPluginEmpty' "created module file resolves import" $ \sessionDir -> do
-        liftIO $ atomicFileWriteString (sessionDir </> "hie.yaml")
-          "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
+      , testWithDummyPlugin' "created module file resolves import"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A", "B"]
+            , directory "src" []
+            ])
+          $ \sessionDir -> do
+
         _doc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
           [ "module A where"
           , "import B"
@@ -99,16 +101,18 @@ tests = testGroup "watched files"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "src" </> "B.hs") FileChangeType_Created ]
         expectDiagnostics [("src" </> "A.hs", [])]
-      , testWithDummyPluginEmpty' "deleted module file breaks import" $ \sessionDir -> do
-        liftIO $ do
-          atomicFileWriteString (sessionDir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
-          createDirectoryIfMissing True (sessionDir </> "src")
-          atomicFileWriteString (sessionDir </> "src" </> "B.hs") $ unlines
-            [ "module B where"
-            , "b :: Bool"
-            , "b = True"
-            ]
+      , testWithDummyPlugin' "deleted module file breaks import"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A", "B"]
+            , directory "src"
+              [ file "B.hs" $ sources
+                [ "module B where"
+                , "b :: Bool"
+                , "b = True"
+                ]
+              ]
+            ])
+          $ \sessionDir -> do
         adoc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
           [ "module A where"
           , "import B"
@@ -122,20 +126,22 @@ tests = testGroup "watched files"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "src" </> "B.hs") FileChangeType_Deleted ]
         expectDiagnostics [("src" </> "A.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
-      , testWithDummyPluginEmpty' "deleted non-target module leaves the module map" $ \sessionDir -> do
+      , testWithDummyPlugin' "deleted non-target module leaves the module map"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A"]
+            , directory "src"
+              [ file "U.hs" $ sources
+                [ "module U where"
+                , "u :: Bool"
+                , "u = True"
+                ]
+              ]
+            ])
+          $ \sessionDir -> do
         -- U is not a target of the cradle, so it is only known through the
         -- scan of the import directory. Assert on the import resolution
         -- itself: GHC's own finder also reports a deleted module, so a
         -- diagnostic would not tell us whether HLS resolved the import.
-        liftIO $ do
-          atomicFileWriteString (sessionDir </> "hie.yaml")
-            "cradle: {direct: {arguments: [\"-isrc\", \"A\"]}}"
-          createDirectoryIfMissing True (sessionDir </> "src")
-          atomicFileWriteString (sessionDir </> "src" </> "U.hs") $ unlines
-            [ "module U where"
-            , "u :: Bool"
-            , "u = True"
-            ]
         adoc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
           [ "module A where"
           , "import U"
