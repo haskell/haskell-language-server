@@ -187,6 +187,113 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
       expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
+    -- The file watch capability is disabled so that opening a document is the
+    -- only thing that registers it: lsp-test otherwise sends a watched file
+    -- notification for it first, which would register it through the watcher
+    -- instead.
+  , testCase "add missing hs-boot (unsaved)" $
+    runSessionWithTestConfig def
+        { testPluginDescriptor = dummyPlugin
+        , testConfigCaps = lspTestCapsNoFileWatches
+        , testDirLocation =
+            Right (mkIdeTestFs
+              [ directCradle ["ModuleA", "ModuleB"]
+              , file "ModuleA.hs" (text "module ModuleA where\n")
+              , file "ModuleB.hs" (text "module ModuleB where\nimport {-# SOURCE #-} ModuleA ()\n")
+              ])
+        }
+    $ \dir -> do
+      -- ModuleA.hs-boot is a candidate location of the declared target
+      -- ModuleA, so opening it later reuses the cached session instead of
+      -- consulting the cradle again. Resolving the import must not depend on
+      -- that reload happening.
+      _ <- openDoc (dir </> "ModuleB.hs") "haskell"
+      expectDiagnostics [(dir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 22), "Could not find module", Nothing)])]
+      _ <- createDoc (dir </> "ModuleA.hs-boot") "haskell" "module ModuleA where"
+      expectDiagnostics [(dir </> "ModuleB.hs", [])]
+  , testCase "closing an unsaved module unregisters it" $
+    runSessionWithTestConfig def
+        { testPluginDescriptor = dummyPlugin
+        , testConfigCaps = lspTestCapsNoFileWatches
+        , testDirLocation = Right (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
+        }
+    $ \dir -> do
+      adoc <- createDoc (dir </> "ModuleA.hs") "haskell" "module ModuleA where"
+      bdoc <- createDoc (dir </> "ModuleB.hs") "haskell" $ T.unlines
+        [ "module ModuleB where"
+        , "import ModuleA ()"
+        ]
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" bdoc
+      liftIO $ assertBool "ModuleB should typecheck against the open ModuleA" ideResultSuccess
+      closeDoc adoc
+      -- Closing also makes ModuleA itself report that it is gone, so only look
+      -- at the import resolution, which is what "not found" is reported by
+      diags <- waitForDiagnosticsSource "not found"
+      liftIO $ assertBool ("expected ModuleA to be unresolvable, got: " <> show diags)
+        (any (T.isInfixOf "ModuleA" . (^. L.message)) diags)
+  , testWithDummyPlugin "import path order determines module file"
+        (mkIdeTestFs
+          [ -- GHC searches import paths in order: with -isrcA -isrcB, a module
+            -- present in both directories must resolve to the file in srcA.
+            directCradle ["-isrcA", "-isrcB", "T", "C"]
+          , directory "srcA"
+            [ file "C.hs" $ sources
+              [ "module C where"
+              , "cA :: ()"
+              , "cA = ()"
+              ]
+            , file "T.hs" $ sources
+              [ "module T where"
+              , "import C"
+              , "t :: ()"
+              , "t = cA"
+              ]
+            ]
+          , directory "srcB"
+            [ file "C.hs" $ sources
+              [ "module C where"
+              , "cB :: ()"
+              , "cB = ()"
+              ]
+            ]
+          ]
+        ) $ do
+      tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
+      liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
+      expectCurrentDiagnostics tdoc []
+      locs <- getDefinitions tdoc (Position 1 7)
+      assertDefsFile ("srcA" </> "C.hs") locs
+  , testWithDummyPlugin' "unlistable directory hides only itself"
+        (mkIdeTestFs
+          [ directCradle ["-isrc", "B"]
+          , directory "src"
+            [ file "B.hs" $ sources
+              [ "module B where"
+              , "import A ()"
+              ]
+            , file "A.hs" $ sources
+              [ "module A where"
+              ]
+            , directory "Locked" []
+            ]
+          ]
+        ) $ \ dir -> do
+      -- A directory we cannot list must not take the modules next to it down
+      -- with it. On Windows the directory stays listable and the test passes
+      -- trivially.
+      let locked = dir </> "src" </> "Locked"
+      liftIO $ do
+        setPermissions locked emptyPermissions
+      bdoc <- openDoc ("src" </> "B.hs") "haskell"
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" bdoc
+      -- Restore before asserting, so that a failure still leaves a removable
+      -- temporary directory behind
+      liftIO $ setPermissions locked
+        $ setOwnerReadable True $ setOwnerSearchable True
+        $ setOwnerWritable True emptyPermissions
+      liftIO $ assertBool "B should find A in the same directory" ideResultSuccess
+      expectCurrentDiagnostics bdoc []
   , testWithDummyPluginEmpty "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
@@ -291,6 +398,20 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
       expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding", Just "GHC-38417")])]
+  , testWithDummyPluginEmpty "hs-boot without a source file is not a module" $ do
+      -- GHC looks for the source file and takes the boot file beside it, so a
+      -- boot file on its own provides nothing
+      let contentB = T.unlines
+            [ "module ModuleB where"
+            , "import {-# SOURCE #-} ModuleA"
+            ]
+      let contentAboot = T.unlines
+            [ "module ModuleA where"
+            ]
+      _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
+      _ <- createDoc "ModuleB.hs" "haskell" contentB
+      expectDiagnostics
+        [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 22), "Could not find module", Nothing)])]
   , testWithDummyPluginEmpty "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
@@ -450,7 +571,6 @@ tests = testGroup "diagnostics"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
-    aSource <- liftIO $ readFileUtf8 aPath -- x = y :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
@@ -464,10 +584,12 @@ tests = testGroup "diagnostics"
       [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Just "GHC-83865")])
       ]
 
-    -- Open A and edit to fix the type error
-    adoc <- createDoc aPath "haskell" aSource
-    changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
-                    T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
+    -- Open A with the type error already fixed. If we open it as it is on disk
+    -- and fix it afterwards, we race with a republish of the error: A was a
+    -- dependency, so the error was deferred, and we typecheck a file of
+    -- interest without deferring, which gives a different diagnostic.
+    _adoc <- createDoc aPath "haskell" $
+      T.unlines ["module A where", "import B", "x :: Bool", "x = y"]
 
     expectDiagnostics
       [ ( "P.hs",

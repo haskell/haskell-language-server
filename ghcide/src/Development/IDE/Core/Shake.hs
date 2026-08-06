@@ -25,7 +25,8 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
+    KnownTargets(..), Target(..), toKnownFiles, toTargetFiles, unionKnownTargets,
+    mkKnownTargets, mkExtraKnownFiles, tombstoneKnownFiles,
     IdeRule, IdeResult, RestartQueue,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -54,6 +55,7 @@ module Development.IDE.Core.Shake(
     HLS.getClientConfig,
     getPluginConfigAction,
     knownTargets,
+    updateKnownTargets,
     ideLogger,
     actionLogger,
     getVirtualFile,
@@ -644,6 +646,28 @@ knownTargets :: Action (Hashed KnownTargets)
 knownTargets = do
   ShakeExtras{knownTargetsVar} <- getShakeExtras
   liftIO $ readTVarIO knownTargetsVar
+
+-- | Record files that appeared and disappeared, returning the keys to
+-- invalidate. Must be called from the restart thread,
+-- see Note [Serializing runs in separate thread].
+updateKnownTargets
+  :: ShakeExtras
+  -> [NormalizedFilePath] -- ^ appeared
+  -> [NormalizedFilePath] -- ^ disappeared
+  -> IO [Key]
+updateKnownTargets ShakeExtras{knownTargetsVar} added removed
+  | null added && null removed = pure []
+  | otherwise = atomically $ do
+      known <- readTVar knownTargetsVar
+      -- Registering a file the session loader already knows about would
+      -- rebuild everything derived from the targets for no gain.
+      -- See Note [Files that are not targets]
+      let addedSet = HSet.fromList added `HSet.difference` toKnownFiles (unhashed known)
+          known' = flip mapHashed known $
+            tombstoneKnownFiles (HSet.fromList removed) addedSet
+            . unionKnownTargets (mkExtraKnownFiles addedSet)
+      writeTVar knownTargetsVar known'
+      pure [toNoFileKey GetKnownTargets | known /= known']
 
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter

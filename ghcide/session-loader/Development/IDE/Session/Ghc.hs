@@ -150,7 +150,7 @@ newComponentCache
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
          -> IO [ [TargetDetails] ]
-newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
+newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
         -- When we have multiple components with the same uid,
         -- prefer the new one over the old.
@@ -172,7 +172,7 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
 #endif
         closure_err_to_multi_err err =
             ideErrorWithSource
-                (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp
+                (Just "cradle") (Just DiagnosticSeverity_Warning) cfp
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
                 (Just (fmap GhcDriverMessage err))
         multi_errs = map closure_err_to_multi_err closure_errs
@@ -198,6 +198,15 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
         Nothing  -> pure ()
         Just err -> logWith recorder Error $ LogDLLLoadError err
 
+    -- A session representative file of this load. See Note [Session representatives]
+    -- Not cfp which may be an error target.
+    let repr = fromMaybe cfp $ listToMaybe
+          [ loc
+          | ci <- Map.elems cis
+          , t <- componentTargets ci
+          , loc <- targetIdLocations (importPaths (componentDynFlags ci)) exts (targetId t)
+          ]
+
     forM (Map.elems cis) $ \ci -> do
       let df = componentDynFlags ci
       thisEnv <- do
@@ -205,7 +214,7 @@ newComponentCache recorder exts _cfp hsc_env old_cis new_cis = do
             -- above.
             -- We just need to set the current unit here
             pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
-      henv <- newHscEnvEq thisEnv
+      henv <- newHscEnvEq repr thisEnv
       let targetEnv = (if isBad ci then multi_errs else [], Just henv)
           targetDepends = componentDependencyInfo ci
       logWith recorder Debug $ LogNewComponentCache (targetEnv, targetDepends)
@@ -280,6 +289,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
               Nothing   -> compRoot
               Just wdir -> compRoot </> wdir
         let dflags''' =
+              normaliseImportsPaths $
               setWorkingDirectory root $
               disableWarningsAsErrors $
               -- disabled, generated directly by ghcide instead
@@ -295,6 +305,9 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
               makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
               dflags''
         return (HomeUnitConfig dflags''' targets mHash)
+
+normaliseImportsPaths :: DynFlags -> DynFlags
+normaliseImportsPaths dflags = dflags { importPaths = fmap normalise (importPaths dflags)}
 
 addComponentInfo ::
   MonadUnliftIO m =>
@@ -498,28 +511,38 @@ data TargetDetails = TargetDetails
       targetLocations :: ![NormalizedFilePath]
   }
 
+-- | Candidate locations of a target, in search order.
+targetIdLocations :: [FilePath]     -- ^ import paths
+                  -> [String]       -- ^ extensions to consider
+                  -> TargetId
+                  -> [NormalizedFilePath]
+-- For a target module we consider all the import paths
+targetIdLocations is exts (GHC.TargetModule modName) =
+    [ toNormalizedFilePath' (i </> moduleNameSlashes modName -<.> ext <> boot)
+    | ext <- exts
+    , i <- is
+    , boot <- ["", "-boot"]
+    ]
+-- For a 'TargetFile' we consider all the possible module names
+targetIdLocations _ _ (GHC.TargetFile f _) = [nf, other]
+  where
+    nf = toNormalizedFilePath' f
+    other
+      | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
+      | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
+
 fromTargetId :: [FilePath]          -- ^ import paths
              -> [String]            -- ^ extensions to consider
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
              -> IO [TargetDetails]
--- For a target module we consider all the import paths
-fromTargetId is exts (GHC.TargetModule modName) env dep = do
-    let fps = [i </> moduleNameSlashes modName -<.> ext <> boot
-              | ext <- exts
-              , i <- is
-              , boot <- ["", "-boot"]
-              ]
-    let locs = fmap toNormalizedFilePath' fps
-    return [TargetDetails (TargetModule modName) env dep locs]
--- For a 'TargetFile' we consider all the possible module names
-fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    let nf = toNormalizedFilePath' f
-    let other
-          | "-boot" `isSuffixOf` f = toNormalizedFilePath' (L.dropEnd 5 $ fromNormalizedFilePath nf)
-          | otherwise = toNormalizedFilePath' (fromNormalizedFilePath nf ++ "-boot")
-    return [TargetDetails (TargetFile nf) env deps [nf, other]]
+fromTargetId is exts tid env dep =
+    return [TargetDetails target env dep (targetIdLocations is exts tid)]
+  where
+    target = case tid of
+      GHC.TargetModule modName -> TargetModule modName
+      GHC.TargetFile f _       -> TargetFile (toNormalizedFilePath' f)
 
 -- ----------------------------------------------------------------------------
 -- Backwards compatibility

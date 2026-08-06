@@ -1,15 +1,18 @@
 
+{-# LANGUAGE CPP       #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs     #-}
 
 module CradleTests (tests) where
 
-import           Config                          (checkDefs, dummyPlugin,
+import           Config                          (Expect (..), assertDefsFile,
+                                                  checkDefs, dummyPlugin,
                                                   lspTestCaps, mkIdeTestFs, mkL,
                                                   runWithExtraFiles,
                                                   testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
+import           Control.Monad                   (when)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Proxy                      (Proxy (..))
@@ -17,7 +20,8 @@ import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult (..))
-import           Development.IDE.Test            (expectDiagnostics,
+import           Development.IDE.Test            (expectCurrentDiagnostics,
+                                                  expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
@@ -35,7 +39,8 @@ import           Language.LSP.Protocol.Types     hiding
                                                   mkRange)
 import           Language.LSP.Test
 import           System.FilePath
-import           Test.Hls                        (TestConfig (..), def,
+import           Test.Hls                        (GhcVersion (..),
+                                                  TestConfig (..), def,
                                                   expectFailBecause,
                                                   ignoreTestBecause,
                                                   runSessionWithTestConfig,
@@ -43,6 +48,7 @@ import           Test.Hls                        (TestConfig (..), def,
                                                   waitForBuildQueue)
 import           Test.Hls.FileSystem
 import           Test.Hls.Util                   (EnvSpec (..), OS (..),
+                                                  ignoreForGhcVersions,
                                                   ignoreInEnv)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -65,6 +71,8 @@ tests = testGroup "cradle"
     , testGroup "multi-unit" (multiTests wholeProjectConf "multi-unit")
     , testGroup "sub-directory" [simpleSubDirectoryTest wholeProjectConf]
     , testGroup "multi-unit-rexport" [multiRexportTest wholeProjectConf]
+    , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests wholeProjectConf)
+    , testGroup "undeclared-module" (undeclaredModuleTests wholeProjectConf)
     ]
   , testGroup "default"
     [ testGroup "dependencies" [sessionDepsArePickedUp defComponentLoadingConf]
@@ -76,6 +84,8 @@ tests = testGroup "cradle"
     , testGroup "multi-unit" (multiTests defComponentLoadingConf "multi-unit")
     , testGroup "sub-directory" [simpleSubDirectoryTest defComponentLoadingConf]
     , testGroup "multi-unit-rexport" [multiRexportTest defComponentLoadingConf]
+    , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests defComponentLoadingConf)
+    , testGroup "undeclared-module" (undeclaredModuleTests defComponentLoadingConf)
     ]
   ]
 
@@ -359,6 +369,49 @@ batchLoadRegressionTests conf =
       runWithExtraFilesMultiComponent conf "multi" regressionNoStaleOutcomesOnRestartNotHealthyInBetween
   ]
 
+-- | A module the user has written but not added to the cabal file yet is the
+-- normal state of code under development, so it has to work: it lies under an
+-- import path of a component, which is where GHC's own finder would look for
+-- it, so it is compiled as part of that component and only warned about.
+undeclaredModuleTests :: SessionLoadingPreferenceConfig -> [TestTree]
+undeclaredModuleTests conf =
+  [ testCase "a module missing from the cabal file still loads" $
+      withUndeclared $ \_dir -> do
+        udoc <- openDoc ("a" </> "Undeclared.hs") "haskell"
+        assertTypeCheckSuccess udoc "the undeclared module should typecheck"
+        diags <- getCurrentDiagnostics udoc
+        -- Only the whole project load knows the file is missing from the cabal
+        -- file. Loading one component at a time asks the build tool about this
+        -- very file, and it answers with the options of the component it lies
+        -- in, so nothing distinguishes it from a module that is listed.
+        when (conf == wholeProjectConf) $ liftIO $ assertBool
+          ("expected a warning about the cabal file, got: " <> show diags)
+          (any isMissingFromCabalWarning diags)
+  , testCase "importing a module missing from the cabal file still loads" $
+      withUndeclared $ \dir -> do
+        liftIO $ atomicFileWriteString (dir </> "a" </> "A.hs") $ unlines
+          [ "module A where"
+          , "import Undeclared"
+          , "foo :: Int"
+          , "foo = u"
+          ]
+        adoc <- openDoc ("a" </> "A.hs") "haskell"
+        assertTypeCheckSuccess adoc "the importing module should typecheck"
+        expectCurrentDiagnostics adoc []
+  ]
+  where
+    withUndeclared act = runWithExtraFilesMultiComponent conf "multi" $ \dir -> do
+      -- Undeclared.hs is under a's hs-source-dirs but is in no cabal field
+      liftIO $ atomicFileWriteString (dir </> "a" </> "Undeclared.hs") $ unlines
+        [ "module Undeclared where"
+        , "u :: Int"
+        , "u = 1"
+        ]
+      act dir
+    isMissingFromCabalWarning d =
+         d ^. L.severity == Just DiagnosticSeverity_Warning
+      && "cabal" `T.isInfixOf` (d ^. L.message)
+
 expectBrokenWithWholeProjectLoading :: SessionLoadingPreferenceConfig -> TestTree -> TestTree
 expectBrokenWithWholeProjectLoading conf =
   if conf == wholeProjectConf
@@ -582,6 +635,45 @@ multiRexportTest conf =
     let fooL = mkL (filePathToUri aPath) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+
+-- | Tests that import resolution respects home unit boundaries: which units
+-- are visible from the importing unit, and in which order they are searched.
+multiUnitImportResolutionTests :: SessionLoadingPreferenceConfig -> [TestTree]
+multiUnitImportResolutionTests conf =
+  [ testCase "visibility" $ runWithExtraFiles "multi-unit-visibility" $ \_dir -> do
+      setComponentsLoadingPreference conf
+      -- bbb does not depend on aaa, so aaa's module Priv must not be visible
+      bdoc <- openDoc ("bbb" </> "B.hs") "haskell"
+      expectDiagnostics [("bbb" </> "B.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
+      locs <- getDefinitions bdoc (Position 1 7)
+      checkDefs locs (pure [ExpectNoDefinitions])
+  , testCase "own unit shadows other units" $ runWithExtraFiles "multi-unit-shadow" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- M lives in unit aaa: its import of X must resolve to aaa's own X,
+      -- not the X of the unrelated unit zzz
+      mdoc <- openDoc ("aaa" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck using aaa's own X"
+      locs <- getDefinitions mdoc (Position 1 7)
+      assertDefsFile (dir </> "aaa" </> "X.hs") locs
+  , ignoreForGhcVersions [GHC96, GHC98, GHC910] "Renaming reexports only exist from GHC 9.12"
+    $ testCase "renaming reexport resolves to the original module" $
+      runWithExtraFiles "multi-unit-reexport-rename" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- rrr reexports Internal.Impl as Facade, so importing Facade has to
+      -- find rrr's Internal.Impl, under its own name
+      mdoc <- openDoc ("mmm" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck through the renaming reexport"
+      locs <- getDefinitions mdoc (Position 1 7)
+      assertDefsFile (dir </> "rrr" </> "Internal" </> "Impl.hs") locs
+  , testCase "package import picks the named unit" $ runWithExtraFiles "multi-unit-pkgimport" $ \dir -> do
+      setComponentsLoadingPreference conf
+      -- the package-qualified import names unit ppp: it must resolve to
+      -- ppp's A, not qqq's
+      mdoc <- openDoc ("mmm" </> "M.hs") "haskell"
+      assertTypeCheckSuccess mdoc "M should typecheck using ppp's A"
+      locs <- getDefinitions mdoc (Position 1 13)
+      assertDefsFile (dir </> "ppp" </> "A.hs") locs
+  ]
 
 sessionDepsArePickedUp :: SessionLoadingPreferenceConfig -> TestTree
 sessionDepsArePickedUp conf = testWithDummyPluginEmpty'

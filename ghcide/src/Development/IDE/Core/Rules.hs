@@ -66,6 +66,7 @@ import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                                 ((%~), (&), (.~))
 import           Control.Monad.Extra
+import qualified Control.Monad.Extra                          as Extra
 import           Control.Monad.IO.Unlift
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -86,7 +87,11 @@ import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.IORef
 import           Data.List
+#if MIN_VERSION_ghc(9,13,0)
 import           Data.List.Extra                              (nubOrd, nubOrdOn)
+#else
+import           Data.List.Extra                              (nubOrdOn)
+#endif
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
@@ -140,11 +145,11 @@ import           GHC.Iface.Ext.Types                          (HieASTs (..))
 import           GHC.Iface.Ext.Utils                          (generateReferencesMap)
 import qualified GHC.LanguageExtensions                       as LangExt
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
 import           GHC.Types.Basic                              (ImportLevel (..))
-import           GHC.Unit.Types                               (GenWithIsBoot(..))
+import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
 import           GHC.Unit.Module.Graph                        (mkModuleEdge)
 import           GHC.Unit.Module.ModNodeKey                   (mnkModuleName)
+import           GHC.Unit.Types                               (GenWithIsBoot (..))
 #endif
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
@@ -165,7 +170,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId, getVirtualFileFromVFS)
+                                                               PluginId,
+                                                               getVirtualFileFromVFS)
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
@@ -178,8 +184,20 @@ import           System.Directory                             (doesFileExist)
 import           System.Info.Extra                            (isWindows)
 
 
+import           Data.Char                                    (isUpper)
+import qualified Data.HashSet                                 as HS
 import qualified Data.IntMap                                  as IM
+import qualified Data.Map.Strict                              as Map
 import           GHC.Fingerprint
+import           System.Directory.Extra                       (canonicalizePath,
+                                                               doesDirectoryExist,
+                                                               listContents)
+import           System.FilePath                              (dropExtension,
+                                                               makeRelative,
+                                                               normalise,
+                                                               splitDirectories,
+                                                               takeExtension,
+                                                               takeFileName)
 
 data Log
   = LogShake Shake.Log
@@ -319,37 +337,26 @@ getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
-        (KnownTargets targets) <- useNoFile_ GetKnownTargets
 #if MIN_VERSION_ghc(9,13,0)
         let imports = [(False, lvl, mbPkgName, modName) | (lvl, mbPkgName, modName) <- ms_textual_imps ms]
-                   ++ [(True, NormalLevel, NoPkgQual, noLoc modName) | L _ modName <- ms_srcimps ms]
+                   ++ [(True, NormalLevel, NoPkgQual, modName) | modName <- ms_srcimps ms]
 #else
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
 #endif
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
-        let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+        let hug_dflags = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
+        let unit_visibility = Map.fromList $ map mkUnitVisibility hug_dflags
         let dflags = hsc_dflags env
-        opt <- getIdeOptions
-        let getTargetFor modName nfp
-                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | Just tt <- HM.lookup (TargetModule modName) targets = do
-                    -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
-                | otherwise = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
+
+        moduleMaps <- use_ GetModulesPaths file
+
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
 #else
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
 #endif
-            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule moduleMaps (hscSetFlags dflags env) unit_visibility modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -637,7 +644,9 @@ getFileHashRule recorder =
 
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
-  fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
+  -- Only the files of the project: a file no component claims has no session to
+  -- be compiled in. See Note [Files that are not targets]
+  fs <- toTargetFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
 #if MIN_VERSION_ghc(9,13,0)
@@ -655,6 +664,93 @@ mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl 
         M.findWithDefault [NormalLevel] (gwib_mod $ mnkModuleName mnk) importLevelsMap
       _ -> [NormalLevel]
 #endif
+
+-- See Note [Session representatives]
+getModulesPathsRule :: Recorder (WithPriority Log) -> Rules ()
+getModulesPathsRule recorder =
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetModulesPaths file ->
+    use GhcSession file >>= \case
+      Nothing -> pure (Nothing, Nothing)
+      Just env_eq
+        | file == envRepresentative env_eq -> do
+            res <- computeModulesPaths env_eq
+            pure (Just (fingerprintToBS (mtfFingerprint res)), Just res)
+        | otherwise -> do
+            res <- use GetModulesPaths (envRepresentative env_eq)
+            pure (fingerprintToBS . mtfFingerprint <$> res, res)
+
+{- Note [Session representatives]
+We want to compute `GetModulesPaths` only once, scanning every import
+directory once per component rather than once per file. To do this,
+we pick a session representative, that is guaranteed to have a non-error
+GhcSession because it is a target location of this load.
+
+Then when we are asked for the ModulePaths of a file, we delegate to the
+session representative instead (the session representative itself computes
+the map).
+-}
+
+-- | All the files below a directory.
+-- If we cannot list a particular directory, then it doesn't contribute to the search
+-- Also handles cyclic directory structures due to symlinks properly
+listFilesRecursive :: (FilePath -> Bool) -> FilePath -> IO [FilePath]
+listFilesRecursive recurseInto = go []
+  where
+    go ancestors dir = handle (\(_ :: IOException) -> pure []) $ do
+      canonical <- canonicalizePath dir
+      if canonical `elem` ancestors then pure [] else do
+        (dirs, files) <- Extra.partitionM doesDirectoryExist =<< listContents dir
+        below <- traverse (go (canonical : ancestors)) (filter recurseInto dirs)
+        pure $ files ++ concat below
+
+computeModulesPaths :: HscEnvEq -> Action ModuleToFilenames
+computeModulesPaths env_eq = do
+  knownTargets <- useNoFile_ GetKnownTargets
+  opt <- getIdeOptions
+  let env = hscEnv env_eq
+      exts = optExtensions opt
+      acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
+      -- Files known to HLS, whether or not they exist on disk yet
+      knownPaths =
+        [ (fromNormalizedFilePath p, p) | p <- HS.toList $ toKnownFiles knownTargets ]
+
+  unit_maps <- forM (hugElts $ hsc_HUG env) $ \(u, hue) -> do
+    dir_maps <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
+      let import_dir = normalise dir'
+          -- makeRelative gives back the path unchanged if it is not below
+          -- import_dir. Both paths are absolute, so this is unambiguous.
+          below f = let rel = makeRelative import_dir f
+                    in if rel == f then Nothing else Just rel
+          toModule rel = mkModuleName $ intercalate "." $
+            splitDirectories (dropExtension rel)
+          accepted f = takeExtension f `elem` acceptedExtensions
+          recurseInto path = case takeFileName path of
+            []    -> False
+            (x:_) -> isUpper x
+          firstWins = foldl'
+            (\acc (m, p) -> addToUniqMap_C (\old _ -> old) acc m p) emptyUniqMap
+          mkMaps fs =
+            let (boot, normal) = partition (("-boot" `isSuffixOf`) . fst) $
+                                   filter (accepted . fst) fs
+            in ( firstWins [ (toModule rel, p) | (rel, p) <- normal ]
+               , HS.fromList (map snd boot)
+               )
+
+      scanned <- liftIO $ listFilesRecursive recurseInto import_dir
+      let (scanNormal, scanBoot) = mkMaps
+            [ (rel, toNormalizedFilePath' f) | f <- scanned, Just rel <- [below f] ]
+          (knownNormal, knownBoot) = mkMaps
+            [ (rel, p) | (f, p) <- knownPaths, Just rel <- [below f] ]
+      -- Known files win within a directory: they may exist only in the editor
+      pure (plusUniqMap_C const knownNormal scanNormal, HS.union knownBoot scanBoot)
+    -- The first import dir providing a module wins, matching GHC's -i order
+    let combineDirs = foldl' (plusUniqMap_C (\old _ -> old)) emptyUniqMap
+    pure (u, (combineDirs (map fst dir_maps), HS.unions (map snd dir_maps)))
+
+  let providers u = mapUniqMap (\p -> pure (u, p))
+      normal = foldl' (plusUniqMap_C (<>)) emptyUniqMap
+        [ providers u m | (u, (m, _)) <- unit_maps ]
+  pure $ mkModuleToFilenames normal (HS.unions [ b | (_, (_, b)) <- unit_maps ])
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
@@ -1329,6 +1425,7 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceRule recorder
     getModSummaryRule templateHaskellWarning recorder
     getModuleGraphRule recorder
+    getModulesPathsRule recorder
     getFileHashRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder

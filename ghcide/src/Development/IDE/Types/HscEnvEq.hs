@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Types.HscEnvEq
 (   HscEnvEq,
-    hscEnv, newHscEnvEq,
+    hscEnv, newHscEnvEq, envRepresentative,
     updateHscEnvEq,
     envPackageExports,
     envVisibleModuleNames,
@@ -24,6 +24,7 @@ import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           Development.IDE.Types.Location  (NormalizedFilePath)
 import           GHC.Driver.Env                  (hsc_all_home_unit_ids)
 import           OpenTelemetry.Eventlog          (withSpan)
 
@@ -40,6 +41,8 @@ data HscEnvEq = HscEnvEq
         -- but it could panic due to a ghc bug: https://github.com/haskell/haskell-language-server/issues/1365
         -- So it's wrapped in IO here for error handling
         -- If Nothing, 'listVisibleModuleNames' panic
+    , envRepresentative     :: !NormalizedFilePath
+        -- ^ See Note [Session representatives]
     }
 
 updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
@@ -48,8 +51,8 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: HscEnv -> IO HscEnvEq
-newHscEnvEq hscEnv' = do
+newHscEnvEq :: NormalizedFilePath -> HscEnv -> IO HscEnvEq
+newHscEnvEq envRepresentative hscEnv' = do
 
     mod_cache <- newIORef emptyInstalledModuleEnv
     -- This finder cache is for things which are outside of things which are tracked
@@ -129,9 +132,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b _ _) =
+  rnf (HscEnvEq a b _ _ e) =
       -- deliberately skip the package exports map and visible module names
-      rnf (Unique.hashUnique a) `seq` rwhnf b
+      rnf (Unique.hashUnique a) `seq` rwhnf b `seq` rnf e
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique
