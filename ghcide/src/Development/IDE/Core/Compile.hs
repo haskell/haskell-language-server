@@ -18,6 +18,8 @@ module Development.IDE.Core.Compile
   , mkHiFileResultNoCompile
   , generateObjectCode
   , generateByteCode
+  , LinkableFingerprint (..)
+  , mkLinkableFingerprint
   , generateHieAsts
   , writeAndIndexHieFile
   , indexHieFile
@@ -66,7 +68,9 @@ import qualified Data.Map.Strict                              as Map
 import           Data.Maybe
 import           Data.Proxy                                   (Proxy (Proxy))
 import qualified Data.Text                                    as T
-import           Data.Time                                    (UTCTime (..))
+import           Data.Time                                    (Day (ModifiedJulianDay),
+                                                               UTCTime (..),
+                                                               picosecondsToDiffTime)
 import           Data.Tuple.Extra                             (dupe)
 import           Debug.Trace
 import           Development.IDE.Core.FileStore               (resetInterfaceStore)
@@ -701,8 +705,29 @@ compileModule (RunSimplifier simplify) session ms tcg =
              else pure desugar
       pure (diagFromErrMsgs compilePhase (hsc_dflags session') $ getWarningMessages msgs, desugar)
 
-generateObjectCode :: UTCTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateObjectCode t session summary guts = do
+
+-- | A horrible hack
+-- GHC identifies Linkables using their UTCTime (when they were generated)
+-- This is insufficient for our needs, we need to identify linkables by a fingerprint containing
+-- both the hash of the linkable itself as well as all of all of its dependencies
+--
+-- UTCTime has an unbounded integer
+-- We can smuggle an arbitary 128 bit fingerprint
+-- in the integer
+--
+-- This way we can ensure we only keep loaded objects (byte/native) with the correct
+-- transitive closure.
+--
+-- This is fine because GHC only uses the time for identity
+newtype LinkableFingerprint = LinkableFingerprint UTCTime
+
+mkLinkableFingerprint :: Util.Fingerprint -> LinkableFingerprint
+mkLinkableFingerprint (Util.Fingerprint a b) =
+  LinkableFingerprint $ UTCTime (ModifiedJulianDay 0) $ picosecondsToDiffTime $
+    toInteger a * 2 ^ (64 :: Int) + toInteger b
+
+generateObjectCode :: LinkableFingerprint -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateObjectCode (LinkableFingerprint linkable_fp) session summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags session) "object" $ do
               let dot_o =  ml_obj_file (ms_location summary)
@@ -725,14 +750,14 @@ generateObjectCode t session summary guts = do
                         Nothing -> throwGhcExceptionIO $ Panic "compileFile didn't generate object code"
                         Just x -> pure x
 #if MIN_VERSION_ghc(9,11,0)
-              let linkable = Linkable t mod (pure $ DotO dot_o_fp ModuleObject)
+              let linkable = Linkable linkable_fp mod (pure $ DotO dot_o_fp ModuleObject)
 #else
-              let linkable = LM t mod [DotO dot_o_fp]
+              let linkable = LM linkable_fp mod [DotO dot_o_fp]
 #endif
               pure (map snd warnings, linkable)
 
-generateByteCode :: UTCTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateByteCode time hscEnv summary guts = do
+generateByteCode :: LinkableFingerprint -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateByteCode (LinkableFingerprint linkable_fp) hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
 
@@ -755,9 +780,9 @@ generateByteCode time hscEnv summary guts = do
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
-              let linkable = Linkable time (ms_mod summary) (pure $ BCOs bytecode)
+              let linkable = Linkable linkable_fp (ms_mod summary) (pure $ BCOs bytecode)
 #else
-              let linkable = LM time (ms_mod summary) [BCOs bytecode sptEntries]
+              let linkable = LM linkable_fp (ms_mod summary) [BCOs bytecode sptEntries]
 #endif
 
               pure (map snd warnings, linkable)
@@ -1676,7 +1701,7 @@ coreFileToCgGuts session iface details core_file = do
 #endif
                 Nothing []
 
-coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
+coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> LinkableFingerprint -> IO ([FileDiagnostic], Maybe HomeModInfo)
 coreFileToLinkable linkableType session ms iface details core_file t = do
   cgi_guts <- coreFileToCgGuts session iface details core_file
   (warns, lb) <- case linkableType of
