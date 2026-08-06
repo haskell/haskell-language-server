@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
@@ -37,6 +38,7 @@ module Test.Hls.Util
     , inspectCommand
     , inspectDiagnostic
     , inspectDiagnosticAny
+    , renameFile
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
@@ -52,7 +54,8 @@ module Test.Hls.Util
 where
 
 import           Control.Applicative.Combinators          (skipManyTill, (<|>))
-import           Control.Exception                        (catch, throwIO)
+import           Control.Exception                        (catch, throw,
+                                                           throwIO)
 import           Control.Lens                             (_Just, (&), (.~),
                                                            (?~), (^.))
 import           Control.Monad
@@ -69,7 +72,7 @@ import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Test                        as Test
-import           System.Directory
+import qualified System.Directory                         as Directory
 import           System.FilePath
 import           System.Info.Extra                        (isMac, isWindows)
 import qualified System.IO.Extra
@@ -80,7 +83,10 @@ import           Test.Tasty.ExpectedFailure               (expectFailBecause,
                                                            ignoreTestBecause)
 import           Test.Tasty.HUnit                         (assertFailure)
 
+import           Data.Foldable                            (traverse_)
 import qualified Data.List                                as List
+import qualified Data.Map                                 as Map
+import           Data.Maybe                               (fromJust)
 import           Data.String.Interpolate                  (__i)
 import qualified Data.Text.Internal.Search                as T
 import qualified Data.Text.Utf16.Rope.Mixed               as Rope
@@ -187,7 +193,7 @@ onlyRunForGhcVersions vers =
 withCurrentDirectoryInTmp :: FilePath -> IO a -> IO a
 withCurrentDirectoryInTmp dir f =
   withTempCopy ignored dir $ \newDir ->
-    withCurrentDirectory newDir f
+    Directory.withCurrentDirectory newDir f
   where
     ignored = ["dist", "dist-newstyle", ".stack-work"]
 
@@ -200,7 +206,7 @@ withCurrentDirectoryInTmp dir f =
 withCurrentDirectoryInTmp' :: [FilePath] -> FilePath -> IO a -> IO a
 withCurrentDirectoryInTmp' ignored dir f =
   withTempCopy ignored dir $ \newDir ->
-    withCurrentDirectory newDir f
+    Directory.withCurrentDirectory newDir f
 
 -- | Example call: @withTempCopy ignored src f@
 --
@@ -219,15 +225,15 @@ withTempCopy ignored srcDir f = do
 -- that are listed in 'ignored'.
 copyDir :: [FilePath] -> FilePath -> FilePath -> IO ()
 copyDir ignored src dst = do
-  cnts <- listDirectory src
+  cnts <- Directory.listDirectory src
   forM_ cnts $ \file -> do
     unless (file `elem` ignored) $ do
       let srcFp = src </> file
           dstFp = dst </> file
-      isDir <- doesDirectoryExist srcFp
+      isDir <- Directory.doesDirectoryExist srcFp
       if isDir
-        then createDirectory dstFp >> copyDir ignored srcFp dstFp
-        else copyFile srcFp dstFp
+        then Directory.createDirectory dstFp >> copyDir ignored srcFp dstFp
+        else Directory.copyFile srcFp dstFp
 
 fromAction :: (Command |? CodeAction) -> CodeAction
 fromAction (InR action) = action
@@ -336,6 +342,89 @@ failIfSessionTimeout action = action `catch` errorHandler
           errorHandler e                  = throwIO e
 
 -- ---------------------------------------------------------------------
+
+-- | Simulate the client action of renaming a file
+-- This consists of sending a `WillRenameFiles` request renaming the file from `from` to `to`,
+-- and applying the returned `WorkspaceEdit` changes and actually renaming the file.
+-- Finally sends a `DidRenameFile` notification to the server.
+renameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session ()
+renameFile from to = do
+    willRenameFile from to >>= \case
+        InL (WorkspaceEdit (Just e) _ _) -> do
+            traverse_
+                ( \(uri, edits) ->
+                    traverse (Test.applyEdit (TextDocumentIdentifier uri)) edits
+                )
+                (Map.assocs e)
+            pure ()
+        InL (WorkspaceEdit _ (Just docChanges) _) -> do
+            traverse_
+                ( \case
+                    InL edit ->
+                        traverse_
+                            (\e ->
+                                Test.applyEdit
+                                    (TextDocumentIdentifier $ edit ^. L.textDocument . L.uri)
+                                    $ mkTextEdit e
+                            )
+                            (edit ^. L.edits)
+                    InR unsupported ->
+                        error $ "renameFile: Unsupported WorkspaceEdit " <> (show unsupported)
+                )
+                docChanges
+            pure ()
+        _ -> pure ()
+    -- We are using the below two operations in place of renameFile,
+    -- due to a potential race condition on Windows.
+    liftIO $ Directory.copyFileWithMetadata (getFilePath from) (getFilePath to)
+    liftIO $ Directory.removeFile $ getFilePath from
+    didRenameFile from to
+    where
+        getFilePath :: TextDocumentIdentifier -> FilePath
+        getFilePath tId =
+            case uriToFilePath uri of
+                Just fp -> fp
+                Nothing -> error "Failed to parse uri " <> show uri <> " to filepath"
+            where
+                uri = tId ^. L.uri
+
+        mkTextEdit :: TextEdit |? AnnotatedTextEdit -> TextEdit
+        mkTextEdit (InL e)   = e
+        mkTextEdit (InR ate) =
+            TextEdit (ate ^. L.range) (ate ^. L.newText)
+
+-- | Sends a WillRenameFiles notification to the server and returns the edit the server produces
+-- In case the server returns an error, throws an error as well.
+willRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session (WorkspaceEdit |? Null)
+willRenameFile from to = do
+  rsp <- Test.request
+    SMethod_WorkspaceWillRenameFiles
+        (
+            RenameFilesParams [FileRename (docIdToText from) (docIdToText to)]
+        )
+
+  case rsp ^. L.result of
+    Right edit -> return edit
+    -- Todo: When this function is upstreamed to lsp-test,
+    -- remove this module from the fromJust entry in `.hlint.yaml`.
+    Left error -> throw (Test.UnexpectedResponseError (fromJust $ rsp ^. L.id) error)
+
+-- | Sends a DidRenameFile Notification to the server
+-- Currently the server does not handle this notification,
+-- but the plan is to reload the session on rename.
+didRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Session ()
+didRenameFile from to =
+    Test.sendNotification
+        SMethod_WorkspaceDidRenameFiles
+        ( RenameFilesParams
+            [FileRename (docIdToText from) (docIdToText to)
+            ]
+        )
+
+docIdToText :: TextDocumentIdentifier -> T.Text
+docIdToText tdi = getUri $ tdi ^. L.uri
+
+-- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
 getCompletionByLabel desiredLabel compls =
     case find (\c -> c ^. L.label == desiredLabel) compls of
@@ -348,7 +437,7 @@ getCompletionByLabel desiredLabel compls =
 -- Run with a canonicalized temp dir
 withCanonicalTempDir :: (FilePath -> IO a) -> IO a
 withCanonicalTempDir f = System.IO.Extra.withTempDir $ \dir -> do
-  dir' <- canonicalizePath dir
+  dir' <- Directory.canonicalizePath dir
   f dir'
 
 -- ----------------------------------------------------------------------------
