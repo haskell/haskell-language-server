@@ -31,9 +31,9 @@
 module Main (main) where
 
 import qualified HieDbRetry
+import           Test.Hls                        (defaultTestRunner)
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
-import           Test.Hls (defaultTestRunner)
 
 import           AsyncTests
 import           BootTests
@@ -52,6 +52,7 @@ import           FindImplementationAndHoverTests
 import           GarbageCollectionTests
 import           HaddockTests
 import           HighlightTests
+import           HoverRangeTests
 import           IfaceTests
 import           InitializeResponseTests
 import           LogType                         ()
@@ -82,6 +83,7 @@ main = do
     , CodeLensTests.tests
     , OutlineTests.tests
     , HighlightTests.tests
+    , HoverRangeTests.tests
     , ConstructorHoverTests.tests
     , FindDefinitionAndHoverTests.tests
     , FindImplementationAndHoverTests.tests
