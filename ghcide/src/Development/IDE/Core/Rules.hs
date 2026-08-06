@@ -93,9 +93,7 @@ import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Time                                    (Day (ModifiedJulianDay),
-                                                               UTCTime (..),
-                                                               picosecondsToDiffTime)
+import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
@@ -1124,17 +1122,6 @@ usePropertyByPathAction path plId p = do
 
 -- ---------------------------------------------------------------------
 
--- | A horrible hack
--- UTCTime is an unbounded integer
--- We can smuggle an arbitary 128 bit fingerprint
--- in the integer
---
--- This is fine because GHC only uses the time for identity
-versionToUTCTime :: Fingerprint -> UTCTime
-versionToUTCTime (Fingerprint a b) =
-  UTCTime (ModifiedJulianDay 0) $ picosecondsToDiffTime $
-    toInteger a * 2 ^ (64 :: Int) + toInteger b
-
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithOldValue $ \GetLinkable f old_value -> do
@@ -1180,7 +1167,7 @@ getLinkableRule recorder =
         -- Smuggle the hash into the UTCTime.
         --
         -- Fine because GHC only checks the UTCTime for equality
-        let vtime = versionToUTCTime version
+        let vfp@(LinkableFingerprint linkable_fp) = mkLinkableFingerprint version
         let m_old_lr = case old_value of
               Shake.Succeeded _ v -> Just v
               Shake.Stale _ _ v   -> Just v
@@ -1193,9 +1180,9 @@ getLinkableRule recorder =
             | Just old_lr <- m_old_lr
             , linkableHash old_lr == fileHash
             , Just bc <- homeModInfoByteCode (linkableHomeMod old_lr)
-            -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justBytecode $ setLinkableTime vtime bc))
+            -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justBytecode $ setLinkableTime linkable_fp bc))
           -- Bytecode needs to be regenerated from the core file
-          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vtime
+          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
           -- Object code can be read from the disk
           ObjectLinkable -> do
             -- object file is up to date if it is newer than the core file
@@ -1211,8 +1198,8 @@ getLinkableRule recorder =
               else pure Nothing
             case mobj_time of
               Just obj_t
-                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ mkLinkable vtime (ms_mod hirModSummary) (dotO obj_file)))
-              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vtime
+                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ mkLinkable linkable_fp (ms_mod hirModSummary) (dotO obj_file)))
+              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
         -- Record the linkable so we know not to unload it, and unload old versions
         whenJust ((homeModInfoByteCode =<< hmi) <|> (homeModInfoObject =<< hmi))
 #if MIN_VERSION_ghc(9,11,0)
