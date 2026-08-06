@@ -72,6 +72,8 @@ tests =
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
     , thLinkingTest True
+    , thStaleBytecodeTest
+    , thStaleBytecodeDeepTest
     , testWithDummyPluginEmpty "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
@@ -267,6 +269,50 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     name = "reloading-th-test" <> if unboxed then "-unboxed" else ""
     dir | unboxed = "THUnboxed"
         | otherwise = "TH"
+
+-- | Test that a value change in a dependency without an interface change is
+-- seen by splices: the loaded bytecode of the intermediate modules must be
+-- relinked against the new leaf even though they are not recompiled.
+--
+-- The leaf and C are open; the intermediate modules are intentionally not, so
+-- they stay non-FOI and are not recompiled when the leaf changes.
+thStaleBytecodeTestFor :: String -> String -> FilePath -> T.Text -> TestTree
+thStaleBytecodeTestFor name dataDir leafFile tag = testCase name $ runWithExtraFiles dataDir $ \dir -> do
+    let aPath = dir </> leafFile
+        cPath = dir </> "C.hs"
+
+    aSource <- liftIO $ readFileUtf8 aPath -- <leaf> = 1
+    cSource <- liftIO $ readFileUtf8 cPath -- c = $(reportWarning (tag ++ show <top>) >> [| <top> |])
+
+    adoc <- createDoc aPath "haskell" aSource
+    cdoc <- createDoc cPath "haskell" cSource
+
+    expectDiagnostics [("C.hs", [(DiagnosticSeverity_Warning, (7, 5), tag <> " 1", Nothing)])]
+
+    -- Change the value of the leaf without changing its interface, so the
+    -- modules in between are not recompiled and only their loaded bytecode
+    -- can go stale
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
+        T.replace "= 1" "= 2" aSource]
+    -- sentinel warning so a stale splice result fails fast instead of timing out
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $
+        cSource <> "foo=()"]
+
+    expectDiagnostics
+        [("C.hs", [ (DiagnosticSeverity_Warning, (7, 5), tag <> " 2", Nothing)
+                  , (DiagnosticSeverity_Warning, (8, 0), "Top-level binding", Just "GHC-38417")
+                  ])]
+
+    closeDoc adoc
+    closeDoc cdoc
+
+-- | C splices a value from B, which imports it from A. A is edited.
+thStaleBytecodeTest :: TestTree
+thStaleBytecodeTest = thStaleBytecodeTestFor "th-stale-bytecode" "THUnload" "A.hs" "b is"
+
+-- | C splices a6, whose value flows through the chain A6 <- ... <- A1. A1 is edited.
+thStaleBytecodeDeepTest :: TestTree
+thStaleBytecodeDeepTest = thStaleBytecodeTestFor "th-stale-bytecode-deep" "THUnloadDeep" "A1.hs" "a6 is"
 
 thLinkingTest :: Bool -> TestTree
 thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do

@@ -93,8 +93,9 @@ import           Data.Proxy
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
-import           Data.Time                                    (UTCTime (..))
-import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
+import           Data.Time                                    (Day (ModifiedJulianDay),
+                                                               UTCTime (..),
+                                                               picosecondsToDiffTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
@@ -1123,6 +1124,17 @@ usePropertyByPathAction path plId p = do
 
 -- ---------------------------------------------------------------------
 
+-- | A horrible hack
+-- UTCTime is an unbounded integer
+-- We can smuggle an arbitary 128 bit fingerprint
+-- in the integer
+--
+-- This is fine because GHC only uses the time for identity
+versionToUTCTime :: Fingerprint -> UTCTime
+versionToUTCTime (Fingerprint a b) =
+  UTCTime (ModifiedJulianDay 0) $ picosecondsToDiffTime $
+    toInteger a * 2 ^ (64 :: Int) + toInteger b
+
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
@@ -1149,12 +1161,30 @@ getLinkableRule recorder =
         linkableType <- getLinkableType f >>= \case
           Nothing -> error $ "called GetLinkable for a file which doesn't need compilation: " ++ show f
           Just t -> pure t
+        -- We need to depend on the linkables for all dependencies, so that
+        -- whenever a dependeny is relinked/reloaded, we unload the current linkable, because
+        -- the old version of the current linkable references the old dependency
+        --
+        -- We get transitivity via induction
+        imports <- use_ GetLocatedImports f
+        let dep_files = [ artifactFilePath loc | (_, Just loc) <- imports, not (isBootLocation loc) ]
+        dep_comps <- uses_ NeedsCompilation dep_files
+        dep_versions <- map linkableVersion <$> uses_ GetLinkable [ d | (d, Just _) <- zip dep_files dep_comps ]
+        -- We compute a hash/identity for this linkable based on its hash + hash of dependencies
+        -- transitive dependencies are included by induction
+        version <- liftIO $ fingerprintFromByteString $ BS.concat (fileHash : dep_versions)
+
+        -- GHC identifies linkables by UTCTime, we want to identify them by hash
+        -- Smuggle the hash into the UTCTime.
+        --
+        -- Fine because GHC only checks the UTCTime for equality
+        let vtime = versionToUTCTime version
         -- Can't use `GetModificationTime` rule because the core file was possibly written in this
         -- very session, so the results aren't reliable
         core_t <- liftIO $ getModTime core_file
         (warns, hmi) <- case linkableType of
           -- Bytecode needs to be regenerated from the core file
-          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
+          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vtime
           -- Object code can be read from the disk
           ObjectLinkable -> do
             -- object file is up to date if it is newer than the core file
@@ -1167,8 +1197,8 @@ getLinkableRule recorder =
               else pure Nothing
             case mobj_time of
               Just obj_t
-                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ mkLinkable (posixSecondsToUTCTime obj_t) (ms_mod hirModSummary) (dotO obj_file)))
-              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core (error "object doesn't have time")
+                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ mkLinkable vtime (ms_mod hirModSummary) (dotO obj_file)))
+              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vtime
         -- Record the linkable so we know not to unload it, and unload old versions
         whenJust ((homeModInfoByteCode =<< hmi) <|> (homeModInfoObject =<< hmi))
 #if MIN_VERSION_ghc(9,11,0)
@@ -1195,7 +1225,8 @@ getLinkableRule recorder =
               --contents, therefore the dummies.
               unload (hscEnv session) (concatMap (\(mod', time') -> keepLinkables time' mod') $ moduleEnvToList to_keep)
               return (to_keep, ())
-        return (fileHash <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash))
+        let versionBS = fingerprintToBS version
+        return (versionBS <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash <*> pure versionBS))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

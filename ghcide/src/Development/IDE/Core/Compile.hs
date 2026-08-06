@@ -701,8 +701,8 @@ compileModule (RunSimplifier simplify) session ms tcg =
              else pure desugar
       pure (diagFromErrMsgs compilePhase (hsc_dflags session') $ getWarningMessages msgs, desugar)
 
-generateObjectCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateObjectCode session summary guts = do
+generateObjectCode :: UTCTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateObjectCode t session summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags session) "object" $ do
               let dot_o =  ml_obj_file (ms_location summary)
@@ -724,8 +724,6 @@ generateObjectCode session summary guts = do
                       case obj of
                         Nothing -> throwGhcExceptionIO $ Panic "compileFile didn't generate object code"
                         Just x -> pure x
-              -- Need time to be the modification time for recompilation checking
-              t <- liftIO $ getModificationTime dot_o_fp
 #if MIN_VERSION_ghc(9,11,0)
               let linkable = Linkable t mod (pure $ DotO dot_o_fp ModuleObject)
 #else
@@ -733,10 +731,8 @@ generateObjectCode session summary guts = do
 #endif
               pure (map snd warnings, linkable)
 
-newtype CoreFileTime = CoreFileTime UTCTime
-
-generateByteCode :: CoreFileTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateByteCode (CoreFileTime time) hscEnv summary guts = do
+generateByteCode :: UTCTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateByteCode time hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
 
@@ -1684,8 +1680,8 @@ coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDet
 coreFileToLinkable linkableType session ms iface details core_file t = do
   cgi_guts <- coreFileToCgGuts session iface details core_file
   (warns, lb) <- case linkableType of
-    BCOLinkable    -> fmap (maybe emptyHomeModInfoLinkable justBytecode) <$> generateByteCode (CoreFileTime t) session ms cgi_guts
-    ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode session ms cgi_guts
+    BCOLinkable    -> fmap (maybe emptyHomeModInfoLinkable justBytecode) <$> generateByteCode t session ms cgi_guts
+    ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode t session ms cgi_guts
   pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
