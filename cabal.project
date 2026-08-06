@@ -52,6 +52,11 @@ allow-newer:
   cabal-install-parsers:Cabal-syntax,
 
 
+-- See https://gitlab.haskell.org/ghc/ghc/-/work_items/26609
+-- https://github.com/digital-asset/ghc-lib/issues/620
+if impl(ghc >= 9.10) && impl(ghc < 9.11)
+  constraints: ghc-lib-parser ^>=9.10
+
 if impl(ghc >= 9.13)
   allow-newer:
     cabal-install-parsers:base,
