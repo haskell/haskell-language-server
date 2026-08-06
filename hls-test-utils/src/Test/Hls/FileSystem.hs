@@ -19,6 +19,7 @@ module Test.Hls.FileSystem
   , copy
   , directory
   , text
+  , sources
   , ref
   , copyDir
   -- * Cradle helpers
@@ -178,9 +179,13 @@ copyDir dir = CopiedDirectory dir
 directory :: FilePath -> [FileTree] -> FileTree
 directory name nodes = Directory name nodes
 
--- | Write the given test directly into a file.
+-- | Write the given text directly into a file.
 text :: T.Text -> Content
 text = Inline
+
+-- | Write the given lines directly into a file.
+sources :: [T.Text] -> Content
+sources = Inline . T.unlines
 
 -- | Read the contents of the given file
 -- The filepath is always resolved to the root of the test data dir.
