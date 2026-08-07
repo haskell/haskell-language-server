@@ -34,6 +34,9 @@
         "callHierarchy": {
             "globalOn": true
         },
+        "caseSplit": {
+            "globalOn": true
+        },
         "changeTypeSignature": {
             "globalOn": true
         },
