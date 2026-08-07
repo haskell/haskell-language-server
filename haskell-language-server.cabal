@@ -701,13 +701,13 @@ flag retrie
   manual:      True
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds))
+  if flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds))
     build-depends: haskell-language-server:hls-retrie-plugin
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
   import:           defaults, pedantic, warnings
-  if !(flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds)))
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
     buildable: False
   exposed-modules:  Ide.Plugin.Retrie
   hs-source-dirs:   plugins/hls-retrie-plugin/src
@@ -717,15 +717,15 @@ library hls-retrie-plugin
     , containers
     , extra
     , ghc
-    , ghcide                == 2.14.0.0
+    , ghcide                == 2.15.0.0
     , hashable
-    , hls-plugin-api        == 2.14.0.0
+    , hls-plugin-api        == 2.15.0.0
     , haskell-language-server:hls-refactor-plugin
     , lens
     , lsp
     , lsp-types
     , mtl
-    , retrie                >=0.1.1.0
+    , retrie                >=2.0.0
     , safe-exceptions
     , stm
     , text
@@ -738,7 +738,7 @@ library hls-retrie-plugin
 
 test-suite hls-retrie-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
-  if !(flag(retrie) && (impl(ghc < 9.10) || flag(ignore-plugins-ghc-bounds)))
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
     buildable: False
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-retrie-plugin/test
@@ -748,7 +748,7 @@ test-suite hls-retrie-plugin-tests
     , filepath
     , hls-plugin-api
     , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
-    , hls-test-utils             == 2.14.0.0
+    , hls-test-utils             == 2.15.0.0
     , text
 
 -----------------------------
