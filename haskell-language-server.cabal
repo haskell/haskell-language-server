@@ -916,6 +916,7 @@ library hls-splice-plugin
   hs-source-dirs:     plugins/hls-splice-plugin/src
   build-depends:
     , aeson
+    , containers
     , extra
     , foldl
     , ghc
@@ -927,6 +928,7 @@ library hls-splice-plugin
     , mtl
     , syb
     , text
+    , text-rope
     , transformers
     , unliftio-core
 
@@ -1551,6 +1553,7 @@ library hls-refactor-plugin
                     Development.IDE.Plugin.CodeAction
                     Development.IDE.Plugin.CodeAction.Util
                     Development.IDE.GHC.Dump
+                    Development.IDE.Plugin.Plugins.ImportUtils
   other-modules:    Development.IDE.Plugin.CodeAction.Args
                     Development.IDE.Plugin.CodeAction.ExactPrint
                     Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -1558,7 +1561,6 @@ library hls-refactor-plugin
                     Development.IDE.Plugin.Plugins.Diagnostic
                     Development.IDE.Plugin.Plugins.FillHole
                     Development.IDE.Plugin.Plugins.FillTypeWildcard
-                    Development.IDE.Plugin.Plugins.ImportUtils
   default-extensions:
     CPP
     DataKinds

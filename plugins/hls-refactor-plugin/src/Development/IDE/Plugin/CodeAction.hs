@@ -5,6 +5,10 @@
 
 module Development.IDE.Plugin.CodeAction
     (
+    -- TODO factor out somewhere instead of exporting from here?
+    newImport,
+    newImportToEdit,
+    newImportInsertRange,
     mkExactprintPluginDescriptor,
     iePluginDescriptor,
     typeSigsPluginDescriptor,
