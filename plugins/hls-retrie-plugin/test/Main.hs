@@ -5,7 +5,6 @@
 
 module Main (main) where
 
-import           Control.Monad                     (void)
 import qualified Data.Map                          as M
 import           Data.Text                         (Text)
 import qualified Development.IDE.GHC.ExactPrint    as ExactPrint
@@ -74,9 +73,7 @@ testCommand title file row col = goldenWithRetrie title file $ \adoc -> do
     let p = Position row col
     codeActions <- getCodeActions adoc $ Range p p
     case codeActions of
-        [InR ca] -> do
-            executeCodeAction ca
-            void $ skipManyTill anyMessage $ getDocumentEdit adoc
+        [InR ca] -> resolveAndExecuteCodeAction ca
         cas -> liftIO . assertFailure $ "One code action expected, got " <> show (length cas)
 
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
@@ -85,10 +82,14 @@ codeActionTitle _                         = Nothing
 
 goldenWithRetrie :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRetrie title path act =
-    goldenWithHaskellDoc (def { plugins = M.singleton "retrie" def }) testPlugins title testDataDir path "expected" "hs" act
+    goldenWithHaskellAndCaps (def { plugins = M.singleton "retrie" def }) codeActionResolveCaps testPlugins title testDataDir path "expected" "hs" act
 
 runWithRetrie :: Session a -> IO a
-runWithRetrie = runSessionWithServer def testPlugins testDataDir
+runWithRetrie = runSessionWithTestConfig def
+    { testDirLocation = Left testDataDir
+    , testConfigCaps = codeActionResolveCaps
+    , testPluginDescriptor = testPlugins
+    } . const
 
 testPlugins :: PluginTestDescriptor LogWrap
 testPlugins =
