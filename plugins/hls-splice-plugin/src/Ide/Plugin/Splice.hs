@@ -26,7 +26,7 @@ import           Control.Monad.IO.Unlift               (MonadIO (..),
                                                         askRunInIO)
 import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
-                                                        runExceptT)
+                                                        runExcept, runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                            hiding (Null)
 import qualified Data.Bifunctor                        as B (first)
@@ -177,8 +177,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
     res <- liftIO $ runMaybeT $ do
 
-            nfp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
-            input <- MaybeT $ pure $ toProjectHaskellInput nfp
+            input <- MaybeT $ pure $ either (const Nothing) Just $ runExcept $ classifyAsHaskell (verTxtDocId ^. J.uri)
             eedits <-
                 ( lift . runExceptT . withTypeChecked input
                         =<< MaybeT
@@ -464,8 +463,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
     verTxtDocId <- liftIO $ runAction "splice.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
-            nfp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
-            input <- MaybeT $ pure $ toProjectHaskellInput nfp
+            input <- MaybeT $ pure $ either (const Nothing) Just $ runExcept $ classifyAsHaskell theUri
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
                     use GetParsedModule input

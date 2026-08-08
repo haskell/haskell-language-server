@@ -8,6 +8,7 @@ module Development.IDE.LSP.Outline
   )
 where
 
+import           Control.Monad.Except           (runExcept)
 import           Control.Monad.IO.Class
 import           Data.Foldable                  (toList)
 import           Data.Functor
@@ -28,18 +29,15 @@ import           Language.LSP.Protocol.Types    (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR),
-                                                 uriToFilePath)
+                                                 type (|?) (InL, InR))
 
 
 moduleOutline
   :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
-  = liftIO $ case uriToFilePath uri of
-    Just (toNormalizedFilePath' -> fp) -> do
-      mb_decls <- case toProjectHaskellInput fp of
-        Nothing -> pure Nothing
-        Just input -> fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule input)
+  = liftIO $ case runExcept $ classifyAsHaskell uri of
+    Right input -> do
+      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule input)
       pure $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
@@ -66,7 +64,7 @@ moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdent
                InR (InL allSymbols)
 
 
-    Nothing -> pure $ InL []
+    Left _ -> pure $ InL []
 
 documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))

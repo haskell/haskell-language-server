@@ -371,7 +371,7 @@ getLocatedImportsRule recorder =
         let moduleImports = catMaybes $ bootArtifact : imports'
         pure (concat diags, Just moduleImports)
 
-type RawDepState = (RawDependencyInformation, IntMap ArtifactsLocation, IntMap ProjectHaskellInput)
+type RawDepState = (RawDependencyInformation, IntMap ArtifactsLocation)
 type RawDepM a = StateT RawDepState Action a
 
 execRawDepM :: Monad m => StateT RawDepState m a -> m RawDepState
@@ -379,16 +379,15 @@ execRawDepM act =
     execStateT act
         ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
         , IntMap.empty
-        , IntMap.empty
         )
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [ProjectHaskellInput] -> Action (RawDependencyInformation, BootIdMap, IntMap ProjectHaskellInput)
+rawDependencyInformation :: [ProjectHaskellInput] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
-    (rdi, ss, inputs) <- execRawDepM (goPlural fs)
+    (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
-    return (rdi, bm, inputs)
+    return (rdi, bm)
   where
     goPlural :: [ProjectHaskellInput] -> RawDepM [FilePathId]
     goPlural ff = do
@@ -405,7 +404,7 @@ rawDependencyInformation fs = do
       checkAlreadyProcessed f $ do
           let al = modSummaryToArtifactsLocation f mbModSum
           -- Get a fresh FilePathId for the new file
-          fId <- getFreshFid f al
+          fId <- getFreshFid al
           -- Record this module and its location
           whenJust mbModSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
@@ -441,26 +440,25 @@ rawDependencyInformation fs = do
 
     checkAlreadyProcessed :: ProjectHaskellInput -> RawDepM FilePathId -> RawDepM FilePathId
     checkAlreadyProcessed nfp k = do
-      (rawDepInfo, _, _) <- get
+      (rawDepInfo, _) <- get
       maybe k return (pathToId (rawPathIdMap rawDepInfo) nfp)
 
     modifyRawDepInfo :: (RawDependencyInformation -> RawDependencyInformation) -> RawDepM ()
-    modifyRawDepInfo f = modify (\(rd, ss, inputs) -> (f rd, ss, inputs))
+    modifyRawDepInfo f = modify (first f)
 
     addBootMap ::  ArtifactsLocation -> FilePathId -> RawDepM ()
     addBootMap al fId =
-      modify (\(rd, ss, inputs) -> (rd, if isBootLocation al
-                                            then IntMap.insert (getFilePathId fId) al ss
-                                            else ss
-                                    , inputs))
+      modify (\(rd, ss) -> (rd, if isBootLocation al
+                                  then IntMap.insert (getFilePathId fId) al ss
+                                  else ss))
 
-    getFreshFid :: ProjectHaskellInput -> ArtifactsLocation -> RawDepM FilePathId
-    getFreshFid input al = do
-      (rawDepInfo, ss, inputs) <- get
+    getFreshFid :: ArtifactsLocation -> RawDepM FilePathId
+    getFreshFid al = do
+      (rawDepInfo, ss) <- get
       let (fId, path_map) = getPathId al (rawPathIdMap rawDepInfo)
       -- Insert the File into the bootmap if it's a boot module
       let rawDepInfo' = rawDepInfo { rawPathIdMap = path_map }
-      put (rawDepInfo', ss, IntMap.insert (getFilePathId fId) input inputs)
+      put (rawDepInfo', ss)
       return fId
 
     -- Split in (package imports, local imports)
@@ -671,10 +669,10 @@ mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl 
 
 dependencyInfoForFiles :: [ProjectHaskellInput] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
-  (rawDepInfo, bm, inputMap) <- rawDependencyInformation fs
+  (rawDepInfo, bm) <- rawDependencyInformation fs
   let allInputsWithIds =
-        map (\(fileId, input) -> (input, FilePathId fileId)) $
-          IntMap.toList inputMap
+        map (\(fileId, location) -> (artifactFilePath location, FilePathId fileId)) $
+          IntMap.toList $ idToPathMap $ rawPathIdMap rawDepInfo
       (allProjectInputs, _all_ids) = unzip allInputsWithIds
   msrs <- uses GetModSummaryWithoutTimestamps allProjectInputs
   let mss = map (fmap msrModSummary) msrs

@@ -14,6 +14,7 @@ where
 
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
 import           Control.Monad.Except                         (ExceptT (..),
+                                                               runExcept,
                                                                runExceptT)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
@@ -57,8 +58,8 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 
 runGhcideCodeAction :: IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> HandlerM Config GhcideCodeActionResult
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range _) codeAction
-    | Just nfp <- toNormalizedFilePath' <$> uriToFilePath uri
-    , Just input <- toProjectHaskellInput nfp = do
+    | Right input <- runExcept $ classifyAsHaskell uri
+    , nfp <- inputFilePath input = do
         let runRule key ruleInput = runAction ("GhcideCodeActions." <> show key) state $ use key ruleInput
             someHaskellInput = SomeProjectHaskellInput input
             someFileInput = SomeFileHaskellInput someHaskellInput

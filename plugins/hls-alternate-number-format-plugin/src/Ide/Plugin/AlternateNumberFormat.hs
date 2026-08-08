@@ -114,7 +114,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
         mkWorkspaceEdit :: ProjectHaskellInput -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit input edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath (inputFilePath input)) edits
+                changes = Just $ Map.singleton (inputUri input) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts

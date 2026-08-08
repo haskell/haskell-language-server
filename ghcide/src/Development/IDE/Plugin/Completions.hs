@@ -11,7 +11,7 @@ module Development.IDE.Plugin.Completions
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
 import           Control.Lens                             ((&), (.~), (?~))
-import           Control.Monad.Error.Class                (throwError)
+import           Control.Monad.Except                     (runExcept)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
                                                            withExceptT)
@@ -129,8 +129,7 @@ dropListFromImportDecl iDecl = let
 resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_CompletionItemResolve
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
-    file <- getNormalizedFilePathE uri
-    projectInput <- maybe (throwError PluginStaleResolve) pure $ toProjectHaskellInput file
+    projectInput <- withExceptT (const PluginStaleResolve) $ classifyAsHaskell uri
     (sess,_) <- withExceptT (const PluginStaleResolve)
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
                   $ useWithStaleFastE GhcSessionDeps projectInput
@@ -171,13 +170,9 @@ getCompletionsLSP ide plId
                   ,_context=completionContext} = ExceptT $ do
     contentsMaybe <-
       liftIO $ runAction "Completion" ide $ getUriContents $ toNormalizedUri uri
-    fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath' path
-        case toProjectHaskellInput npath of
-          -- Completions are only available for project Haskell files.
-          Nothing -> return (InL [])
-          Just projectInput -> do
+    -- Completions are only available for project Haskell files.
+    fmap Right $ case (contentsMaybe, runExcept $ classifyAsHaskell uri) of
+      (Just cnts, Right projectInput) -> do
             (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
                 opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
                 localCompls <- useWithStaleFast LocalCompletions projectInput
@@ -203,9 +198,7 @@ getCompletionsLSP ide plId
                 ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps projectInput
                 astres <- case ms of
                   Just ms' | uses_overloaded_record_dot ms'
-                    -> case toSomeHaskellInput npath of
-                         Just haskellInput -> useWithStaleFast GetHieAst haskellInput
-                         Nothing -> return Nothing
+                    -> useWithStaleFast GetHieAst (SomeProjectHaskellInput projectInput)
                   _ -> return Nothing
 
                 pure (opts, fmap (,pm,binds) compls, moduleExports, astres)

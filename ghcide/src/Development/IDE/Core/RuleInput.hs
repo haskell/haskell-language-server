@@ -19,6 +19,7 @@ module Development.IDE.Core.RuleInput
     , isHaskellFilePath
     , isDependencyHaskellPath
     , IsFileInput(..)
+    , inputUri
     , toProjectHaskellInput
     , toNonProjectHaskellInput
     , toCabalInput
@@ -40,6 +41,7 @@ import           Data.Typeable
 import           GHC.Generics                (Generic)
 import           Ide.Plugin.Error            (PluginError (..))
 import           Language.LSP.Protocol.Types (NormalizedFilePath, Uri,
+                                              filePathToUri,
                                               fromNormalizedFilePath,
                                               toNormalizedUri,
                                               uriToNormalizedFilePath)
@@ -193,6 +195,10 @@ instance IsFileInput NormalizedFilePath where
 -- | Fingerprint a file input by its normalized file path.
 fileInputFingerprint :: IsFileInput i => i -> InputFingerprint
 fileInputFingerprint input = InputFile (inputFilePath input)
+
+-- | Convert a file input to a URI.
+inputUri :: IsFileInput i => i -> Uri
+inputUri = filePathToUri . fromNormalizedFilePath . inputFilePath
 
 -- | Leaf Type which represents a cabal file.
 newtype CabalInput = CabalInput NormalizedFilePath

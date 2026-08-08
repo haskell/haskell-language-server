@@ -14,7 +14,8 @@ module Development.IDE.Plugin.Test
 import           Control.Concurrent                   (threadDelay)
 import qualified Control.Exception                    as E
 import           Control.Monad
-import           Control.Monad.Except                 (ExceptT (..), throwError)
+import           Control.Monad.Except                 (ExceptT (..), runExcept,
+                                                       throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -103,10 +104,9 @@ testRequestHandler _ (BlockSeconds secs) = do
     liftIO $ sleep secs
     return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
-    let nfp = fromUri $ toNormalizedUri file
-    case toProjectHaskellInput nfp of
-      Nothing -> return $ Left $ PluginInvalidParams $ "Expected project Haskell file: " <> pack (show file)
-      Just pHaskell -> do
+    case runExcept $ classifyAsHaskell file of
+      Left err -> pure $ Left err
+      Right pHaskell -> do
         sess <- runAction "Test - GhcSession" s $ use_ GhcSession pHaskell
         let hiPath = hiDir $ hsc_dflags $ hscEnv sess
         return $ Right (toJSON hiPath)

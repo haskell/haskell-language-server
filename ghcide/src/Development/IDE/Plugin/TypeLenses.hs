@@ -155,9 +155,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
             , Just newRange <- [toCurrentRange mp range]]
     if mode == Always || mode == Exported
       then do
-        projectFile <- handleMaybe
-          (PluginInvalidParams $ "Expected project Haskell file: " <> T.pack (show uri))
-          (toProjectHaskellInput nfp)
+        projectFile <- classifyAsHaskell uri
         -- In this mode we get the global bindings from the
         -- GlobalBindingTypeSigs rule.
         (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
@@ -180,10 +178,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
 
 codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
-  nfp <- getNormalizedFilePathE uri
-  projectFile <- handleMaybe
-    (PluginInvalidParams $ "Expected project Haskell file: " <> T.pack (show uri))
-    (toProjectHaskellInput nfp)
+  projectFile <- classifyAsHaskell uri
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
     $ useWithStaleE GetGlobalBindingTypeSigs projectFile

@@ -77,7 +77,7 @@ foundHover (mbRange, contents) =
 
 -- | Respond to and log a hover or go-to-definition request
 request
-  :: T.Text
+  :: IsFileInput input => T.Text
   -> (NormalizedFilePath -> Maybe input)
   -> (input -> Position -> IdeAction (Maybe a))
   -> b
@@ -87,13 +87,12 @@ request
   -> TextDocumentPositionParams
   -> ExceptT PluginError (HandlerM c) b
 request label classify getResults notFound found recorder ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
-    mbResult <- case uriToFilePath' uri of
-        Just path -> logAndRunRequest recorder label classify getResults ide pos path
-        Nothing   -> pure Nothing
+    mbResult <- case uriToNormalizedFilePath (toNormalizedUri uri) >>= classify of
+        Just input -> logAndRunRequest recorder label getResults ide pos input
+        Nothing    -> pure Nothing
     pure $ maybe notFound found mbResult
 
-logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Maybe input) -> (input -> Position -> IdeAction (Maybe a)) -> IdeState -> Position -> String -> IO (Maybe a)
-logAndRunRequest recorder label classify getResults ide pos path = do
-  let filePath = toNormalizedFilePath' path
-  logWith recorder Debug $ LogRequest label pos filePath
-  maybe (pure Nothing) (runIdeAction (T.unpack label) (shakeExtras ide) . flip getResults pos) (classify filePath)
+logAndRunRequest :: IsFileInput input => Recorder (WithPriority Log) -> T.Text -> (input -> Position -> IdeAction (Maybe a)) -> IdeState -> Position -> input -> IO (Maybe a)
+logAndRunRequest recorder label getResults ide pos input = do
+  logWith recorder Debug $ LogRequest label pos (inputFilePath input)
+  runIdeAction (T.unpack label) (shakeExtras ide) (getResults input pos)

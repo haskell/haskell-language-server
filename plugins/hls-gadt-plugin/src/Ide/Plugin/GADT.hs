@@ -80,7 +80,7 @@ toGADTCommand pId@(PluginId pId') state _ ToGADTParams{..} = withExceptT handleG
     where
         workSpaceEdit input edits = WorkspaceEdit
             (pure $ Map.fromList
-                [(filePathToUri $ fromNormalizedFilePath (inputFilePath input),
+                [(inputUri input,
                 edits)])
                  Nothing Nothing
 
