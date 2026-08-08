@@ -75,6 +75,13 @@ inlineThisTests =
       , testResolve "multi parameter dispatch" "MultiClauseTuple" 7 6
       , testResolve "multi clause partial" "MultiClausePartial" 8 8
       ]
+    , expectFail $ testGroup "imports"
+      [ testResolve "appends an import" "CrossFileUse" 6 4
+      , testResolve "append import at layout column" "IndentImportUse" 6 6
+      , testResolve "import unqualified to match template" "QualifiedScopeUse" 6 4
+      , testResolve "import qualified" "QualifiedBodyUse" 5 4
+      , testResolve "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
+      ]
     ]
 
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
