@@ -19,6 +19,7 @@ import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
 import           Data.Text                      (isPrefixOf)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
@@ -76,8 +77,9 @@ modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
   void $ modifyVar' var f
 
-isWorkspaceFile :: NormalizedFilePath -> Action Bool
-isWorkspaceFile file =
+isWorkspaceFile :: SomeFileInput -> Action Bool
+isWorkspaceFile input = do
+  let file = inputFilePath input
   if isRelative (fromNormalizedFilePath file)
     then return True
     else do

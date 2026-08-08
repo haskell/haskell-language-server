@@ -27,6 +27,7 @@ import           Development.IDE                   (FileDiagnostic,
                                                     fdStructuredMessageL,
                                                     logWith, realSrcSpanToRange)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes    (GetParsedModule (GetParsedModule))
 import           Development.IDE.GHC.Compat        hiding (vcat)
 import           Development.IDE.GHC.Compat.Error  (_MismatchMessage,
@@ -47,8 +48,7 @@ import           GHC.Tc.Errors.Ppr                 (pprErrCtxtMsg)
 import           GHC.Utils.Outputable              (vcat)
 #endif
 import qualified Ide.Logger                        as Logger
-import           Ide.Plugin.Error                  (PluginError,
-                                                    getNormalizedFilePathE)
+import           Ide.Plugin.Error                  (PluginError)
 import           Ide.Types                         (Config, HandlerM,
                                                     PluginDescriptor (..),
                                                     PluginId (PluginId),
@@ -89,16 +89,16 @@ codeActionHandler
     -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler recorder plId ideState _ CodeActionParams{_textDocument, _range} = do
     let TextDocumentIdentifier uri = _textDocument
-    nfp <- getNormalizedFilePathE uri
-    decls <- getDecls plId ideState nfp
+    input <- classifyAsHaskell uri
+    decls <- getDecls plId ideState input
 
-    activeDiagnosticsInRange (shakeExtras ideState) nfp _range >>= \case
+    activeDiagnosticsInRange (shakeExtras ideState) (inputFilePath input) _range >>= \case
         Nothing -> pure (InL [])
         Just fileDiags -> do
             actions <- lift $ mapM (generateAction recorder plId uri decls) fileDiags
             pure (InL (catMaybes actions))
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
+getDecls :: MonadIO m => PluginId -> IdeState -> ProjectHaskellInput -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . fmap (hsmodDecls . unLoc . pm_parsed_source)

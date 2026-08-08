@@ -44,6 +44,7 @@ import Ide.Logger
 import Ide.Plugin.Error
 
 import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.RuleInput
 import Development.IDE.Core.Service hiding (Log)
 import Development.IDE.Core.Shake hiding (Log)
 import Development.IDE.GHC.Compat
@@ -290,13 +291,12 @@ provider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 provider state              -- ghcide state, used to retrieve typechecking artifacts
          pId                -- Plugin ID
          CodeLensParams{_textDocument = TextDocumentIdentifier{_uri}} = do
-  -- VSCode uses URIs instead of file paths
-  -- haskell-lsp provides conversion functions
-  nfp <- getNormalizedFilePathE _uri
+  -- Classify the URI as a Haskell source file in the project
+  input <- classifyAsHaskell _uri
   -- Get the typechecking artifacts from the module
-  tmr <- runActionE "importLens" state $ useE TypeCheck nfp
+  tmr <- runActionE "importLens" state $ useE TypeCheck input
   -- We also need a GHC session with all the dependencies
-  hsc <- runActionE "importLens" state $ useE GhcSessionDeps nfp
+  hsc <- runActionE "importLens" state $ useE GhcSessionDeps input
   -- Use the GHC API to extract the "minimal" imports
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
 

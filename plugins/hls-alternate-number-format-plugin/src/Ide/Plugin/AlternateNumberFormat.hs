@@ -13,6 +13,7 @@ import           Development.IDE                  (GetParsedModule (GetParsedMod
                                                    define, realSrcSpanToRange,
                                                    use)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
 import           Development.IDE.GHC.Util         (getExtensions)
@@ -52,6 +53,7 @@ data CollectLiterals = CollectLiterals
 instance Hashable CollectLiterals
 instance NFData CollectLiterals
 
+type instance RuleInput CollectLiterals = ProjectHaskellInput
 type instance RuleResult CollectLiterals = CollectLiteralsResult
 
 data CollectLiteralsResult = CLR
@@ -70,8 +72,8 @@ instance Show CollectLiteralsResult where
 instance NFData CollectLiteralsResult
 
 collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
-collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
-    pm <- use GetParsedModule nfp
+collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals input -> do
+    pm <- use GetParsedModule input
     -- get the current extensions active and transform them into FormatTypes
     let exts = map GhcExtension . getExtensions <$> pm
         -- collect all the literals for a file
@@ -81,25 +83,25 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
 
 codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
-    nfp <- getNormalizedFilePathE (docId ^. L.uri)
-    CLR{..} <- requestLiterals pId state nfp
-    pragma <- getFirstPragma pId state nfp
+    input <- classifyAsHaskell (docId ^. L.uri)
+    CLR{..} <- requestLiterals pId state input
+    pragma <- getFirstPragma pId state input
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = RangeMap.filterByRange currRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
-        actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
+        actions = concatMap (\(lit, alts) -> map (mkCodeAction input lit enabledExtensions pragma) alts) literalPairs
     pure $ InL actions
     where
-        mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
-        mkCodeAction nfp lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
+        mkCodeAction :: ProjectHaskellInput -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
+        mkCodeAction input lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
             , _kind = Just $ CodeActionKind_Custom "quickfix.literals.style"
             , _diagnostics = Nothing
             , _isPreferred = Nothing
             , _disabled = Nothing
-            , _edit = Just $ mkWorkspaceEdit nfp edits
+            , _edit = Just $ mkWorkspaceEdit input edits
             , _command = Nothing
             , _data_ = Nothing
             }
@@ -109,10 +111,10 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
                     ext': exts -> [insertNewPragma npi ext' | needsExtension enabled ext'] <> pragmaEdit exts
                     []         -> []
 
-        mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
-        mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
+        mkWorkspaceEdit :: ProjectHaskellInput -> [TextEdit] -> WorkspaceEdit
+        mkWorkspaceEdit input edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
+                changes = Just $ Map.singleton (inputUri input) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
@@ -128,7 +130,7 @@ mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
 needsExtension :: [GhcExtension] -> Extension -> Bool
 needsExtension ghcExts ext = ext `notElem` map unExt ghcExts
 
-requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
+requestLiterals :: MonadIO m => PluginId -> IdeState -> ProjectHaskellInput -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
     runActionE (unpack pId <> ".CollectLiterals") state
     . useE CollectLiterals

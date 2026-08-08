@@ -76,6 +76,7 @@ import           Debug.Trace
 import           Development.IDE.Core.FileStore               (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.ProgressReporting       (progressUpdate)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.WorkerThread            (writeTaskQueue)
@@ -207,7 +208,7 @@ computePackageDeps env pkg = do
 
 data TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables   :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables   :: [ProjectHaskellInput] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   , getModuleGraph :: IO DependencyInformation
   }
 
@@ -872,9 +873,9 @@ tagDiag (w@(Just (WarningWithFlag warning)), fd)
 -- other diagnostics are left unaffected
 tagDiag t = t
 
-addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
-addRelativeImport fp modu dflags = dflags
-    {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
+addRelativeImport :: ProjectHaskellInput -> ModuleName -> DynFlags -> DynFlags
+addRelativeImport input modu dflags = dflags
+    {importPaths = nubOrd (maybeToList (moduleImportPath (inputFilePath input) modu) ++ importPaths dflags)}
 
 -- | Also resets the interface store
 atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO a
@@ -882,7 +883,7 @@ atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
+  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toSomeFileInput (toNormalizedFilePath' targetPath))) >> pure x)
     `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult
@@ -961,7 +962,7 @@ spliceExpressions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile :: ShakeExtras -> ModSummary -> SomeHaskellInput -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
  atomically $ do
   pending <- readTVar indexPending
@@ -984,10 +985,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
           bracket_ pre post $
-            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
+            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcFile) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
+    srcFile         = inputFilePath srcPath
     HieDbWriter{..} = hiedbWriter se
 
     pre = progressUpdate indexProgressReporting ProgressStarted
@@ -1004,11 +1006,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust (lspEnv se) $ \env -> LSP.runLspT env $
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-            toJSON $ fromNormalizedFilePath srcPath
+            toJSON $ fromNormalizedFilePath srcFile
       whenJust mdone $ \_ -> progressUpdate indexProgressReporting ProgressCompleted
 
 writeAndIndexHieFile
-  :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo]
+  :: HscEnv -> ShakeExtras -> ModSummary -> SomeHaskellInput -> [GHC.AvailInfo]
 #if MIN_VERSION_ghc(9,11,0)
   -> (HieASTs Type, NameEntityInfo)
 #else
@@ -1089,7 +1091,7 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                         then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
                                Nothing -> pure Nothing
                                Just fs -> let ml = fromJust $ do
-                                                    id <- lookupPathToId (depPathIdMap dep_info) fs
+                                                    id <- pathToId (depPathIdMap dep_info) fs
                                                     artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
 #if MIN_VERSION_ghc(9,13,0)
                                           in pure $ Just $ InstalledFound ml
@@ -1115,8 +1117,8 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                   then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
                          Nothing -> pure Nothing
                          Just fs -> let ml = fromJust $ do
-                                              id <- lookupPathToId (depPathIdMap dep_info) fs
-                                              artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
+                                          id <- pathToId (depPathIdMap dep_info) fs
+                                          artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
                                     in pure $ Just $ InstalledFound ml im
                   else lookupFinderCache (hsc_FC env) gwib
             }
@@ -1520,8 +1522,8 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
-  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
+  , get_file_version :: SomeFileInput -> m (Maybe FileVersion)
+  , get_linkable_hashes :: [ProjectHaskellInput] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
@@ -1635,7 +1637,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies :: MonadIO m => ([ProjectHaskellInput] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps = do
   graph <- get_module_graph
   let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph

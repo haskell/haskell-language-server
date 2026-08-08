@@ -49,6 +49,7 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentPosition,
                                                        toCurrentRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           (FieldLabel (flSelector),
@@ -103,7 +104,6 @@ import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError, PluginStaleResolve),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
@@ -180,7 +180,7 @@ getConversionType = \case
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
-  nfp <- getNormalizedFilePathE (docId ^. L.uri)
+  nfp <- classifyAsHaskell (docId ^. L.uri)
   CRR {crCodeActions, crCodeActionResolve, enabledExtensions} <- runActionE "ExplicitFields.CodeAction" ideState $ useE CollectRecords nfp
   -- All we need to build a code action is the list of extensions, and a int to
   -- allow us to resolve it later.
@@ -209,7 +209,7 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
 
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsHaskell uri
   pragma <- getFirstPragma pId ideState nfp
   (CRR {crCodeActionResolve, nameMap, enabledExtensions}, pprCtx) <- runActionE "ExplicitFields.CodeActionResolve" ideState $ do
     cr <- useE CollectRecords nfp
@@ -237,7 +237,7 @@ codeActionResolveProvider ideState pId ca uri uid = do
 
 inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsHaskell uri
   pragma <- getFirstPragma pId state nfp
   runIdeActionE "ExplicitFields.InlayHintDotDot" (shakeExtras state) $ do
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
@@ -251,7 +251,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
                   , uid <- RangeMap.elementsInRange range crCodeActions
                   , Just record <- [IntMap.lookup uid crCodeActionResolve] ]
         -- Get the definition of each dotdot of record
-        locations = [ fmap (,record) (getDefinition nfp pos)
+        locations = [ fmap (,record) (getDefinition (SomeProjectHaskellInput nfp) pos)
                     | record <- records
                     , pos <- maybeToList $ fmap _start $ recordInfoToDotDotRange record ]
     defnLocsList <- lift $ sequence locations
@@ -292,7 +292,7 @@ inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumen
 
 inlayHintPosRecProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintPosRecProvider _ state _pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsHaskell uri
   runIdeActionE "ExplicitFields.InlayHintPosRec" (shakeExtras state) $ do
     (CRR {crCodeActions, nameMap, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
     (typechecked, _) <- useWithStaleFastE TypeCheck nfp
@@ -429,6 +429,7 @@ instance NFData RecordAppExpr
 instance Show CollectRecordsResult where
   show _ = "<CollectRecordsResult>"
 
+type instance RuleInput CollectRecords = ProjectHaskellInput
 type instance RuleResult CollectRecords = CollectRecordsResult
 
 data CollectNames = CollectNames
@@ -445,6 +446,7 @@ instance NFData CollectNamesResult
 instance Show CollectNamesResult where
   show _ = "<CollectNamesResult>"
 
+type instance RuleInput CollectNames = ProjectHaskellInput
 type instance RuleResult CollectNames = CollectNamesResult
 
 data Saturated = Saturated | Unsaturated

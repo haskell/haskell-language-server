@@ -30,6 +30,7 @@ import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
 import           Development.IDE.Core.FileStore           (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error         (GhcHint (SuggestExtension),
                                                            LanguageExtensionHint (..),
@@ -39,7 +40,6 @@ import           Development.IDE.Plugin.Completions       (ghcideCompletionsPlug
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
 import qualified Development.IDE.Spans.Pragmas            as Pragmas
-import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import qualified Language.LSP.Protocol.Message            as LSP
@@ -86,15 +86,15 @@ mkCodeActionProvider :: (Maybe DynFlags -> FileDiagnostic -> [PragmaEdit]) -> Pl
 mkCodeActionProvider mkSuggest state _plId
   (LSP.CodeActionParams _ _ docId@LSP.TextDocumentIdentifier{ _uri = uri } caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
-    normalizedFilePath <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    input <- classifyAsHaskell (verTxtDocId ^. L.uri)
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
-      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession input
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput input)
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule input
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-    activeDiagnosticsInRange (shakeExtras state) normalizedFilePath caRange >>= \case
+    activeDiagnosticsInRange (shakeExtras state) (inputFilePath input) caRange >>= \case
         Nothing -> pure $ LSP.InL []
         Just fileDiags -> do
             let actions = concatMap (mkSuggest parsedModuleDynFlags) fileDiags
@@ -103,12 +103,13 @@ mkCodeActionProvider mkSuggest state _plId
 mkCodeActionProvider96 :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 mkCodeActionProvider96 mkSuggest state _plId
   (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
-    normalizedFilePath <- getNormalizedFilePathE uri
+    input <- classifyAsHaskell uri
+    let normalizedFilePath = inputFilePath input
     -- ghc session to get some dynflags even if module isn't parsed
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
-      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
-    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession input
+    fileContents <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput input)
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule input
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
         pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags

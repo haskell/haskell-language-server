@@ -25,12 +25,11 @@ import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
-import           Development.IDE                      (IdeState,
-                                                       NormalizedFilePath,
-                                                       Pretty (..), Range,
-                                                       Recorder (..), Rules,
-                                                       WithPriority (..),
+import           Development.IDE                      (IdeState, Pretty (..),
+                                                       Range, Recorder (..),
+                                                       Rules, WithPriority (..),
                                                        realSrcSpanToRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
 import           Development.IDE.Core.Shake           (define, useWithStale)
@@ -47,11 +46,10 @@ import           Development.IDE.GHC.Compat           (Extension (OverloadedReco
                                                        getLoc, hs_valds,
                                                        parenthesizeHsExpr,
                                                        pattern RealSrcSpan,
-                                                       unLoc
+                                                       unLoc)
 #if __GLASGOW_HASKELL__ >= 913
-                                                       , unLocWithUserRdr
+import           Development.IDE.GHC.Compat           (unLocWithUserRdr)
 #endif
-                                                       )
 import           Development.IDE.GHC.Util             (getExtensions,
                                                        printOutputable)
 import           Development.IDE.Graph                (RuleResult)
@@ -64,7 +62,6 @@ import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
 import           Ide.Plugin.Error                     (PluginError (..),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
@@ -127,6 +124,7 @@ instance NFData CollectRecordSelectorsResult
 instance Show CollectRecordSelectorsResult where
     show _ = "<CollectRecordsResult>"
 
+type instance RuleInput CollectRecordSelectors = ProjectHaskellInput
 type instance RuleResult CollectRecordSelectors = CollectRecordSelectorsResult
 
 -- |Where we store our collected record selectors
@@ -171,17 +169,17 @@ descriptor recorder plId =
 resolveProvider :: ResolveFunction IdeState ORDResolveData 'Method_CodeActionResolve
 resolveProvider ideState plId ca uri (ORDRD _ int) =
   do
-    nfp <- getNormalizedFilePathE uri
-    CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
-    pragma <- getFirstPragma plId ideState nfp
+    input <- classifyAsHaskell uri
+    CRSR _ crsDetails exts <- collectRecSelResult ideState input
+    pragma <- getFirstPragma plId ideState  input
     rse <- handleMaybe PluginStaleResolve $ IntMap.lookup int crsDetails
     pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState _ (CodeActionParams _ _ caDocId caRange _) =
     do
-        nfp <- getNormalizedFilePathE (caDocId ^. L.uri)
-        CRSR crsMap _ exts <- collectRecSelResult ideState nfp
+        input <- classifyAsHaskell (caDocId ^. L.uri)
+        CRSR crsMap _ exts <- collectRecSelResult ideState input
         let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
@@ -297,11 +295,13 @@ getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 -- "selector selector2.record2"
 #if __GLASGOW_HASKELL__ >= 911
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> XExpr (HsRecSelRn _)) re) =
-#else
-getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
-#endif
     ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
       | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#else
+getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
+    ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re
+      | RealSrcSpan realSpan' _ <- [ getLoc e ] ], False )
+#endif
 -- Record selection where the field is being applied with the "$" operator:
 -- "selector $ record"
 #if __GLASGOW_HASKELL__ >= 913
@@ -322,7 +322,7 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
 #endif
 getRecSels _ = ([], False)
 
-collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
+collectRecSelResult :: MonadIO m => IdeState -> ProjectHaskellInput
                         -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
     runActionE "overloadedRecordDot.collectRecordSelectors" ideState

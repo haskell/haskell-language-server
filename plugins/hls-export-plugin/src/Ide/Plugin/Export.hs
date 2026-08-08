@@ -12,12 +12,12 @@ import qualified Data.Text                        as T
 import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import           Development.IDE
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake       (getDiagnostics)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Error (_TcRnUnusedTopBind,
                                                    msgEnvelopeErrorL)
 import qualified GHC.LanguageExtensions.Type      as LangExt (Extension (..))
-import           Ide.Plugin.Error                 (getNormalizedFilePathE)
 import           Ide.Plugin.Export.Cursor
 import           Ide.Plugin.Export.ExactPrint
 import           Ide.Plugin.Export.Exports
@@ -38,15 +38,17 @@ descriptor plId =
 quickCodeActionHandlers :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 quickCodeActionHandlers state _plId (CodeActionParams _ _ doc range _) = do
   let uri = doc ^. L.uri
-  nfp <- getNormalizedFilePathE uri
+  input <- classifyAsHaskell uri
   (ps, isCpp, mUnder, msrc) <- runActionE "Export.getInputs" state $ do
-    pm <- useE GetParsedModuleWithComments nfp
+    pm <- useE GetParsedModuleWithComments input
     let ps = pm_parsed_source pm
         isCpp = xopt LangExt.Cpp (ms_hspp_opts (pm_mod_summary pm))
         mUnder = if isExplicit ps then locateUnderCursor (range ^. L.start) ps else Nothing
     -- Only a CPP module about to be offered an action needs the buffer (to find
     -- directives in the export list), so skip the fetch otherwise.
-    msrc <- if isJust mUnder && isCpp then snd <$> useE GetFileContents nfp else pure Nothing
+    msrc <- if isJust mUnder && isCpp
+      then snd <$> useE GetFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput input)
+      else pure Nothing
     pure (ps, isCpp, mUnder, msrc)
   case mUnder of
     -- A CPP module whose buffer we could not read may have directives in the
@@ -55,7 +57,7 @@ quickCodeActionHandlers state _plId (CodeActionParams _ _ doc range _) = do
     Just under | not (isCpp && isNothing msrc) -> do
       -- The names GHC flags as defined-but-unused. Attach the action to the
       -- unused diagnostics as well.
-      unusedDiags <- liftIO $ unusedTopBindDiagnostics state nfp
+      unusedDiags <- liftIO $ unusedTopBindDiagnostics state input
       pure . InL . map InR $
         [ ca
         | Just (verb, title, edits) <-
@@ -70,10 +72,10 @@ quickCodeActionHandlers state _plId (CodeActionParams _ _ doc range _) = do
     _ -> pure (InL [])
 
 -- | The LSP diagnostics for names GHC reports as unused top-level definitions.
-unusedTopBindDiagnostics :: IdeState -> NormalizedFilePath -> IO [Diagnostic]
-unusedTopBindDiagnostics state nfp = do
+unusedTopBindDiagnostics :: IdeState -> ProjectHaskellInput -> IO [Diagnostic]
+unusedTopBindDiagnostics state input = do
   diags <- atomically $ getDiagnostics state
-  pure [ fdLspDiagnostic d | d <- diags, fdFilePath d == nfp, isUnusedTopBind d ]
+  pure [ fdLspDiagnostic d | d <- diags, fdFilePath d == inputFilePath input, isUnusedTopBind d ]
   where
     isUnusedTopBind =
       has (fdStructuredMessageL . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnUnusedTopBind)

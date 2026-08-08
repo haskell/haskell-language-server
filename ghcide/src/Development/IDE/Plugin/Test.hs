@@ -14,7 +14,8 @@ module Development.IDE.Plugin.Test
 import           Control.Concurrent                   (threadDelay)
 import qualified Control.Exception                    as E
 import           Control.Monad
-import           Control.Monad.Except                 (ExceptT (..), throwError)
+import           Control.Monad.Except                 (ExceptT (..), runExcept,
+                                                       throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -30,6 +31,7 @@ import           Data.Proxy
 import           Data.String
 import           Data.Text                            (Text, pack)
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -102,10 +104,12 @@ testRequestHandler _ (BlockSeconds secs) = do
     liftIO $ sleep secs
     return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
-    let nfp = fromUri $ toNormalizedUri file
-    sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
-    let hiPath = hiDir $ hsc_dflags $ hscEnv sess
-    return $ Right (toJSON hiPath)
+    case runExcept $ classifyAsHaskell file of
+      Left err -> pure $ Left err
+      Right pHaskell -> do
+        sess <- runAction "Test - GhcSession" s $ use_ GhcSession pHaskell
+        let hiPath = hiDir $ hsc_dflags $ hscEnv sess
+        return $ Right (toJSON hiPath)
 testRequestHandler s GetShakeSessionQueueCount = liftIO $ do
     n <- atomically $ countQueue $ actionQueue $ shakeExtras s
     return $ Right (toJSON n)
@@ -116,13 +120,13 @@ testRequestHandler s WaitForShakeQueue = liftIO $ do
     return $ Right A.Null
 testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
-    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
+    success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) (toSomeFileInput nfp)
     let res = WaitForIdeRuleResult <$> success
     return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s (WaitForIdeRules k files) = liftIO $ do
     let nfps = fmap (fromUri . toNormalizedUri) files
         uniqueCount = Set.size (Set.fromList nfps)
-        act = runAction ("WaitForIdeRules " <> k <> " " <> show files) s $ parseActions (fromString k) nfps
+        act = runAction ("WaitForIdeRules " <> k <> " " <> show files) s $ parseActions (fromString k) (toSomeFileInput <$> nfps)
     success <-
       if uniqueCount > 0
         then (setSessionLoaderPendingBarrier s uniqueCount >> act)
@@ -150,7 +154,7 @@ testRequestHandler s GetStoredKeys = do
     return $ Right $ toJSON $ map show keys
 testRequestHandler s GetFilesOfInterest = do
     ff <- liftIO $ getFilesOfInterest s
-    return $ Right $ toJSON $ map fromNormalizedFilePath $ HM.keys ff
+    return $ Right $ toJSON $ map (fromNormalizedFilePath . inputFilePath) $ HM.keys ff
 testRequestHandler s GetRebuildsCount = do
     count <- liftIO $ runAction "get build count" s getRebuildCount
     return $ Right $ toJSON count
@@ -163,29 +167,35 @@ getDatabaseKeys field db = do
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
 
-parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
-parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
-parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
-parseAction "getmodsummary" fp = Right . isJust <$> use GetModSummary fp
-parseAction "getmodsummarywithouttimestamps" fp = Right . isJust <$> use GetModSummaryWithoutTimestamps fp
-parseAction "getparsedmodule" fp = Right . isJust <$> use GetParsedModule fp
-parseAction "ghcsession" fp = Right . isJust <$> use GhcSession fp
-parseAction "ghcsessiondeps" fp = Right . isJust <$> use GhcSessionDeps fp
-parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
+withProjectFile :: SomeFileInput -> (ProjectHaskellInput -> Action (Either Text Bool)) -> Action (Either Text Bool)
+withProjectFile (SomeFileHaskellInput (SomeProjectHaskellInput pFile)) action = action pFile
+withProjectFile _ _ = pure $ Right False
+
+withHaskellFile :: SomeFileInput -> (SomeHaskellInput -> Action (Either Text Bool)) -> Action (Either Text Bool)
+withHaskellFile (SomeFileHaskellInput hFile) action = action hFile
+withHaskellFile _ _                                 = pure $ Right False
+
+parseAction :: CI String -> SomeFileInput -> Action (Either Text Bool)
+parseAction "typecheck" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use TypeCheck pFile
+parseAction "getLocatedImports" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GetLocatedImports pFile
+parseAction "getmodsummary" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GetModSummary pFile
+parseAction "getmodsummarywithouttimestamps" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GetModSummaryWithoutTimestamps pFile
+parseAction "getparsedmodule" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GetParsedModule pFile
+parseAction "ghcsession" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GhcSession pFile
+parseAction "ghcsessiondeps" fp = withProjectFile fp $ \pFile -> Right . isJust <$> use GhcSessionDeps pFile
+parseAction "gethieast" fp = withHaskellFile fp $ \hFile -> Right . isJust <$> use GetHieAst hFile
 parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
-parseActions :: CI String -> [NormalizedFilePath] -> Action (Either Text [Bool])
-parseActions "typecheck" fps = Right . fmap isJust <$> uses TypeCheck fps
-parseActions "getLocatedImports" fps = Right . fmap isJust <$> uses GetLocatedImports fps
-parseActions "getmodsummary" fps = Right . fmap isJust <$> uses GetModSummary fps
-parseActions "getmodsummarywithouttimestamps" fps = Right . fmap isJust <$> uses GetModSummaryWithoutTimestamps fps
-parseActions "getparsedmodule" fps = Right . fmap isJust <$> uses GetParsedModule fps
-parseActions "ghcsession" fps = Right . fmap isJust <$> uses GhcSession fps
-parseActions "ghcsessiondeps" fps = Right . fmap isJust <$> uses GhcSessionDeps fps
-parseActions "gethieast" fps = Right . fmap isJust <$> uses GetHieAst fps
-parseActions "getFileContents" fps = Right . fmap isJust <$> uses GetFileContents fps
-parseActions other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
+parseActions :: CI String -> [SomeFileInput] -> Action (Either Text [Bool])
+parseActions action fps
+    | action == fromString "typecheck"
+    , Just pFiles <- traverse projectFile fps =
+        fmap (Right . map isJust) (uses TypeCheck pFiles)
+  where
+    projectFile (SomeFileHaskellInput (SomeProjectHaskellInput pFile)) = Just pFile
+    projectFile _ = Nothing
+parseActions action fps = sequence <$> traverse (parseAction action) fps
 
 -- | a command that blocks forever. Used for testing
 blockCommandId :: Text

@@ -30,6 +30,7 @@ import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service          hiding (Log)
 import           Development.IDE.Core.Shake            hiding (Log)
@@ -89,8 +90,8 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor exactPrintRecorder $
 
 prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
-    nfp <- getNormalizedFilePathE uri
-    HAR{hieAst} <- handleGetHieAst state nfp
+    input <- classifyAsHaskell uri
+    HAR{hieAst} <- handleGetHieAst state input
     let spansWithNamesUnderCursor =
             [ srcSpan
             | (names, srcSpan) <- getNamesSpansAtPoint' hieAst pos
@@ -109,9 +110,9 @@ prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifi
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
-    nfp <- getNormalizedFilePathE uri
-    directOldNames <- getNamesAtPos state nfp pos
-    directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
+    input <- classifyAsHaskell uri
+    directOldNames <- getNamesAtPos state input pos
+    directRefs <- concat <$> mapM (refsAtName state input) directOldNames
 
     {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
         indirect references through punned names. To find the transitive closure, we do a pass of
@@ -128,11 +129,11 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
         -- There were no Names at given position (e.g. rename triggered within a comment or on a keyword)
         [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
         _  -> do
-            refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+            refs <- HS.fromList . concat <$> mapM (refsAtName state input) oldNames
 
             -- Validate rename
             crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
-            unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
+            unless crossModuleEnabled $ failWhenImportOrExport state input refs oldNames
             when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
 
             -- Perform rename
@@ -147,13 +148,13 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
     IdeState ->
-    NormalizedFilePath ->
+    ProjectHaskellInput ->
     HashSet Location ->
     [Name] ->
     ExceptT PluginError (HandlerM config) ()
-failWhenImportOrExport state nfp refLocs names = do
+failWhenImportOrExport state input refLocs names = do
     pm <- runActionE "Rename.GetParsedModule" state
-         (useE GetParsedModule nfp)
+         (useE GetParsedModule input)
     let hsMod = unLoc $ pm_parsed_source pm
     case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
         (mbModName, _) | not $ any (\n -> nameIsLocalOrFrom (replaceModName n mbModName) n) names
@@ -174,9 +175,9 @@ getSrcEdit ::
     ExceptT PluginError (HandlerM config) WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift pluginGetClientCapabilities
-    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    input <- classifyAsHaskell (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
-        (useE GetAnnotatedParsedSource nfp)
+        (useE GetAnnotatedParsedSource input)
     let ps = annAst
         src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
@@ -216,12 +217,12 @@ replaceRefs newName refs = everywhere $
 refsAtName ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    ProjectHaskellInput ->
     Name ->
     ExceptT PluginError m [Location]
-refsAtName state nfp name = do
+refsAtName state input name = do
     ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
-    ast <- handleGetHieAst state nfp
+    ast <- handleGetHieAst state input
     dbRefs <- case nameModule_maybe name of
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$> withHieDb (\hieDb ->
@@ -233,7 +234,7 @@ refsAtName state nfp name = do
                 (nameOccName name)
                 (Just $ moduleName mod)
                 (Just $ moduleUnit mod)
-                [fromNormalizedFilePath nfp]
+                [fromNormalizedFilePath (inputFilePath input)]
             )
     pure $ nameLocs name ast ++ dbRefs
 
@@ -245,21 +246,21 @@ nameLocs name (HAR _ _ rm _ _) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
-getNamesAtPos state nfp pos = do
-    HAR{hieAst} <- handleGetHieAst state nfp
+getNamesAtPos :: MonadIO m => IdeState -> ProjectHaskellInput -> Position -> ExceptT PluginError m [Name]
+getNamesAtPos state input pos = do
+    HAR{hieAst} <- handleGetHieAst state input
     pure $ getNamesAtPoint' hieAst pos
 
 handleGetHieAst ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    ProjectHaskellInput ->
     ExceptT PluginError m HieAstResult
-handleGetHieAst state nfp =
+handleGetHieAst state input =
     -- We explicitly do not want to allow a stale version here - we only want to rename if
     -- the module compiles, otherwise we can't guarantee that we'll rename everything,
     -- which is bad (see https://github.com/haskell/haskell-language-server/issues/3799)
-    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst nfp
+    fmap removeGenerated $ runActionE "Rename.GetHieAst" state $ useE GetHieAst (SomeProjectHaskellInput input)
 
 {- Note [Generated references]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -308,8 +309,8 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedFilePath, Position)
-locToFilePos (Location uri (Range pos _)) = (,pos) <$> getNormalizedFilePathE uri
+locToFilePos :: Monad m => Location -> ExceptT PluginError m (ProjectHaskellInput, Position)
+locToFilePos (Location uri (Range pos _)) = (,pos) <$> classifyAsHaskell uri
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =

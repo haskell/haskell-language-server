@@ -35,7 +35,8 @@ import           Data.List                                    (dropWhileEnd,
                                                                intercalate,
                                                                intersperse)
 import qualified Data.Map                                     as Map
-import           Data.Maybe                                   (catMaybes)
+import           Data.Maybe                                   (catMaybes,
+                                                               mapMaybe)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
@@ -43,6 +44,7 @@ import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE.Core.FileStore               (getUriContents, setSomethingModified)
 import           Development.IDE.Core.Rules                   (IdeState,
                                                                runAction)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake                   (use_, uses_, VFSModified (VFSUnmodified), useWithSeparateFingerprintRule_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
@@ -162,11 +164,11 @@ mkRangeCommands recorder st plId textDocument =
             do
                 let TextDocumentIdentifier uri = textDocument
                 fp <- uriToFilePathE uri
-                let nfp = toNormalizedFilePath' fp
-                    isLHS = isLiterate fp
+                projectFile <- classifyAsHaskell uri
+                let isLHS = isLiterate fp
                 dbg $ LogCodeLensFp fp
                 (comments, _) <-
-                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
+                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments projectFile
                 dbg $ LogCodeLensComments comments
 
                 -- Extract 'EvalExpr's from source code
@@ -217,20 +219,20 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- uriToFilePathE _uri
-            let nfp = toNormalizedFilePath' fp
+            projectFile <- classifyAsHaskell _uri
             mdlText <- moduleText st _uri
 
             -- enable codegen for the module which we need to evaluate.
             final_hscEnv <- liftIO $ bracket_
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                queueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                queueForEvaluation st projectFile
+                return [toKey IsEvaluating projectFile]
                 )
               (setSomethingModified VFSUnmodified st "Eval" $ do
-                unqueueForEvaluation st nfp
-                return [toKey IsEvaluating nfp]
+                unqueueForEvaluation st projectFile
+                return [toKey IsEvaluating projectFile]
                 )
-              (initialiseSessionForEval (needsQuickCheck evalExprs) st nfp)
+              (initialiseSessionForEval (needsQuickCheck evalExprs) st projectFile)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -254,21 +256,21 @@ runEvalCmd recorder plId st mtoken EvalParams{..} =
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
-initialiseSessionForEval needs_quickcheck st nfp = do
+initialiseSessionForEval :: Bool -> IdeState -> ProjectHaskellInput -> IO HscEnv
+initialiseSessionForEval needs_quickcheck st projectFile = do
   (ms, env1) <- runAction "runEvalCmd" st $ do
 
-    ms <- msrModSummary <$> use_ GetModSummary nfp
-    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
+    ms <- msrModSummary <$> use_ GetModSummary projectFile
+    deps_hsc <- hscEnv <$> use_ GhcSessionDeps projectFile
 
-    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph nfp <*> pure nfp
-    linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
+    linkables_needed <- transitiveDeps <$> useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph projectFile <*> pure projectFile
+    linkables <- uses_ GetLinkable (projectFile : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    tm <- tmrTypechecked <$> use_ TypeCheck nfp
+    tm <- tmrTypechecked <$> use_ TypeCheck projectFile
     let rdr_env = tcg_rdr_env tm
         addRdrEnv hmi
           | iface <- hm_iface hmi

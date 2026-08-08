@@ -19,6 +19,7 @@ import           Control.Monad.IO.Class
 import           Data.List                         (find, isSuffixOf)
 import           Data.Maybe
 import qualified Data.Set                          as S
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
@@ -39,7 +40,7 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath    :: !NormalizedFilePath
+  { artifactFilePath    :: !ProjectHaskellInput
   , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ 'True' for a real Haskell source file ('HsSrcFile');
                                           -- 'False' for a boot ('HsBootFile') or signature ('HsigFile') file.
@@ -56,33 +57,38 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
+modSummaryToArtifactsLocation :: ProjectHaskellInput -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation input ms = ArtifactsLocation input (ms_location <$> ms) source mbMod
   where
+    file = inputFilePath input
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath file
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
 data LocateResult
   = LocateNotFound
   | LocateFoundReexport UnitId
-  | LocateFoundFile UnitId NormalizedFilePath
+  | LocateFoundFile UnitId ProjectHaskellInput
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: MonadIO m
              => [(UnitId, [FilePath], S.Set ModuleName)]
              -> [String]
-             -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))
+             -> (ModuleName -> ProjectHaskellInput -> m (Maybe ProjectHaskellInput))
              -> Bool
              -> ModuleName
              -> m LocateResult
 locateModuleFile import_dirss exts targetFor isSource modName = do
   let candidates import_dirs =
-        [ toNormalizedFilePath' (prefix </> moduleNameSlashes modName <.> maybeBoot ext)
-           | prefix <- import_dirs , ext <- exts]
+        mapMaybe
+          -- GHC import paths are untyped and may include generated dependency roots;
+          -- retain only project Haskell inputs.
+          (toProjectHaskellInput . toNormalizedFilePath')
+          [ prefix </> moduleNameSlashes modName <.> maybeBoot ext
+          | prefix <- import_dirs , ext <- exts]
   mf <- firstJustM go (concat [map (uid,) (candidates dirs) | (uid, dirs, _) <- import_dirss])
   case mf of
     Nothing ->
@@ -114,7 +120,7 @@ locateModule
     => HscEnv
     -> [(UnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
-    -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))  -- ^ does file exist predicate
+    -> (ModuleName -> ProjectHaskellInput -> m (Maybe ProjectHaskellInput))  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
     -> PkgQual                -- ^ Package name
     -> Bool                            -- ^ Is boot module
@@ -165,7 +171,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     hpt_deps = homeUnitDepends units
 
     toModLocation uid file = liftIO $ do
-        loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
+        loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath $ inputFilePath file)
         let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 

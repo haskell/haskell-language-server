@@ -30,6 +30,7 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
@@ -60,8 +61,8 @@ instance Pretty Log where
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
+whenUriFile :: Uri -> (SomeHaskellInput -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri >>= toSomeHaskellInput . toNormalizedFilePath') act
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
@@ -69,25 +70,34 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
       whenUriFile _uri $ \file -> do
+          let action = addFileOfInterest ide file Modified{firstOpen=True}
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=True}
+          case file of
+            SomeProjectHaskellInput projectFile ->
+              setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False projectFile action
+            _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
       logWith recorder Debug $ LogOpenedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file $
-            addFileOfInterest ide file Modified{firstOpen=False}
+          let action = addFileOfInterest ide file Modified{firstOpen=False}
+          case file of
+            SomeProjectHaskellInput projectFile ->
+              setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False projectFile action
+            _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
         logWith recorder Debug $ LogModifiedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file $
-                addFileOfInterest ide file OnDisk
+            let action = addFileOfInterest ide file OnDisk
+            case file of
+              SomeProjectHaskellInput projectFile ->
+                setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True projectFile action
+              _ -> setSomethingModified (VFSModified vfs) ide (fromNormalizedFilePath (inputFilePath file) ++ " (modified)") action
         logWith recorder Debug $ LogSavedTextDocument _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
@@ -107,10 +117,12 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         -- filter also uris that do not map to filenames, since we cannot handle them
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
-                [ (nfp, event) | (FileEvent uri event) <- fileEvents
+                [ (input, event) | (FileEvent uri event) <- fileEvents
                 , Just fp <- [uriToFilePath uri]
                 , let nfp = toNormalizedFilePath fp
-                , not $ HM.member nfp filesOfInterest
+                , let input = toSomeFileInput nfp
+                , let haskellInput = toSomeHaskellInput nfp
+                , not $ maybe False (flip HM.member filesOfInterest) haskellInput
                 ]
         unless (null fileEvents') $ do
             let msg = show fileEvents'

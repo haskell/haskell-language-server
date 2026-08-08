@@ -84,6 +84,7 @@ import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
+import qualified Data.IntSet                                  as IntSet
 import           Data.IORef
 import           Data.List
 import           Data.List.Extra                              (nubOrd, nubOrdOn)
@@ -105,6 +106,7 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              hiding (Log,
                                                                LogShake)
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service                 hiding (Log,
                                                                LogShake)
@@ -141,10 +143,6 @@ import           GHC.Iface.Ext.Utils                          (generateReference
 import qualified GHC.LanguageExtensions                       as LangExt
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC.Types.PkgQual                            (PkgQual (NoPkgQual))
-import           GHC.Types.Basic                              (ImportLevel (..))
-import           GHC.Unit.Types                               (GenWithIsBoot(..))
-import           GHC.Unit.Module.Graph                        (mkModuleEdge)
-import           GHC.Unit.Module.ModNodeKey                   (mnkModuleName)
 #endif
 import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
@@ -165,7 +163,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty,
                                                                usePropertyByPath)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId, getVirtualFileFromVFS)
+                                                               PluginId,
+                                                               getVirtualFileFromVFS)
 import qualified Language.LSP.Protocol.Lens                   as JL
 import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
@@ -184,7 +183,7 @@ import           GHC.Fingerprint
 data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
-  | LogLoadingHieFile !NormalizedFilePath
+  | LogLoadingHieFile !ProjectHaskellInput
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogTypecheckedFOI !NormalizedFilePath
@@ -196,7 +195,7 @@ instance Pretty Log where
     LogReindexingHieFile path ->
       "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFile path ->
-      "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath path)
+      "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath $ inputFilePath path)
     LogLoadingHieFileFail path e ->
       nest 2 $
         vcat
@@ -228,20 +227,20 @@ toIdeResult = either (, Nothing) (([],) . Just)
 
 -- TODO: rename
 -- TODO: return text --> return rope
-getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
-getSourceFileSource nfp = do
-    msource <- getFileContents nfp
+getSourceFileSource :: SomeFileInput -> Action BS.ByteString
+getSourceFileSource input = do
+    msource <- getFileContents input
     case msource of
-        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
+        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath (inputFilePath input))
         Just source -> pure $ T.encodeUtf8 $ Rope.toText source
 
 -- | Parse the contents of a haskell file.
-getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
+getParsedModule :: ProjectHaskellInput -> Action (Maybe ParsedModule)
 getParsedModule = use GetParsedModule
 
 -- | Parse the contents of a haskell file,
 -- ensuring comments are preserved in annotations
-getParsedModuleWithComments :: NormalizedFilePath -> Action (Maybe ParsedModule)
+getParsedModuleWithComments :: ProjectHaskellInput -> Action (Maybe ParsedModule)
 getParsedModuleWithComments = use GetParsedModuleWithComments
 
 ------------------------------------------------------------
@@ -260,14 +259,14 @@ getParsedModuleWithComments = use GetParsedModuleWithComments
 getParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
 getParsedModuleRule recorder =
   -- this rule does not have early cutoff since all its dependencies already have it
-  define (cmapWithPrio LogShake recorder) $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms', msrHscEnv = hsc} <- use_ GetModSummary file
+  define (cmapWithPrio LogShake recorder) $ \GetParsedModule input -> do
+    ModSummaryResult{msrModSummary = ms', msrHscEnv = hsc} <- use_ GetModSummary input
     opt <- getIdeOptions
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file ms
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt input ms
 
 withoutOptHaddock :: ModSummary -> ModSummary
 withoutOptHaddock = withoutOption Opt_Haddock
@@ -285,8 +284,8 @@ getParsedModuleWithCommentsRule :: Recorder (WithPriority Log) -> Rules ()
 getParsedModuleWithCommentsRule recorder =
   -- The parse diagnostics are owned by the GetParsedModule rule
   -- For this reason, this rule does not produce any diagnostics
-  defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments file -> do
-    ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary file
+  defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments input -> do
+    ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary input
     opt <- getIdeOptions
 
     let ms' = withoutOptHaddock $ withOption Opt_KeepRawTokenStream ms
@@ -294,7 +293,7 @@ getParsedModuleWithCommentsRule recorder =
     let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt file ms''
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt input ms''
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
@@ -306,14 +305,11 @@ getModifyDynFlags f = do
 getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
-getParsedModuleDefinition packageState opt file ms = do
-    let fp = fromNormalizedFilePath file
-    (diag, res) <- parseModule opt packageState fp ms
-    case res of
-        Nothing   -> pure (diag, Nothing)
-        Just modu -> pure (diag, Just modu)
+getParsedModuleDefinition packageState opt input ms = do
+    let fp = fromNormalizedFilePath (inputFilePath input)
+    parseModule opt packageState fp ms
 
 getLocatedImportsRule :: Recorder (WithPriority Log) -> Rules ()
 getLocatedImportsRule recorder =
@@ -331,19 +327,21 @@ getLocatedImportsRule recorder =
         let import_dirs = map (second homeUnitEnv_dflags) $ hugElts $ hsc_HUG env
         let dflags = hsc_dflags env
         opt <- getIdeOptions
-        let getTargetFor modName nfp
-                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile nfp) targets = do
+        let getTargetFor modName input
+                | Just (TargetFile nfp') <- HM.lookupKey (TargetFile input) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
+                    itExists <- getFileExists (SomeFileHaskellInput ( SomeProjectHaskellInput nfp'))
+                    return (if itExists then Just nfp' else Nothing)
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let nfp' = fromMaybe nfp $ HashSet.lookupElement nfp tt
-                    itExists <- getFileExists nfp'
-                    return $ if itExists then Just nfp' else Nothing
+                    let nfp' = fromMaybe input (HashSet.lookupElement input tt)
+                    itExists <- getFileExists (SomeFileHaskellInput ( SomeProjectHaskellInput nfp'))
+                    return (if itExists then Just nfp' else Nothing)
                 | otherwise = do
-                    itExists <- getFileExists nfp
-                    return $ if itExists then Just nfp else Nothing
+                    itExists <- getFileExists $ toSomeFileInput nfp
+                    return $ if itExists then Just input else Nothing
+              where
+                nfp = inputFilePath input
 #if MIN_VERSION_ghc(9,13,0)
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, _lvl, mbPkgName, modName) -> do
 #else
@@ -372,9 +370,10 @@ getLocatedImportsRule recorder =
         let moduleImports = catMaybes $ bootArtifact : imports'
         pure (concat diags, Just moduleImports)
 
-type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
+type RawDepState = (RawDependencyInformation, IntMap ArtifactsLocation)
+type RawDepM a = StateT RawDepState Action a
 
-execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
+execRawDepM :: Monad m => StateT RawDepState m a -> m RawDepState
 execRawDepM act =
     execStateT act
         ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
@@ -383,17 +382,18 @@ execRawDepM act =
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [NormalizedFilePath] -> Action (RawDependencyInformation, BootIdMap)
+rawDependencyInformation :: [ProjectHaskellInput] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
     (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
     return (rdi, bm)
   where
+    goPlural :: [ProjectHaskellInput] -> RawDepM [FilePathId]
     goPlural ff = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
         zipWithM go ff mss
 
-    go :: NormalizedFilePath -- ^ Current module being processed
+    go :: ProjectHaskellInput -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
     go f mbModSum = do
@@ -437,10 +437,10 @@ rawDependencyInformation fs = do
               return fId
 
 
-    checkAlreadyProcessed :: NormalizedFilePath -> RawDepM FilePathId -> RawDepM FilePathId
+    checkAlreadyProcessed :: ProjectHaskellInput -> RawDepM FilePathId -> RawDepM FilePathId
     checkAlreadyProcessed nfp k = do
       (rawDepInfo, _) <- get
-      maybe k return (lookupPathToId (rawPathIdMap rawDepInfo) nfp)
+      maybe k return (pathToId (rawPathIdMap rawDepInfo) nfp)
 
     modifyRawDepInfo :: (RawDependencyInformation -> RawDependencyInformation) -> RawDepM ()
     modifyRawDepInfo f = modify (first f)
@@ -471,7 +471,8 @@ rawDependencyInformation fs = do
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
       if not artifactIsSource
         then
-          let msource_mod_id = lookupPathToId (rawPathIdMap pm) (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath artifactFilePath)
+          let msource_mod_id = toProjectHaskellInput (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath $ inputFilePath artifactFilePath)
+                                >>= pathToId (rawPathIdMap pm)
           in case msource_mod_id of
                Just source_mod_id -> insertBootId source_mod_id (FilePathId boot_mod_id) bm
                Nothing -> bm
@@ -482,9 +483,9 @@ rawDependencyInformation fs = do
 
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles file -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
-        DependencyInformation{..} <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph file
-        case pathToId depPathIdMap file of
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles input -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
+        DependencyInformation{..} <- useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph input
+        case pathToId depPathIdMap input of
           -- The header of the file does not parse, so it can't be part of any import cycles.
           Nothing -> pure []
           Just fileId ->
@@ -494,8 +495,9 @@ reportImportCyclesRule recorder =
                   let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
                   -- Convert cycles of files into cycles of module names
                   forM cycles $ \(imp, files) -> do
-                      modNames <- forM files $
-                          getModuleName . idToPath depPathIdMap
+                      modNames <- forM files $ \cycleFileId -> do
+                          let cycleInput = idToPath depPathIdMap cycleFileId
+                          getModuleName cycleInput
                       pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
@@ -505,21 +507,28 @@ reportImportCyclesRule recorder =
               & fdLspDiagnosticL %~ JL.range .~ rng
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
-          getModuleName file = do
-           ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
+          getModuleName input = do
+           ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps input
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      getHieAstRuleDefinition f hsc tmr
+      case f of
+        SomeProjectHaskellInput input -> do
+          tmr <- use_ TypeCheck input
+          hsc <- hscEnv <$> use_ GhcSessionDeps input
+          getHieAstRuleDefinition f hsc tmr
+        _ -> pure ([], Nothing)
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
-persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
-  res <- readHieFileForSrcFromDisk recorder file
+persistentHieFileRule recorder = addPersistentRule GetHieAst $ \input -> runMaybeT $ do
+  projectInput <- MaybeT $ pure $ case input of
+    SomeProjectHaskellInput projectInput -> Just projectInput
+    _                                    -> Nothing
+  let file = inputFilePath projectInput
+  res <- readHieFileForSrcFromDisk recorder projectInput
   vfsRef <- asks vfsVar
   vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case getVirtualFileFromVFS (VFS vfsData) (filePathToUri' file) of
@@ -529,7 +538,7 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
-getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
+getHieAstRuleDefinition :: SomeHaskellInput -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
 getHieAstRuleDefinition f hsc tmr = do
   (diags, masts') <- liftIO $ generateHieAsts hsc tmr
 #if MIN_VERSION_ghc(9,11,0)
@@ -537,17 +546,17 @@ getHieAstRuleDefinition f hsc tmr = do
 #else
   let masts = masts'
 #endif
+  let file = inputFilePath f
   se <- getShakeExtras
-
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-          toJSON $ fromNormalizedFilePath f
+          toJSON $ fromNormalizedFilePath (file)
       pure []
     _ | Just asts <- masts' -> do
-          source <- getSourceFileSource f
+          source <- getSourceFileSource (toSomeFileInput file)
           let exports = tcg_exports $ tmrTypechecked tmr
               modSummary = tmrModSummary tmr
           liftIO $ writeAndIndexHieFile hsc se modSummary f exports asts source
@@ -570,7 +579,7 @@ persistentImportMapRule = addPersistentRule GetImportMap $ \_ -> pure $ Just (Im
 getBindingsRule :: Recorder (WithPriority Log) -> Rules ()
 getBindingsRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetBindings f -> do
-    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst f
+    HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst (SomeProjectHaskellInput f)
     case kind of
       HieFresh      -> pure ([], Just $ bindings rm)
       HieFromDisk _ -> pure ([], Nothing)
@@ -580,7 +589,7 @@ getDocMapRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetDocMap file -> do
       (tmrTypechecked -> tc) <- use_ TypeCheck file
       (hscEnv -> hsc)        <- use_ GhcSessionDeps file
-      HAR{refMap=rf}         <- use_ GetHieAst file
+      HAR{refMap=rf}         <- use_ GetHieAst (SomeProjectHaskellInput file)
       cfg <- getClientConfigAction
       dkMap <- liftIO $ mkDocMap hsc rf tc $ LinkTargets
                 { linkSource = linkSourceTo cfg
@@ -592,12 +601,13 @@ getDocMapRule recorder =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
-readHieFileForSrcFromDisk recorder file = do
+readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> ProjectHaskellInput -> MaybeT IdeAction Compat.HieFile
+readHieFileForSrcFromDisk recorder input = do
   ShakeExtras{withHieDb} <- ask
+  let file = inputFilePath input
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
-  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
+  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile input
   exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
 readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
@@ -611,16 +621,16 @@ readHieFileFromDisk recorder hie_loc = do
 
 -- | Typechecks a module.
 typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
-typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
-    pm <- use_ GetParsedModule file
-    hsc  <- hscEnv <$> use_ GhcSessionDeps file
-    foi <- use_ IsFileOfInterest file
+typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck input -> do
+    pm <- use_ GetParsedModule input
+    hsc  <- hscEnv <$> use_ GhcSessionDeps input
+    foi <- use_ IsFileOfInterest (SomeProjectHaskellInput input)
     -- We should only call the typecheck rule for files of interest.
     -- Keeping typechecked modules in memory for other files is
     -- very expensive.
     when (foi == NotFOI) $
-      logWith recorder Logger.Warning $ LogTypecheckedFOI file
-    typeCheckRuleDefinition hsc pm file
+      logWith recorder Logger.Warning $ LogTypecheckedFOI (inputFilePath input)
+    typeCheckRuleDefinition hsc pm input
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
 knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetKnownTargets -> do
@@ -630,9 +640,9 @@ knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorde
 
 getFileHashRule :: Recorder (WithPriority Log) -> Rules ()
 getFileHashRule recorder =
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetFileHash file -> do
-        void $ use_ GetModificationTime file
-        fileHash <- liftIO $ Util.getFileHash (fromNormalizedFilePath file)
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetFileHash input -> do
+        void $ use_ GetModificationTime input
+        fileHash <- liftIO $ Util.getFileHash (fromNormalizedFilePath (inputFilePath input))
         return (Just (fingerprintToBS fileHash), ([], Just fileHash))
 
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
@@ -656,11 +666,14 @@ mkLevelEdges ms dep_node_keys = concatMap (\nk -> map (\lvl -> mkModuleEdge lvl 
       _ -> [NormalLevel]
 #endif
 
-dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
+dependencyInfoForFiles :: [ProjectHaskellInput] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
   (rawDepInfo, bm) <- rawDependencyInformation fs
-  let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
-  msrs <- uses GetModSummaryWithoutTimestamps all_fs
+  let allInputsWithIds =
+        map (\(fileId, location) -> (artifactFilePath location, FilePathId fileId)) $
+          IntMap.toList $ idToPathMap $ rawPathIdMap rawDepInfo
+      (allProjectInputs, _all_ids) = unzip allInputsWithIds
+  msrs <- uses GetModSummaryWithoutTimestamps allProjectInputs
   let mss = map (fmap msrModSummary) msrs
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
@@ -691,14 +704,14 @@ dependencyInfoForFiles fs = do
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> Action (IdeResult TcModuleResult)
 typeCheckRuleDefinition hsc pm fp = do
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkables = unliftIO unlift . uses_ GetLinkable
+           { getLinkables = \files -> unliftIO unlift $ uses_ GetLinkable files
            , getModuleGraph = unliftIO unlift $ useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph fp
            }
   -- This 'setFileCacheHook' is neccessary to work correctly
@@ -716,7 +729,7 @@ typeCheckRuleDefinition hsc pm fp = do
       r@(_, mtc) <- a
       forM_ mtc $ \tc -> do
         used_files <- liftIO $ readIORef $ tcg_dependent_files $ tmrTypechecked tc
-        void $ uses_ GetModificationTime (map toNormalizedFilePath' used_files)
+        void $ uses_ GetModificationTime (map (toSomeFileInput . toNormalizedFilePath') used_files)
       return r
 
 -- | Get all the linkables stored in the graph, i.e. the ones we *do not* need to unload.
@@ -749,27 +762,28 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                 ]
         return (fingerprint, res)
 
-    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GhcSession input -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         -- loading is always returning a absolute path now
-        (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
+        (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath (inputFilePath input)
 
         -- add the deps to the Shake graph
         let addDependency fp = do
                 -- VSCode uses absolute paths in its filewatch notifications
                 let nfp = toNormalizedFilePath' fp
-                itExists <- getFileExists nfp
+                let file = toSomeFileInput nfp
+                itExists <- getFileExists file
                 when itExists $ void $ do
-                  use_ GetPhysicalModificationTime nfp
+                  use_ GetPhysicalModificationTime file
 
         mapM_ addDependency deps
 
         let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) file -> do
-        env <- use_ GhcSession file
-        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
+    defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) input -> do
+        env <- use_ GhcSession input
+        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env input
 
 newtype GhcSessionDepsConfig = GhcSessionDepsConfig
     { fullModuleGraph :: Bool
@@ -788,12 +802,13 @@ instance Default GhcSessionDepsConfig where
 ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
-        GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+        GhcSessionDepsConfig -> HscEnvEq -> ProjectHaskellInput -> Action (Maybe HscEnvEq)
 ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
-    mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+    mbdeps <- mapM snd <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
+            let projectDeps = map artifactFilePath deps
             when fullModuleGraph $ void $ use_ ReportImportCycles file
             msr <- if fullModSummary
                 then use_ GetModSummary file
@@ -803,8 +818,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 -- This `HscEnv` has its plugins initialized in `parsePragmasIntoHscEnv`
                 -- Fixes the bug in #4631
                 env = msrHscEnv msr
-            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
-            ifaces <- uses_ GetModIface deps
+            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) projectDeps
+            ifaces <- uses_ GetModIface projectDeps
             -- Load .hs-boot before .hs: the HPT is keyed by module name, and
             -- GHC's addHomeModInfoToHpt overwrites, so the non-boot must be last.
             let inLoadOrder = sortOn (not . isBootHmi)
@@ -822,7 +837,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 -- also points to all the direct descendants of the current module. To get the keys for the descendants
                 -- we must get their `ModSummary`s
                 !final_deps <- do
-                  dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+                  dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps projectDeps
                   return $!! map (NodeKey_Module . msKey) dep_mss
 #if MIN_VERSION_ghc(9,13,0)
                 let final_dep_edges = mkLevelEdges ms final_deps
@@ -853,7 +868,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Nothing -> return (Nothing, ([], Nothing))
     Just session -> do
       linkableType <- getLinkableType f
-      ver <- use_ GetModificationTime f
+      ver <- use_ GetModificationTime (SomeFileHaskellInput $  SomeProjectHaskellInput f)
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -862,7 +877,9 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             { source_version = ver
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
-            , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
+            , get_linkable_hashes = \fs ->
+                map (snd . fromJust . hirCoreFp)
+                  <$> uses_ GetModIface fs
             , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
@@ -892,8 +909,9 @@ getModIfaceFromDiskAndIndexRule recorder =
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
       hie_loc = Compat.ml_hie_file $ ms_location ms
+      file = inputFilePath f
   fileHash <- liftIO $ Util.getFileHash hie_loc
-  mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
+  mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath file))
   let hie_loc' = HieDb.hieModuleHieFile <$> mrow
   case mrow of
     Just row
@@ -903,7 +921,7 @@ getModIfaceFromDiskAndIndexRule recorder =
       -- All good, the db has indexed the file
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-          toJSON $ fromNormalizedFilePath f
+          toJSON $ fromNormalizedFilePath file
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
@@ -913,8 +931,8 @@ getModIfaceFromDiskAndIndexRule recorder =
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
-          logWith recorder Logger.Debug $ LogReindexingHieFile f
-          indexHieFile se ms f fileHash hf
+          logWith recorder Logger.Debug $ LogReindexingHieFile file
+          indexHieFile se ms (SomeProjectHaskellInput f) fileHash hf
 
   return (Just x)
 
@@ -936,8 +954,8 @@ getModSummaryRule displayTHWarning recorder = do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = setNonHomeFCHook $ hscSetFlags (modify_dflags $ hsc_dflags session') session' -- TODO wz1000
-        mFileContent <- getFileContents f
-        let fp = fromNormalizedFilePath f
+        mFileContent <- getFileContents (SomeFileHaskellInput(SomeProjectHaskellInput f))
+        let fp = fromNormalizedFilePath (inputFilePath f)
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp (textToStringBuffer . Rope.toText <$> mFileContent)
         case modS of
@@ -963,11 +981,11 @@ getModSummaryRule displayTHWarning recorder = do
                 return (Just fp, Just res{msrModSummary = ms})
             Nothing -> return (Nothing, Nothing)
 
-generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
-generateCore runSimplifier file = do
-    packageState <- hscEnv <$> use_ GhcSessionDeps file
+generateCore :: RunSimplifier -> ProjectHaskellInput -> Action (IdeResult ModGuts)
+generateCore runSimplifier input = do
+    packageState <- hscEnv <$> use_ GhcSessionDeps input
     hsc' <- setFileCacheHook packageState
-    tm <- use_ TypeCheck file
+    tm <- use_ TypeCheck input
     liftIO $ compileModule runSimplifier hsc' (tmrModSummary tm) (tmrTypechecked tm)
 
 generateCoreRule :: Recorder (WithPriority Log) -> Rules ()
@@ -976,7 +994,7 @@ generateCoreRule recorder =
 
 getModIfaceRule :: Recorder (WithPriority Log) -> Rules ()
 getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModIface f -> do
-  fileOfInterest <- use_ IsFileOfInterest f
+  fileOfInterest <- use_ IsFileOfInterest (SomeProjectHaskellInput f)
   res <- case fileOfInterest of
     IsFOI status -> do
       -- Never load from disk for files of interest
@@ -1019,7 +1037,7 @@ setFileCacheHook :: HscEnv -> Action HscEnv
 setFileCacheHook old_hsc_env = do
 #if MIN_VERSION_ghc(9,11,0)
   unlift <- askUnliftIO
-  return $ old_hsc_env { hsc_FC = (hsc_FC old_hsc_env) { lookupFileCache = unliftIO unlift . use_ GetFileHash . toNormalizedFilePath'  } }
+  return $ old_hsc_env { hsc_FC = (hsc_FC old_hsc_env) { lookupFileCache = unliftIO unlift . use_ GetFileHash . toSomeFileInput . toNormalizedFilePath'  } }
 #else
   return old_hsc_env
 #endif
@@ -1027,19 +1045,19 @@ setFileCacheHook old_hsc_env = do
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
 -- `.hie` and `.o` file (if needed) were also successfully written
-regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
-regenerateHiFile sess f ms compNeeded = do
+regenerateHiFile :: HscEnvEq -> ProjectHaskellInput -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile sess input ms compNeeded = do
     hsc <- setFileCacheHook (hscEnv sess)
     opt <- getIdeOptions
 
     -- By default, we parse with `-haddock` unless 'OptHaddockParse' is overwritten.
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt input ms
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', mtmr) <- typeCheckRuleDefinition hsc pm f
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm input
             case mtmr of
               Nothing -> pure (diags', Nothing)
               Just tmr -> do
@@ -1054,15 +1072,24 @@ regenerateHiFile sess f ms compNeeded = do
                 -- Write hi file
                 hiDiags <- case res of
                   Just !hiFile -> do
-
+                    let haskellInput = SomeProjectHaskellInput input
+                        fileInput = SomeFileHaskellInput haskellInput
                     -- Write hie file. Do this before writing the .hi file to
                     -- ensure that we always have a up2date .hie file if we have
                     -- a .hi file
                     se' <- getShakeExtras
                     (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
-                    source <- getSourceFileSource f
+                    source <- getSourceFileSource fileInput
                     wDiags <- forM masts $ \asts ->
-                      liftIO $ writeAndIndexHieFile hsc se' (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
+                      liftIO $
+                        writeAndIndexHieFile
+                          hsc
+                          se'
+                          (tmrModSummary tmr)
+                          haskellInput
+                          (tcg_exports $ tmrTypechecked tmr)
+                          asts
+                          source
 
                     -- We don't write the `.hi` file if there are deferred errors, since we won't get
                     -- accurate diagnostics next time if we do
@@ -1230,21 +1257,21 @@ getLinkableRule recorder =
         return (versionBS <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash <*> pure versionBS))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
-getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
+getLinkableType :: ProjectHaskellInput -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
-needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
-needsCompilationRule file
-  | "boot" `isSuffixOf` fromNormalizedFilePath file =
+needsCompilationRule :: ProjectHaskellInput -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
+needsCompilationRule input
+  | "boot" `isSuffixOf` fromNormalizedFilePath (inputFilePath input) =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
-needsCompilationRule file = do
-  graph <- useWithSeparateFingerprintRule GetModuleGraphImmediateReverseDepsFingerprints GetModuleGraph file
+needsCompilationRule input = do
+  graph <- useWithSeparateFingerprintRule GetModuleGraphImmediateReverseDepsFingerprints GetModuleGraph input
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing
-    Just depinfo -> case immediateReverseDependencies file depinfo of
+    Just depinfo -> case immediateReverseDependencies input depinfo of
       -- If we fail to get immediate reverse dependencies, fail with an error message
-      Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
+      Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show input
       Just revdeps -> do
         -- It's important to use stale data here to avoid wasted work.
         -- if NeedsCompilation fails for a module M its result will be  under-approximated
@@ -1365,13 +1392,16 @@ mainRule recorder RulesConfig{..} = do
 
 
 -- | Get HieFile for haskell file on NormalizedFilePath
-getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
-getHieFile nfp = runMaybeT $ do
-  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
-  tmr <- MaybeT $ use TypeCheck nfp
-  ghc <- MaybeT $ use GhcSession nfp
-  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-  source <- lift $ getSourceFileSource nfp
+getHieFile :: SomeHaskellInput -> Action (Maybe HieFile)
+getHieFile input = runMaybeT $ do
+  projectInput <- MaybeT $ pure $ case input of
+    SomeProjectHaskellInput fp -> Just fp
+    _                          -> Nothing
+  HAR {hieAst} <- MaybeT $ use GetHieAst input
+  tmr <- MaybeT $ use TypeCheck projectInput
+  ghc <- MaybeT $ use GhcSession projectInput
+  msr <- MaybeT $ use GetModSummaryWithoutTimestamps projectInput
+  source <- lift $ getSourceFileSource (SomeFileHaskellInput input)
   let exports = tcg_exports $ tmrTypechecked tmr
   typedAst <- MaybeT $ pure $ cast hieAst
   liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

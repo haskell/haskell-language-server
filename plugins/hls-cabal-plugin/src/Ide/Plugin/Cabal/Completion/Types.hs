@@ -9,6 +9,7 @@ import           Control.Lens                    ((^.))
 import           Data.Hashable
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
+import           Development.IDE.Core.RuleInput
 import qualified Distribution.Fields             as Syntax
 import qualified Distribution.PackageDescription as PD
 import qualified Distribution.Parsec.Position    as Syntax
@@ -40,6 +41,7 @@ instance Pretty Log where
     LogMapLookUpOfKnownKeyFailed key -> "Lookup of key in map failed even though it should exist" <+> pretty key
     LogCompletionContext ctx -> "Completion context is:" <+> pretty ctx
 
+type instance RuleInput ParseCabalFile = CabalInput
 type instance RuleResult ParseCabalFile = PD.GenericPackageDescription
 
 data ParseCabalFile = ParseCabalFile
@@ -49,6 +51,7 @@ instance Hashable ParseCabalFile
 
 instance NFData ParseCabalFile
 
+type instance RuleInput ParseCabalFields = CabalInput
 type instance RuleResult ParseCabalFields = [Syntax.Field Syntax.Position]
 
 data ParseCabalFields = ParseCabalFields
@@ -58,6 +61,7 @@ instance Hashable ParseCabalFields
 
 instance NFData ParseCabalFields
 
+type instance RuleInput ParseCabalCommonSections = CabalInput
 type instance RuleResult ParseCabalCommonSections = [Syntax.Field Syntax.Position]
 
 data ParseCabalCommonSections = ParseCabalCommonSections

@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -23,12 +24,12 @@ import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key, RuleResult, newKey,
                                                        pattern Key)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location
 import           GHC.Generics
 import           HieDb.Types                          (HieDb)
 import qualified StmContainers.Map                    as STM
@@ -75,31 +76,32 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
-toKey = (newKey.) . curry Q
+toKey :: (Shake.ShakeValue k, IsInput (RuleInput k)) => k -> RuleInput k -> Key
+toKey k input = newKey (Q k (toInput input))
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, SomeInput)
 fromKey (Key k)
-  | Just (Q (k', f)) <- cast k = Just (k', f)
+  | Just (Q k' f) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, SomeInput)
 fromKeyType (Key k)
   | App tc a <- typeOf k
   , Just HRefl <- tc `eqTypeRep` (typeRep @Q)
-  , Q (_, f) <- k
+  , Q _ f <- k
   = Just (SomeTypeRep a, f)
   | otherwise = Nothing
 
-toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyFilePath)
+toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, RuleInput k ~ NoInput ) => k -> Key
+toNoFileKey k = newKey (Q k (toInput NoInput))
 
-newtype Q k = Q (k, NormalizedFilePath)
-    deriving newtype (Eq, Hashable, NFData)
+data Q k = Q !k !SomeInput
+    deriving stock (Eq, Generic)
+    deriving anyclass (Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+    show (Q k input) = show k ++ "; " ++ show input
 
 -- | Invariant: the @v@ must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
