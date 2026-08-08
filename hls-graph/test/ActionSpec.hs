@@ -3,22 +3,21 @@
 
 module ActionSpec where
 
-import           Control.Concurrent                      (MVar, newEmptyMVar,
-                                                          readMVar)
+import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
-import           Control.Concurrent.Async                (async, poll)
+import           Control.Concurrent.Async                (AsyncCancelled (..))
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class                  (MonadIO (..))
-import           Data.IORef                              (newIORef, readIORef)
-import           Data.Maybe                              (isJust, isNothing)
+import           Data.IORef                              (newIORef, readIORef,
+                                                          writeIORef)
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase,
                                                           shakeRunDatabaseForKeys)
 import           Development.IDE.Graph.Internal.Database (build, cleanupAsync,
-                                                          incDatabase,
-                                                          registerAsyncs,
-                                                          runAsyncIfRegistered)
+                                                          incDatabase, newScope,
+                                                          scopeSize,
+                                                          spawnInScope)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
@@ -138,21 +137,34 @@ spec = do
     resultDeps res `shouldBe` UnknownDeps
 
   describe "Closing escaped rule computations" $ do
-    it "tracks an async registered while the scope is open" $ do
-      scope <- newIORef (Just [])
-      gate <- newEmptyMVar
-      a <- runAsyncIfRegistered gate $ do C.threadDelay maxBound
-      registerAsyncs scope [a] `shouldReturn` True
-      -- Confirm registration so the parked thread proceeds to its computation.
-      C.putMVar gate True
-      -- The registered async runs and stays alive.
-      poll a >>= \res -> isJust res `shouldBe` False
-    it "refuses to register into a closed scope and cancels the late async" $ do
-      scope <- newIORef (Just [])
+    it "runs a spawned body and cancels it at teardown" $ do
+      scope <- newScope
+      started <- C.newEmptyMVar
+      waitForIt <- spawnInScope scope $ do
+        C.putMVar started ()
+        C.threadDelay maxBound
+      scopeSize scope `shouldReturn` Just 1
+      -- The signal only arrives if the body really started running.
+      C.takeMVar started
       cleanupAsync scope
-      readIORef scope >>= \m -> isNothing m `shouldBe` True
-      late <- async $ C.threadDelay maxBound
-      -- Registration fails rather than leaking the async past teardown.
-      registerAsyncs scope [late] `shouldReturn` False
-      -- The refused async was cancelled, not left running.
-      poll late >>= \res -> isJust res `shouldBe` True
+      scopeSize scope `shouldReturn` Nothing
+      waitForIt `shouldThrow` \(_ :: AsyncCancelled) -> True
+    it "spawns nothing into a closed scope" $ do
+      scope <- newScope
+      cleanupAsync scope
+      ran <- newIORef False
+      waitForIt <- spawnInScope scope $ writeIORef ran True
+      -- Still closed, so nothing was added behind teardown's back.
+      scopeSize scope `shouldReturn` Nothing
+      -- Nobody gets a result, and the body never ran.
+      waitForIt `shouldThrow` \ScopeClosed -> True
+      readIORef ran `shouldReturn` False
+    it "recomputes a key whose scope died before forcing it" $ do
+      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions ruleCycleAfterVictim
+      -- The cycle tears down the inner scope while 'CycleRule 1' sits 'Running'
+      -- with a thunk that scope never forced.
+      build theDb emptyStack [CycleRule 0] `shouldThrow` \StackException{} -> True
+      -- Same step, so the stale entry is still visible and gets waited on rather
+      -- than respawned.
+      res <- build theDb emptyStack [CycleRule 1]
+      snd res `shouldBe` [1 :: Int]
