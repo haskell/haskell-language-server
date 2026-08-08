@@ -69,6 +69,12 @@ inlineThisTests =
       , testResolve "where to let arg substitution" "WhereToLetSubst" 6 4
       , testResolve "qualified" "Qualified" 5 6
       ]
+    , expectFail $ testGroup "dispatch"
+      [ testResolve "dispatch multi clause" "MultiClause" 7 4
+      , testResolve "transfer guards to case" "Guards" 9 4
+      , testResolve "multi parameter dispatch" "MultiClauseTuple" 7 6
+      , testResolve "multi clause partial" "MultiClausePartial" 8 8
+      ]
     ]
 
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
