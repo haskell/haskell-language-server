@@ -54,14 +54,10 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> SomeFileInput -> ExceptT PluginError m NextPragmaInfo
-getFirstPragma (PluginId pId) state nfp = do
-  projectFile <- handleMaybe (PluginInvalidParams $ pack "Expected project Haskell file") $
-    case nfp of
-      SomeFileHaskellInput (SomeProjectHaskellInput projectFile) -> Just projectFile
-      _ -> Nothing
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> ProjectHaskellInput -> ExceptT PluginError m NextPragmaInfo
+getFirstPragma (PluginId pId) state projectFile = do
   (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession projectFile
-  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+  fileContents <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents ( SomeFileHaskellInput $ SomeProjectHaskellInput projectFile)
   pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------

@@ -136,6 +136,7 @@ kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
     let normalizedFiles = map inputFilePath files
+        -- keep project-specific GHC rules run only for project Haskell files.
         projectHaskellFiles = mapMaybe (toProjectHaskellInput . inputFilePath) files
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $

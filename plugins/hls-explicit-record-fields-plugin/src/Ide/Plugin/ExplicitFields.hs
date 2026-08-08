@@ -210,7 +210,7 @@ codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
 codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
 codeActionResolveProvider ideState pId ca uri uid = do
   nfp <- classifyAsHaskell uri
-  pragma <- getFirstPragma pId ideState (SomeFileHaskellInput $ SomeProjectHaskellInput nfp)
+  pragma <- getFirstPragma pId ideState nfp
   (CRR {crCodeActionResolve, nameMap, enabledExtensions}, pprCtx) <- runActionE "ExplicitFields.CodeActionResolve" ideState $ do
     cr <- useE CollectRecords nfp
     typechecked <- useE TypeCheck nfp
@@ -238,7 +238,7 @@ codeActionResolveProvider ideState pId ca uri uid = do
 inlayHintDotdotProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentInlayHint
 inlayHintDotdotProvider _ state pId InlayHintParams {_textDocument = TextDocumentIdentifier uri, _range = visibleRange} = do
   nfp <- classifyAsHaskell uri
-  pragma <- getFirstPragma pId state (SomeFileHaskellInput $ SomeProjectHaskellInput nfp)
+  pragma <- getFirstPragma pId state nfp
   runIdeActionE "ExplicitFields.InlayHintDotDot" (shakeExtras state) $ do
     (crr@CRR {crCodeActions, crCodeActionResolve}, pm) <- useWithStaleFastE CollectRecords nfp
     (typechecked, _) <- useWithStaleFastE TypeCheck nfp

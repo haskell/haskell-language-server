@@ -66,8 +66,10 @@ data PluginError
     -- It will be logged with Warning and takes medium precedence (2) in being
     -- returned as a response to the client.
   | PluginInvalidParams T.Text
-    -- |PluginUnsupportedUriType should be used if a request URI cannot be
-    -- classified as a file URI.
+    -- | Plugin received a request for an URI it doesn't support.
+    -- For example, in a haskell plugin, code actions were requested for non-haskell files.
+    --
+    -- TODO: we should record the supported uri types
   | PluginUnsupportedUriType Uri
     -- |PluginInvalidUserState should be thrown when a function that your plugin
     -- depends on fails. This should only be used when the function fails
@@ -121,6 +123,7 @@ instance Pretty PluginError where
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
 toErrorCode (PluginInternalError _)      = InR ErrorCodes_InternalError
 toErrorCode (PluginInvalidParams _)      = InR ErrorCodes_InvalidParams
+-- TODO: should be a custom error code
 toErrorCode (PluginUnsupportedUriType _) = InR ErrorCodes_InvalidParams
 toErrorCode (PluginInvalidUserState _)   = InL LSPErrorCodes_RequestFailed
 -- PluginRequestRefused should never be a argument to `toResponseError`, as

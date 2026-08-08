@@ -171,7 +171,7 @@ resolveProvider ideState plId ca uri (ORDRD _ int) =
   do
     input <- classifyAsHaskell uri
     CRSR _ crsDetails exts <- collectRecSelResult ideState input
-    pragma <- getFirstPragma plId ideState (toSomeFileInput (inputFilePath input))
+    pragma <- getFirstPragma plId ideState  input
     rse <- handleMaybe PluginStaleResolve $ IntMap.lookup int crsDetails
     pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
 

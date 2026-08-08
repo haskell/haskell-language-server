@@ -85,7 +85,7 @@ codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
     input <- classifyAsHaskell (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state input
-    pragma <- getFirstPragma pId state (SomeFileHaskellInput $ SomeProjectHaskellInput input)
+    pragma <- getFirstPragma pId state input
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = RangeMap.filterByRange currRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates

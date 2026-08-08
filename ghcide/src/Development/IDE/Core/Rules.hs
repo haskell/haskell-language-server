@@ -484,14 +484,6 @@ rawDependencyInformation fs = do
     dropBootSuffix :: FilePath -> FilePath
     dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
-immediateReverseDependencyInputs :: ProjectHaskellInput -> DependencyInformation -> Maybe [ProjectHaskellInput]
-immediateReverseDependencyInputs file DependencyInformation{..} = do
-  FilePathId cur_id <- pathToId depPathIdMap file
-  pure $
-    map (idToPath depPathIdMap . FilePathId) $
-      maybe mempty IntSet.toList $
-        IntMap.lookup cur_id depReverseModuleDeps
-
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles input -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
@@ -879,7 +871,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Nothing -> return (Nothing, ([], Nothing))
     Just session -> do
       linkableType <- getLinkableType f
-      ver <- use_ GetModificationTime (toSomeFileInput (inputFilePath f))
+      ver <- use_ GetModificationTime (SomeFileHaskellInput $  SomeProjectHaskellInput f)
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -1239,7 +1231,7 @@ needsCompilationRule input = do
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
     Nothing -> pure Nothing
-    Just depinfo -> case immediateReverseDependencyInputs input depinfo of
+    Just depinfo -> case immediateReverseDependencies input depinfo of
       -- If we fail to get immediate reverse dependencies, fail with an error message
       Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show input
       Just revdeps -> do
@@ -1362,19 +1354,16 @@ mainRule recorder RulesConfig{..} = do
 
 
 -- | Get HieFile for haskell file on NormalizedFilePath
-getHieFile :: SomeFileInput -> Action (Maybe HieFile)
+getHieFile :: SomeHaskellInput -> Action (Maybe HieFile)
 getHieFile input = runMaybeT $ do
-  haskellInput <- MaybeT $ pure $ case input of
-    SomeFileHaskellInput fp -> Just fp
-    _                       -> Nothing
-  projectInput <- MaybeT $ pure $ case haskellInput of
+  projectInput <- MaybeT $ pure $ case input of
     SomeProjectHaskellInput fp -> Just fp
     _                          -> Nothing
-  HAR {hieAst} <- MaybeT $ use GetHieAst haskellInput
+  HAR {hieAst} <- MaybeT $ use GetHieAst input
   tmr <- MaybeT $ use TypeCheck projectInput
   ghc <- MaybeT $ use GhcSession projectInput
   msr <- MaybeT $ use GetModSummaryWithoutTimestamps projectInput
-  source <- lift $ getSourceFileSource input
+  source <- lift $ getSourceFileSource (SomeFileHaskellInput input)
   let exports = tcg_exports $ tmrTypechecked tmr
   typedAst <- MaybeT $ pure $ cast hieAst
   liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

@@ -175,6 +175,7 @@ getCompletionsLSP ide plId
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
         case toProjectHaskellInput npath of
+          -- Completions are only available for project Haskell files.
           Nothing -> return (InL [])
           Just projectInput -> do
             (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do

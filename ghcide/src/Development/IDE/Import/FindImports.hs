@@ -84,6 +84,8 @@ locateModuleFile :: MonadIO m
 locateModuleFile import_dirss exts targetFor isSource modName = do
   let candidates import_dirs =
         mapMaybe
+          -- GHC import paths are untyped and may include generated dependency roots;
+          -- retain only project Haskell inputs.
           (toProjectHaskellInput . toNormalizedFilePath')
           [ prefix </> moduleNameSlashes modName <.> maybeBoot ext
           | prefix <- import_dirs , ext <- exts]

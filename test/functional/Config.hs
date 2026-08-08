@@ -106,7 +106,7 @@ data GetTestDiagnostics = GetTestDiagnostics
     deriving (Eq, Show, Generic)
 instance Hashable GetTestDiagnostics
 instance NFData   GetTestDiagnostics
-type instance RuleInput GetTestDiagnostics = SomeFileInput
+type instance RuleInput GetTestDiagnostics = SomeHaskellInput
 type instance RuleResult GetTestDiagnostics = ()
 
 expectDiagnosticsFail

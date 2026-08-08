@@ -114,7 +114,7 @@ rules recorder plId = do
       let file = inputFilePath input
       config <- getPluginConfigAction plId
       if plcGlobalOn config && plcDiagnosticsOn config then do
-          maybeHie <- getHieFile (toSomeFileInput file)
+          maybeHie <- getHieFile (SomeProjectHaskellInput input)
           case maybeHie of
             Nothing -> return ([], Nothing)
             Just hie -> do

@@ -936,7 +936,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         unless (null new_components_info || not checkProject) $ do
             cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath . inputFilePath) (concatMap targetLocations all_targets)
             void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                let files = map (toSomeFileInput . inputFilePath) cfps'
+                let files = map ( SomeFileHaskellInput . SomeProjectHaskellInput) cfps'
                 mmt <- uses GetModificationTime files
                 let cs_exist = map fst (filter (isJust . snd) (zip cfps' mmt))
                 modIfaces <- uses GetModIface cs_exist

@@ -77,7 +77,7 @@ codeLensCommandHandler plId state _ InstanceBindLensCommand{commandUri, commandE
     -- have the InstanceSigs extension enabled
     mbPragma <- if InstanceSigs `elem` lensEnabledExtensions
                 then pure Nothing
-                else Just <$> getFirstPragma plId state (SomeFileHaskellInput $ SomeProjectHaskellInput nfp)
+                else Just <$> getFirstPragma plId state nfp
     let -- By mapping over our Maybe NextPragmaInfo value, we only compute this
         -- edit if we actually need to.
         pragmaInsertion =

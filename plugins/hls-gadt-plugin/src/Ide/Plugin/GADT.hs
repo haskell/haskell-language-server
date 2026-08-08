@@ -68,7 +68,7 @@ toGADTCommand pId@(PluginId pId') state _ ToGADTParams{..} = withExceptT handleG
         $ maybeToEither FailedToFindDataDeclRange
         $ srcSpanToRange $ locA ann
     pragma <- withExceptT GhcidePluginErrors
-        $ getFirstPragma pId state (SomeFileHaskellInput $ SomeProjectHaskellInput input)
+        $ getFirstPragma pId state input
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ pluginSendRequest
