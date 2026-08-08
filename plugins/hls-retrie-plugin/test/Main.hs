@@ -60,6 +60,7 @@ inlineThisTests =
       , testResolve "nested let function" "NestedLet" 5 5
       , testResolve "operator" "Operator" 4 8
       , testResolve "uses imported fixities" "OpChain" 8 4
+      , testResolve "expression has lower precedence" "Parenthesis" 7 8
       ]
     ]
 
