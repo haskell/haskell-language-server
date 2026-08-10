@@ -53,6 +53,7 @@ inlineThisTests =
       , testProvider "class member" "Class" 6 6 []
       , testProvider "operator" "Operator" 4 8 ["Inline */"]
       , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward in current file", "Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards in current file", "Apply rule maybe/nothing backwards"]
+      , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Unfold UserId in current file", "Fold UserId", "Fold UserId in current file"]
       ]
     , testGroup "resolve"
       [ testResolve "top level function" "Identity" 7 6
