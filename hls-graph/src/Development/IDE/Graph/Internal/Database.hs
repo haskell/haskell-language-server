@@ -462,8 +462,13 @@ partitionWaits = partitionEithers . map toEither
     toEither (Wait io)  = Left io
     toEither (Spawn io) = Right io
 
+justWait :: Wait -> IO ()
+justWait (Wait io)  = io
+justWait (Spawn io) = io
+
 waitConcurrently_ :: [Wait] -> AIO ()
 waitConcurrently_ [] = pure ()
+waitConcurrently_ [one] = liftIO $ justWait one -- Avoid spawning when only a single action
 waitConcurrently_ waits = do
     scope <- AIO ask
     let (syncs, spawns) = partitionWaits waits
