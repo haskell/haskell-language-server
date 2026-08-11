@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -24,7 +25,8 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeSessionInit, shakeExtras, shakeDb, rootDir,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets(..), Target(..), toKnownFiles, unionKnownTargets, mkKnownTargets,
+    KnownTargets(..), Target(..), toKnownFiles, toTargetFiles, unionKnownTargets,
+    mkKnownTargets, mkExtraKnownFiles, tombstoneKnownFiles,
     IdeRule, IdeResult, RestartQueue,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -53,6 +55,7 @@ module Development.IDE.Core.Shake(
     HLS.getClientConfig,
     getPluginConfigAction,
     knownTargets,
+    updateKnownTargets,
     ideLogger,
     actionLogger,
     getVirtualFile,
@@ -86,6 +89,9 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
+#if MIN_VERSION_ghc(9,10,0)
+import           Control.Exception.Context              (displayExceptionContext)
+#endif
 import           Control.Lens                           ((%~), (&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -108,8 +114,8 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.List.Extra                        (foldl', partition,
-                                                         takeEnd)
+import qualified Data.List                              as List
+import           Data.List.Extra                        (partition, takeEnd)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
 import qualified Data.SortedList                        as SL
@@ -225,10 +231,7 @@ instance Pretty Log where
         , "Took:" <+> pretty (showDuration seconds) ]
     LogBuildSessionFinish e -> case e of
       Nothing -> "Finished build session"
-      Just e -> vcat
-        [ "Finished build session"
-        , pretty (displayException e)
-        ]
+      Just e -> "Finished build session:" <+> prettyBuildSessionFinishException e
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
@@ -644,6 +647,28 @@ knownTargets = do
   ShakeExtras{knownTargetsVar} <- getShakeExtras
   liftIO $ readTVarIO knownTargetsVar
 
+-- | Record files that appeared and disappeared, returning the keys to
+-- invalidate. Must be called from the restart thread,
+-- see Note [Serializing runs in separate thread].
+updateKnownTargets
+  :: ShakeExtras
+  -> [NormalizedFilePath] -- ^ appeared
+  -> [NormalizedFilePath] -- ^ disappeared
+  -> IO [Key]
+updateKnownTargets ShakeExtras{knownTargetsVar} added removed
+  | null added && null removed = pure []
+  | otherwise = atomically $ do
+      known <- readTVar knownTargetsVar
+      -- Registering a file the session loader already knows about would
+      -- rebuild everything derived from the targets for no gain.
+      -- See Note [Files that are not targets]
+      let addedSet = HSet.fromList added `HSet.difference` toKnownFiles (unhashed known)
+          known' = flip mapHashed known $
+            tombstoneKnownFiles (HSet.fromList removed) addedSet
+            . unionKnownTargets (mkExtraKnownFiles addedSet)
+      writeTVar knownTargetsVar known'
+      pure [toNoFileKey GetKnownTargets | known /= known']
+
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
 -- elsewhere and doing it twice is expensive.
@@ -820,7 +845,7 @@ shakeRestart recorder IdeState{..} vfs reason acts ioActionBetweenShakeSession =
                 keys <- ioActionBetweenShakeSession
                 -- it is every important to update the dirty keys after we enter the critical section
                 -- see Note [Housekeeping rule cache and dirty key outside of hls-graph]
-                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> foldl' (flip insertKeySet) x keys
+                atomically $ modifyTVar' (dirtyKeys shakeExtras) $ \x -> List.foldl' (flip insertKeySet) x keys
                 res <- shakeDatabaseProfile shakeDb
                 backlog <- readTVarIO $ dirtyKeys shakeExtras
                 queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -1285,7 +1310,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file (T.pack $ show (key, file) ++ show e) | not $ isBadDependency e],Nothing))
+                        pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
@@ -1329,6 +1354,37 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+
+    prettyRuleAbortedByException key file e = T.pack $ unlines $
+        [ "Rule execution aborted due to exception"
+        , ""
+        , "Rule: " <> show key
+        , "Target: " <> fromNormalizedFilePath file
+        , "Message: " <> show e
+        ] <>
+        [ unlines
+            [ "Context:"
+            , ctx
+            ]
+        | Just ctx <- [displayExcContext e]
+        ]
+
+displayExcContext :: SomeException -> Maybe String
+displayExcContext (SomeException _exc) =
+#if MIN_VERSION_ghc(9,10,0)
+    case displayExceptionContext ?exceptionContext of
+      "" -> Nothing
+      dc -> Just dc
+#else
+    Just $ displayException (SomeException _exc)
+#endif
+
+prettyBuildSessionFinishException :: SomeException -> Doc ann
+prettyBuildSessionFinishException exc = case fromException exc of
+  Nothing -> case displayExcContext exc of
+    Nothing  -> pretty (displayException exc)
+    Just ctx -> pretty ctx
+  Just AsyncCancelled -> viaShow AsyncCancelled -- We don't want to see the stack trace for a cancelled build session
 
 -- Note [Housekeeping rule cache and dirty key outside of hls-graph]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

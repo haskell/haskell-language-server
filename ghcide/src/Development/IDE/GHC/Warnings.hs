@@ -53,7 +53,8 @@ withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> LogActionCompat
       newAction dynFlags logFlags wr _ loc prUnqual msg = do
-        let wr_d = map ((wr,) . over fdLspDiagnosticL (attachReason wr)) $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
+        let wr_d = map ((wr,) . over fdLspDiagnosticL (attachReason wr))
+                 $ diagFromSDocErrMsg diagSource dynFlags (mkWarnMsg dynFlags wr logFlags loc prUnqual msg)
         modifyVar_ warnings $ return . (wr_d:)
       newLogger env = pushLogHook (const (logActionCompat (newAction (hsc_dflags env)))) (hsc_logger env)
   res <- action $ \env -> putLogHook (newLogger env) env

@@ -3134,6 +3134,16 @@ addFunctionConstraintTests = let
     , "  return ()"
     ]
 
+  -- See https://github.com/haskell/haskell-language-server/issues/3486
+  quantifiedConstraintSourceCode :: T.Text -> T.Text
+  quantifiedConstraintSourceCode context = T.unlines
+    [ "{-# LANGUAGE QuantifiedConstraints #-}"
+    , "{-# LANGUAGE RankNTypes #-}"
+    , "module Testing where"
+    , "f :: " <> context <> " => f Int -> m Bool"
+    , "f x = return (x == x)"
+    ]
+
   in testGroup "add function constraint"
   [ checkCodeAction
     "no preexisting constraint"
@@ -3180,6 +3190,11 @@ addFunctionConstraintTests = let
     "Add `Monad m` to the context of the type signature for `f`"
     (missingMonadConstraint "")
     (missingMonadConstraint "Monad m => ")
+  , checkCodeAction
+    "preexisting parenthesized quantified constraint"
+    "Add `Monad m` to the context of the type signature for `f`"
+    (quantifiedConstraintSourceCode "((forall a. Eq (f a)), Applicative m)")
+    (quantifiedConstraintSourceCode "((forall a. Eq (f a)), Applicative m, Monad m)")
   ]
 
 checkCodeAction :: TestName -> T.Text -> T.Text -> T.Text -> TestTree

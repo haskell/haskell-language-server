@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Types.HscEnvEq
 (   HscEnvEq,
-    hscEnv, newHscEnvEq,
+    hscEnv, newHscEnvEq, envRepresentative,
     updateHscEnvEq,
     envPackageExports,
     envVisibleModuleNames,
@@ -12,6 +12,7 @@ import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force, rwhnf)
 import           Control.Exception               (evaluate, mask, throwIO)
+import qualified Control.Exception               as Exc
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
 import           Data.IORef
@@ -23,6 +24,7 @@ import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           Development.IDE.Types.Location  (NormalizedFilePath)
 import           GHC.Driver.Env                  (hsc_all_home_unit_ids)
 import           OpenTelemetry.Eventlog          (withSpan)
 
@@ -39,6 +41,8 @@ data HscEnvEq = HscEnvEq
         -- but it could panic due to a ghc bug: https://github.com/haskell/haskell-language-server/issues/1365
         -- So it's wrapped in IO here for error handling
         -- If Nothing, 'listVisibleModuleNames' panic
+    , envRepresentative     :: !NormalizedFilePath
+        -- ^ See Note [Session representatives]
     }
 
 updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
@@ -47,8 +51,8 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: HscEnv -> IO HscEnvEq
-newHscEnvEq hscEnv' = do
+newHscEnvEq :: NormalizedFilePath -> HscEnv -> IO HscEnvEq
+newHscEnvEq envRepresentative hscEnv' = do
 
     mod_cache <- newIORef emptyInstalledModuleEnv
     -- This finder cache is for things which are outside of things which are tracked
@@ -56,14 +60,14 @@ newHscEnvEq hscEnv' = do
 #if MIN_VERSION_ghc(9,11,0)
     let hscEnv = hscEnv'
                { hsc_FC = FinderCache
-                        { flushFinderCaches = \_ -> error "GHC should never call flushFinderCaches outside the driver"
+                        { flushFinderCaches = \_ -> throwIO $ Exc.ErrorCall "flushFinderCaches: GHC should never call flushFinderCaches outside the driver"
 #if MIN_VERSION_ghc(9,13,0)
                         , addToFinderCache  = \im val -> do
 #else
                         , addToFinderCache  = \(GWIB im _) val -> do
 #endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
-                            then error "tried to add home module to FC"
+                            then throwIO $ Exc.ErrorCall "addToFinderCache: tried to add home module to FC"
                             else atomicModifyIORef' mod_cache $ \c -> (extendInstalledModuleEnv c im val, ())
 #if MIN_VERSION_ghc(9,13,0)
                         , lookupFinderCache = \im -> do
@@ -71,9 +75,9 @@ newHscEnvEq hscEnv' = do
                         , lookupFinderCache = \(GWIB im _) -> do
 #endif
                             if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
-                            then error ("tried to lookup home module from FC" ++ showSDocUnsafe (ppr (im, hsc_all_home_unit_ids hscEnv')))
+                            then throwIO $ Exc.ErrorCall ("lookupFinderCache: tried to lookup home module from FC: " ++ showSDocUnsafe (ppr (im, hsc_all_home_unit_ids hscEnv')))
                             else lookupInstalledModuleEnv <$> readIORef mod_cache <*> pure im
-                        , lookupFileCache = \fp -> error ("not used by HLS" ++ fp)
+                        , lookupFileCache = \fp -> throwIO $ Exc.ErrorCall ("lookupFileCache: Called without using setFileCacheHook for target: " ++ fp)
                         }
                 }
 
@@ -128,9 +132,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b _ _) =
+  rnf (HscEnvEq a b _ _ e) =
       -- deliberately skip the package exports map and visible module names
-      rnf (Unique.hashUnique a) `seq` rwhnf b
+      rnf (Unique.hashUnique a) `seq` rwhnf b `seq` rnf e
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique

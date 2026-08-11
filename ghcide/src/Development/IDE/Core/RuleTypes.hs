@@ -40,7 +40,8 @@ import           GHC.Iface.Ext.Utils                          (RefMap)
 
 import           Data.ByteString                              (ByteString)
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
-import           Development.IDE.Import.FindImports           (ArtifactsLocation)
+import           Development.IDE.Import.FindImports           (ArtifactsLocation,
+                                                               ModuleToFilenames)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
@@ -104,6 +105,9 @@ data LinkableResult
   { linkableHomeMod :: !HomeModInfo
   , linkableHash    :: !ByteString
   -- ^ The hash of the core file
+  , linkableVersion :: !ByteString
+  -- ^ Fingerprint of the core file and the versions of all transitive
+  -- dependencies, identifying the code the linkable links against
   }
 
 instance Show LinkableResult where
@@ -411,6 +415,8 @@ type instance RuleResult GetModSummary = ModSummaryResult
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
 
+type instance RuleResult GetModulesPaths = ModuleToFilenames
+
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Generic)
 instance Hashable GetParsedModule
@@ -522,6 +528,13 @@ data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
     deriving (Eq, Show, Generic)
 instance Hashable GetModSummaryWithoutTimestamps
 instance NFData   GetModSummaryWithoutTimestamps
+
+-- | Map from module name to paths, from scanning the session's import
+-- directories. See Note [Session representatives].
+data GetModulesPaths = GetModulesPaths
+    deriving (Eq, Show, Generic)
+instance Hashable GetModulesPaths
+instance NFData   GetModulesPaths
 
 data GetModSummary = GetModSummary
     deriving (Eq, Show, Generic)

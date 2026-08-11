@@ -56,7 +56,7 @@ import           Development.IDE.Graph               (Action, Key)
 import qualified Development.IDE.Session.Implicit    as GhcIde
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq      (HscEnvEq)
+import           Development.IDE.Types.HscEnvEq      (HscEnvEq, hscEnv)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified HIE.Bios                            as HieBios
@@ -72,7 +72,7 @@ import           Ide.Logger                          (Pretty (pretty),
                                                       vcat, viaShow, (<+>))
 import           Ide.Types                           (Config,
                                                       SessionLoadingPreferenceConfig (..),
-                                                      sessionLoading)
+                                                      componentsLoading)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
@@ -401,6 +401,8 @@ getHieDbLocIn base dir = do
 -- - The loader processes files from 'pendingFiles', attempting to load them in batches.
 -- - (SBL1) If a file is already in 'failedFiles', it is loaded individually (single-file mode).
 -- - (SBL2) Otherwise, the loader tries to load as many files as possible together (batch mode).
+--   Only files owned by the same cradle (the same @hie.yaml@) as the file being
+--   loaded are batched together; see 'getExtraFilesToLoad'.
 --
 -- On success:
 --   - (SBL3) All successfully loaded files are removed from 'pendingFiles' and 'failedFiles',
@@ -537,6 +539,11 @@ insertFileMapping :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM
 insertFileMapping state hieYaml ncfp =
   STM.insert hieYaml ncfp (filesMap state)
 
+-- | Same as 'insertFileMapping', but never overwrites an existing value.
+insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMappingIfMissing state hieYaml ncfp =
+  STM.focus (Focus.alter (<|> Just hieYaml)) ncfp (filesMap state)
+
 -- | Remove a file from the pending file set
 removeFromPending :: SessionState -> FilePath -> STM ()
 removeFromPending state file =
@@ -580,18 +587,27 @@ handleSingleFileProcessingError state hieYaml file diags extraDepFiles = liftIO 
 --
 -- If the current file is in error loading files, we fallback to single loading mode (empty set)
 -- Otherwise, we remove error files from pending files and also exclude the current file
-getExtraFilesToLoad :: SessionState -> FilePath -> IO [FilePath]
-getExtraFilesToLoad state cfp = do
+--
+-- Only files already known to belong to the same cradle as the current file are
+-- returned. Handing files owned by a different cradle to a multi-component load
+-- makes the build tool fail wholesale — e.g. cabal cannot map the foreign files
+-- to any component of this cradle — which poisons the load of the current file.
+getExtraFilesToLoad :: SessionState -> Maybe FilePath -> FilePath -> IO [FilePath]
+getExtraFilesToLoad state hieYaml cfp = do
   pendingFiles <- getPendingFiles state
   errorFiles <- readVar (failedFiles state)
   old_files <- readVar (loadedFiles state)
   -- if the file is in error loading files, we fall back to single loading mode
-  return $
-    Set.toList $
-      if cfp `Set.member` errorFiles
-        then Set.empty
-        -- remove error files from pending files since error loading need to load one by one
-        else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  let candidates =
+        if cfp `Set.member` errorFiles
+          then Set.empty
+          -- remove error files from pending files since error loading need to load one by one
+          else (Set.delete cfp $ pendingFiles `Set.difference` errorFiles) <> old_files
+  filterM ownedByThisCradle (Set.toList candidates)
+  where
+    ownedByThisCradle file = do
+      owner <- atomically $ STM.lookup (toNormalizedFilePath' file) (filesMap state)
+      pure $ owner == Just hieYaml
 
 -- | We allow users to specify a loading strategy.
 -- Check whether this config was changed since the last time we have loaded
@@ -606,11 +622,11 @@ didSessionLoadingPreferenceConfigChange s = do
     mLoadingConfig <- liftIO $ readVar biosSessionLoadingVar
     case mLoadingConfig of
         Nothing -> do
-            liftIO $ writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
+            liftIO $ writeVar biosSessionLoadingVar (Just (componentsLoading clientConfig))
             pure False
         Just loadingConfig -> do
-            liftIO $ writeVar biosSessionLoadingVar (Just (sessionLoading clientConfig))
-            pure (loadingConfig /= sessionLoading clientConfig)
+            liftIO $ writeVar biosSessionLoadingVar (Just (componentsLoading clientConfig))
+            pure (loadingConfig /= componentsLoading clientConfig)
 
 newSessionState :: IO SessionState
 newSessionState = do
@@ -700,14 +716,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
     let absolutePathsCradleDeps (eq, deps) = (eq, fmap toAbsolutePath $ Map.keys deps)
     returnWithVersion $ \file -> do
       let absFile = toAbsolutePath file
-      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState absFile
+      absolutePathsCradleDeps <$> lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 -- | Given a file, this function will return the HscEnv and the dependencies
 -- it would look up the cache first, if the cache is not available, it would
 -- submit a request to the getOptionsLoop to get the options for the file
 -- and wait until the options are available
-lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
-lookupOrWaitCache recorder sessionState absFile = do
+lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> (FilePath -> IO (Maybe FilePath)) -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
+lookupOrWaitCache recorder sessionState cradleLoc absFile = do
   let ncfp = toNormalizedFilePath' absFile
   cacheResult <- maybeM
     (return Nothing)
@@ -725,8 +741,14 @@ lookupOrWaitCache recorder sessionState absFile = do
     Just r -> return r
     Nothing -> do
       -- if not ok, we need to reload the session
-      atomically $ addToPending sessionState absFile
-      lookupOrWaitCache recorder sessionState absFile
+      hieYaml <- cradleLoc absFile
+      atomically $ do
+        -- Insert the mapping into filesMap so the cradle is known up-front.
+        -- This ensures we are able to batch requests belonging to the same
+        -- cradle.
+        insertFileMappingIfMissing sessionState hieYaml ncfp
+        addToPending sessionState absFile
+      lookupOrWaitCache recorder sessionState cradleLoc absFile
 
 checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
 checkInCache sessionState ncfp = runMaybeT $ do
@@ -940,6 +962,19 @@ packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
   liftIO $ modifyVar (hscEnvs sessionState) $
     addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs dep_info newTargetDfs (hieYaml, cfp, opts)
 
+{- Note [Modules the build tool has not been told about]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Writing a module and adding it to the cabal file are two steps, so we
+constantly see files that exist and are already imported but are not a target
+of any component. If we refuse to load such a file it gets no session at all,
+and the modules importing it fail to typecheck without reporting anything.
+
+We treat a file below an import path of a component as a module of that
+component, because that is what GHC does: its finder searches the -i
+directories and never the target list, and a module missing from the targets is
+a warning (-Wmissing-home-modules), not an error. A file below no import path
+is still an error, we have no options to compile it with.
+-}
 addErrorTargetIfUnknown :: Foldable t => t [TargetDetails] -> Maybe FilePath -> NormalizedFilePath -> IO ([TargetDetails], HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
 addErrorTargetIfUnknown all_target_details hieYaml cfp = do
   let flags_map' = HM.fromList (concatMap toFlagsMap all_targets')
@@ -949,16 +984,60 @@ addErrorTargetIfUnknown all_target_details hieYaml cfp = do
         Just _ -> (all_targets', flags_map')
         Nothing -> (this_target_details : all_targets', HM.insert cfp this_flags flags_map')
           where
-                this_target_details = TargetDetails (TargetFile cfp) this_error_env this_dep_info [cfp]
-                this_flags = (this_error_env, this_dep_info)
-                this_error_env = ([this_error], Nothing)
-                this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp
-                                (T.unlines
-                                  [ "No cradle target found. Is this file listed in the targets of your cradle?"
-                                  , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
-                                  ])
-                                Nothing
+                this_target_details = TargetDetails (TargetFile cfp) this_env this_dep_info [cfp]
+                this_flags = (this_env, this_dep_info)
+                -- See Note [Modules the build tool has not been told about]
+                this_env = case owningComponent all_targets' cfp of
+                  Just env -> (missingHomeModuleWarning env cfp, Just env)
+                  Nothing  -> ([noTargetError], Nothing)
+                noTargetError =
+                  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp
+                    (T.unlines
+                      [ "No cradle target found. Is this file listed in the targets of your cradle?"
+                      , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
+                      ])
+                    Nothing
   pure (all_targets, this_flags_map)
+
+-- | -Wmissing-home-modules. GHC only emits it from the driver, which we do not
+-- use, so we emit it ourselves.
+missingHomeModuleWarning :: HscEnvEq -> NormalizedFilePath -> [FileDiagnostic]
+missingHomeModuleWarning env cfp
+  | not (wopt Opt_WarnMissingHomeModules dflags) = []
+  | otherwise =
+      [ ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) cfp
+          (T.unlines [message, "It is being compiled with the options of that component."])
+          Nothing
+      ]
+  where
+    dflags = hsc_dflags $ hscEnv env
+    unit = T.pack $ unitIdString $ homeUnitId_ dflags
+    message
+      | gopt Opt_BuildingCabalPackage dflags =
+          "This module is needed for compilation but not listed in your .cabal file's \
+          \other-modules or exposed-modules for '" <> unit <> "'."
+      | otherwise =
+          "This module is not listed in the options for '" <> unit
+            <> "' but needed for compilation."
+
+-- | The component with an import path the file is below. If several match we
+-- take the most specific one, the one giving the shortest relative path.
+-- See Note [Modules the build tool has not been told about]
+owningComponent :: [TargetDetails] -> NormalizedFilePath -> Maybe HscEnvEq
+owningComponent targets cfp =
+  listToMaybe [ env | (_, env) <- sortOn (length . splitDirectories . fst) candidates ]
+  where
+    file = fromNormalizedFilePath cfp
+    -- makeRelative gives back the file unchanged if it is not below the
+    -- directory. Both paths are absolute, so this is unambiguous.
+    candidates =
+      [ (rel, env)
+      | td <- targets
+      , Just env <- [snd (targetEnv td)]
+      , importPath <- importPaths $ hsc_dflags $ hscEnv env
+      , let rel = makeRelative (normalise importPath) file
+      , rel /= file
+      ]
 
 -- | Populate the knownTargetsVar with all the
 -- files in the project so that `knownFiles` can learn about them and
@@ -1025,8 +1104,8 @@ loadCradleWithNotifications recorder sessionState hieYaml cfp = do
   let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                 <> " (for " <> T.pack lfpLog <> ")"
 
-  sessionPref <- asks (sessionLoading . sessionClientConfig)
-  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState cfp
+  sessionPref <- asks (componentsLoading . sessionClientConfig)
+  extraToLoads <- liftIO $ getExtraFilesToLoad sessionState hieYaml cfp
   -- Start loading the file!
   eopts <- mRunLspTCallback lspEnv (\act -> withIndefiniteProgress progMsg Nothing NotCancellable (const act)) $
     withTrace "Load cradle" $ \addTag -> do
@@ -1047,7 +1126,7 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file loadStyle cradle
+    cradleRes <- HieBios.getCompilerOptions (TargetWithContext file old_fps) loadStyle cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
@@ -1068,8 +1147,9 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
 
     where
         loadStyle = case loadConfig of
-            PreferSingleComponentLoading -> LoadFile
-            PreferMultiComponentLoading  -> LoadWithContext old_fps
+            PreferSingleComponentLoading   -> LoadFile
+            PreferMultiComponentLoading    -> LoadFileWithContext
+            PreferMultiWholeProjectLoading -> LoadUnitsFromCradle
 
 -- ----------------------------------------------------------------------------
 -- Utilities

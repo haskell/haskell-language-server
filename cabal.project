@@ -6,7 +6,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2026-07-11T00:00:00Z
+index-state: 2026-07-30T14:41:11Z
 
 tests: True
 test-show-details: direct
@@ -51,6 +51,11 @@ constraints:
 allow-newer:
   cabal-install-parsers:Cabal-syntax,
 
+
+-- See https://gitlab.haskell.org/ghc/ghc/-/work_items/26609
+-- https://github.com/digital-asset/ghc-lib/issues/620
+if impl(ghc >= 9.10) && impl(ghc < 9.11)
+  constraints: ghc-lib-parser ^>=9.10
 
 if impl(ghc >= 9.13)
   allow-newer:

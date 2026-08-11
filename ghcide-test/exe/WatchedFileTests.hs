@@ -11,7 +11,10 @@ import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as T
-import           Development.IDE.Test            (expectDiagnostics)
+import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
+import           Development.IDE.Test            (expectDiagnostics,
+                                                  expectNoMoreDiagnostics,
+                                                  waitForAction)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
                                                  (SemanticTokenAbsolute (..),
@@ -73,6 +76,106 @@ tests = testGroup "watched files"
         sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
                [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
         expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'", Just "GHC-83865")])]
+      , testWithDummyPlugin' "created module file resolves import"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A", "B"]
+            , directory "src" []
+            ])
+          $ \sessionDir -> do
+
+        _doc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
+          [ "module A where"
+          , "import B"
+          , "a :: Bool"
+          , "a = b"
+          ]
+        expectDiagnostics [("src" </> "A.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
+        -- create B off editor, as e.g. a git checkout would
+        liftIO $ do
+          createDirectoryIfMissing True (sessionDir </> "src")
+          atomicFileWriteString (sessionDir </> "src" </> "B.hs") $ unlines
+            [ "module B where"
+            , "b :: Bool"
+            , "b = True"
+            ]
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+               [FileEvent (filePathToUri $ sessionDir </> "src" </> "B.hs") FileChangeType_Created ]
+        expectDiagnostics [("src" </> "A.hs", [])]
+      , testWithDummyPlugin' "deleted module file breaks import"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A", "B"]
+            , directory "src"
+              [ file "B.hs" $ sources
+                [ "module B where"
+                , "b :: Bool"
+                , "b = True"
+                ]
+              ]
+            ])
+          $ \sessionDir -> do
+        adoc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
+          [ "module A where"
+          , "import B"
+          , "a :: Bool"
+          , "a = b"
+          ]
+        WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" adoc
+        liftIO $ assertBool "A should typecheck" ideResultSuccess
+        -- delete B off editor
+        liftIO $ removeFile (sessionDir </> "src" </> "B.hs")
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+               [FileEvent (filePathToUri $ sessionDir </> "src" </> "B.hs") FileChangeType_Deleted ]
+        expectDiagnostics [("src" </> "A.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module", Nothing)])]
+      , testWithDummyPlugin' "deleted non-target module leaves the module map"
+          (mkIdeTestFs
+            [ directCradle ["-isrc", "A"]
+            , directory "src"
+              [ file "U.hs" $ sources
+                [ "module U where"
+                , "u :: Bool"
+                , "u = True"
+                ]
+              ]
+            ])
+          $ \sessionDir -> do
+        -- U is not a target of the cradle, so it is only known through the
+        -- scan of the import directory. Assert on the import resolution
+        -- itself: GHC's own finder also reports a deleted module, so a
+        -- diagnostic would not tell us whether HLS resolved the import.
+        adoc <- createDoc ("src" </> "A.hs") "haskell" $ T.unlines
+          [ "module A where"
+          , "import U"
+          , "a :: Bool"
+          , "a = u"
+          ]
+        WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" adoc
+        liftIO $ assertBool "A should typecheck" ideResultSuccess
+        liftIO $ removeFile (sessionDir </> "src" </> "U.hs")
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+               [FileEvent (filePathToUri $ sessionDir </> "src" </> "U.hs") FileChangeType_Deleted ]
+        _ <- waitForDiagnosticsSource "not found"
+        pure ()
+      , testWithDummyPluginEmpty' "created file no component claims is not a target" $ \sessionDir -> do
+        -- Such a file has no session to be compiled in, so making it part of
+        -- the project only buys a cradle load that rejects it
+        liftIO $ do
+          atomicFileWriteString (sessionDir </> "hie.yaml") $ unlines
+            [ "cradle:"
+            , "  multi:"
+            , "    - path: \"./src\""
+            , "      config: {cradle: {direct: {arguments: [\"-isrc\", \"A\"]}}}"
+            ]
+          createDirectoryIfMissing True (sessionDir </> "src")
+          createDirectoryIfMissing True (sessionDir </> "elsewhere")
+          atomicFileWriteString (sessionDir </> "src" </> "A.hs") "module A where"
+        adoc <- openDoc ("src" </> "A.hs") "haskell"
+        WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" adoc
+        liftIO $ assertBool "A should typecheck" ideResultSuccess
+        let stray = sessionDir </> "elsewhere" </> "Stray.hs"
+        liftIO $ atomicFileWriteString stray "module Stray where"
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
+               [FileEvent (filePathToUri stray) FileChangeType_Created ]
+        expectNoMoreDiagnostics 2
       , testWithDummyPlugin' "reload HLS after .cabal file changes" (mkIdeTestFs [copyDir ("watched-files" </> "reload")]) $ \sessionDir -> do
           let hsFile = "src" </> "MyLib.hs"
           _ <- openDoc hsFile "haskell"
