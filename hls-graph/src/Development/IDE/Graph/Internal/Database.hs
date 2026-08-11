@@ -124,7 +124,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                     pure val
                 Dirty s -> do
                     let act = run (refresh db stack id s)
-                        (force, val) = splitIO (join act)
+                        (force, val) = splitIO act
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
                     modifyTVar' toForce (Spawn force:)
                     pure val
@@ -172,13 +172,13 @@ refreshDeps visited db stack key result = \case
                     else refreshDeps newVisited db stack key result deps
 
 -- | Refresh a key:
-refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
+refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
-    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> asyncWithCleanUp $ refreshDeps mempty db stack key me (reverse deps)
+    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> refreshDeps mempty db stack key me (reverse deps)
     (Right stack, _) ->
-        asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
+        liftIO $ compute db stack key RunDependenciesChanged result
 
 -- | Compute a key.
 compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
@@ -309,23 +309,6 @@ runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
     asyncs <- newIORef []
     runReaderT act asyncs `onException` cleanupAsync asyncs
-
--- | Like 'async' but with built-in cancellation.
---   Returns an IO action to wait on the result.
-asyncWithCleanUp :: AIO a -> AIO (IO a)
-asyncWithCleanUp act = do
-    st <- AIO ask
-    io <- unliftAIO act
-    -- mask to make sure we keep track of the spawned async
-    liftIO $ uninterruptibleMask $ \restore -> do
-        a <- async $ restore io
-        atomicModifyIORef'_ st (void a :)
-        return $ wait a
-
-unliftAIO :: AIO a -> AIO (IO a)
-unliftAIO act = do
-    st <- AIO ask
-    return $ runReaderT (unAIO act) st
 
 newtype RunInIO = RunInIO (forall a. AIO a -> IO a)
 
