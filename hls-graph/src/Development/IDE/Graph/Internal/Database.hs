@@ -171,7 +171,7 @@ refreshDeps visited db stack key result = \case
                     then liftIO $ compute db stack key RunDependenciesChanged (Just result)
                     else refreshDeps newVisited db stack key result deps
 
--- | Refresh a key:
+-- | Refresh a key in the existing force runner, which already owns its lifetime.
 refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
