@@ -345,27 +345,24 @@ newtype AIO a = AIO { unAIO :: ReaderT Scope IO a }
 
 -- | The threads a scope owns, or 'Nothing' once it has closed.
 -- See Note [Closing escaped rule computations].
-data Scope = Scope
-    { scopeClosing :: !(IORef Bool)
-    , scopeAsyncs  :: !(MVar (Maybe [Async ()]))
+newtype Scope = Scope
+    { scopeAsyncs :: MVar (Maybe [Async ()])
     }
 
 newScope :: IO Scope
-newScope = Scope <$> newIORef False <*> newMVar (Just [])
+newScope = Scope <$> newMVar (Just [])
 
 -- | How many asyncs the scope owns, or 'Nothing' if it has closed.
 scopeSize :: Scope -> IO (Maybe Int)
 scopeSize = fmap (fmap length) . readMVar . scopeAsyncs
 
--- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
+-- | Run the monadic computation, cancelling whatever it leaves spawned at exit.
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
     scope <- newScope
-    -- Close on every exit, so no later force can spawn into a scope that ended.
-    -- Cancel only on an exception, since a normal return has already waited on
-    -- everything it spawned.
-    (runReaderT act scope `onException` cleanupAsync scope)
-        `finally` void (closeScope scope)
+    -- A normal return has already waited on what it spawned, so anything left
+    -- escaped. See Note [Closing escaped rule computations].
+    runReaderT act scope `finally` cleanupAsync scope
 
 {- Note [Closing escaped rule computations]
 
@@ -375,7 +372,7 @@ parent to cancel it, so on a restart it escapes the step bump and leaks.
 
   See https://github.com/haskell/haskell-language-server/issues/4985.
 
-How the thunk outlives its scope, all at one step S:
+Example trace of a thunk escaping scope, all at one step S:
   1. A build opens scope-1 and installs 'Running S' for the key.
   2. That build throws before forcing the thunk, so scope-1 spawned nothing for
      the key and its teardown finds nothing to cancel. The 'Running S' entry
@@ -383,34 +380,25 @@ How the thunk outlives its scope, all at one step S:
   3. A second build at step S opens scope-2, sees that entry, waits on the
      thunk, and forces it on scope-2's thread.
 
-'spawnInScope' decides whether to spawn while holding the scope open,
-so a refused computation is never started and the forcing thread raises
-'ScopeClosed'.
+'scopeAsyncs' serialises spawning against teardown:
+  * Spawn wins the lock, it'll be registered and teardown cancels it.
+  * Teardown wins, so nothing starts and the thread raises 'ScopeClosed'.
+
+A refusal unwinds and retries:
   * 'repairRefusal' demotes the key to 'Dirty' before re-throwing.
   * 'build' retries once, so the demoted key recomputes in a live scope.
   * 'isAsyncException' classes it async, so it isn't swallowed.
 -}
 
 -- | Spawn one async into the scope, or refuse if the scope has closed.
---
--- The wait is returned rather than run, so the lock is free before anyone
--- blocks on a result.
---
 -- See Note [Closing escaped rule computations].
 spawnInScope :: Scope -> IO a -> IO (IO a)
-spawnInScope Scope{scopeClosing, scopeAsyncs} io =
+spawnInScope Scope{scopeAsyncs} io =
     mask_ $ modifyMVar scopeAsyncs $ \case
-        Nothing -> pure (Nothing, refuse)
+        Nothing -> pure (Nothing, throwIO ScopeClosed)
         Just as -> do
-            closing <- readIORef scopeClosing
-            if closing
-                -- Teardown is on its way and will take this list.
-                then pure (Just as, refuse)
-                else do
-                    a <- asyncWithUnmask $ \unmask -> unmask io
-                    pure (Just (void a : as), wait a)
-  where
-    refuse = throwIO ScopeClosed
+            a <- asyncWithUnmask $ \unmask -> unmask io
+            pure (Just (void a : as), wait a)
 
 -- | Like 'async' but with built-in cancellation.
 -- Returns an IO action to wait on the result.
@@ -437,20 +425,20 @@ withRunInIO k = do
 -- | Close the scope so no later force can spawn into it, handing back whatever
 -- asyncs it still owns.
 closeScope :: Scope -> IO [Async ()]
-closeScope Scope{scopeClosing, scopeAsyncs} = do
-    writeIORef scopeClosing True
+closeScope Scope{scopeAsyncs} =
     mask_ $ modifyMVar scopeAsyncs $ \m -> pure (Nothing, fromMaybe [] m)
 
 cleanupAsync :: Scope -> IO ()
 -- mask to make sure we interrupt all the asyncs
 cleanupAsync scope = uninterruptibleMask $ \unmask -> do
-    let warnIfTakingTooLong = unmask $ forever $ do
-            sleep 10
-            traceM "cleanupAsync: waiting for asyncs to finish"
-    -- Armed before the close so a stall taking the lock is reported too.
-    withAsync warnIfTakingTooLong $ \_ -> do
-        asyncs <- closeScope scope
-        mapConcurrently_ cancel asyncs
+    asyncs <- closeScope scope
+    -- Every scope tears down through here, so keep the empty case free.
+    unless (null asyncs) $ do
+        let warnIfTakingTooLong = unmask $ forever $ do
+                sleep 10
+                traceM "cleanupAsync: waiting for asyncs to finish"
+        withAsync warnIfTakingTooLong $ \_ ->
+            mapConcurrently_ cancel asyncs
 
 data Wait
     = Wait !(IO ())
