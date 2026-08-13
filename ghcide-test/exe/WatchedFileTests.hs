@@ -9,6 +9,7 @@ import           Config                          (mkIdeTestFs,
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
+import           Data.List                       (nub)
 import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as T
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
@@ -50,6 +51,15 @@ tests = testGroup "watched files"
 
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
         liftIO $ length watchedFileRegs @?= 2
+
+    , testWithDummyPluginEmpty' "distinct registration ids" $ \sessionDir -> do
+        liftIO $ atomicFileWriteString (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
+        setIgnoringRegistrationRequests False
+        ids <- getWatchedFilesRegistrationIdsUntil SMethod_TextDocumentPublishDiagnostics
+
+        liftIO $ length ids @?= 2
+        liftIO $ assertEqual "registration ids must be distinct" (nub ids) ids
 
     -- TODO add a test for didChangeWorkspaceFolder
     ]
@@ -189,6 +199,15 @@ tests = testGroup "watched files"
           expectDiagnostics [(hsFile, [])]
     ]
   ]
+
+getWatchedFilesRegistrationIdsUntil :: forall m. SServerMethod m -> Session [T.Text]
+getWatchedFilesRegistrationIdsUntil m = do
+      msgs <- manyTill (Just <$> message SMethod_ClientRegisterCapability <|> Nothing <$ anyMessage) (message m)
+      return
+            [ _id
+            | Just TRequestMessage{_params = RegistrationParams regs} <- msgs
+            , Registration _id "workspace/didChangeWatchedFiles" _ <- regs
+            ]
 
 getWatchedFilesSubscriptionsUntil :: forall m. SServerMethod m -> Session [DidChangeWatchedFilesRegistrationOptions]
 getWatchedFilesSubscriptionsUntil m = do
