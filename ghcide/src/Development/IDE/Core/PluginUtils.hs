@@ -221,8 +221,8 @@ activeDiagnosticsInRangeMT ide nfp range = do
             rangesOverlap range (fileDiag ^. fdLspDiagnosticL . LSP.range)
 
 -- | Just like 'activeDiagnosticsInRangeMT'. See the docs of 'activeDiagnosticsInRangeMT' for details.
-activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m (Maybe [FileDiagnostic])
-activeDiagnosticsInRange ide nfp range = runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
+activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m [FileDiagnostic]
+activeDiagnosticsInRange ide nfp range = concat <$> runMaybeT (activeDiagnosticsInRangeMT ide nfp range)
 
 -- Prefer server-side diagnostics if available; they are authoritative.
 injectServerDiagnostics :: IdeState -> CodeActionParams -> IO CodeActionParams
@@ -231,9 +231,7 @@ injectServerDiagnostics ide params@LSP.CodeActionParams{_textDocument=LSP.TextDo
     Nothing  -> pure []
     Just nfp -> do
       mDiags <- activeDiagnosticsInRange (shakeExtras ide) nfp _range
-      case mDiags of
-        Nothing    -> pure []
-        Just diags -> pure $ diags ^.. traverse . fdLspDiagnosticL
+      pure $ mDiags ^.. traverse . fdLspDiagnosticL
   pure $ params & LSP.context . LSP.diagnostics .~ serverDiags
 
 -- ----------------------------------------------------------------------------

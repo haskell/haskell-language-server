@@ -86,9 +86,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
     verTxtDocId <- liftIO $ runAction "classplugin.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     activeDiagnosticsInRange (shakeExtras state) nfp caRange
-        >>= \case
-        Nothing -> pure $ InL []
-        Just fileDiags -> do
+        >>= \fileDiags -> do
             actions <- join <$> mapM (mkActions nfp verTxtDocId) (methodDiags fileDiags)
             pure $ InL actions
     where
