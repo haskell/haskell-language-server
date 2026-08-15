@@ -1462,6 +1462,7 @@ isSafeDependencyRule _k
   | Just Refl <- eqT @k @IsFileOfInterest = True
 
   -- Safe metadata/file watching rules.
+  | Just Refl <- eqT @k @GetFileContents = True
   | Just Refl <- eqT @k @GetModificationTime = True
   | Just Refl <- eqT @k @AddWatchedFile = True
 
