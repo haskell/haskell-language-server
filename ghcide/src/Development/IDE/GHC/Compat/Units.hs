@@ -83,6 +83,11 @@ import           GHC.Unit.Module.Graph                 (emptyMG)
 #endif
 
 
+#if MIN_VERSION_ghc(9,14,1)
+import qualified GHC.Types.Unique.Set              as UniqSet
+import GHC.Driver.Env (hscUIC)
+#endif
+
 type PreloadUnitClosure = UniqSet UnitId
 
 unitState :: HscEnv -> UnitState
@@ -94,7 +99,7 @@ createUnitEnvFromFlags unitDflags = do
   let mkEntry dflags = do
         hpt <- emptyHomePackageTable
         let us = State.emptyUnitState -- placeholder UnitState
-        pure (homeUnitId_ dflags, mkHomeUnitEnv us Nothing dflags hpt Nothing)
+        pure (homeUnitId_ dflags, mkHomeUnitEnv us dflags hpt Nothing)
   unitEnvList <- mapM mkEntry (NE.toList unitDflags)
   pure $ unitEnv_new (Map.fromList unitEnvList)
 #else
@@ -110,16 +115,17 @@ initUnits unitDflags env = do
   initial_home_graph <- createUnitEnvFromFlags (dflags0 NE.:| unitDflags)
   let home_units = unitEnv_keys initial_home_graph
   home_unit_graph <- forM initial_home_graph $ \homeUnitEnv -> do
-    let cached_unit_dbs = homeUnitEnv_unit_dbs homeUnitEnv
+    let
         dflags = homeUnitEnv_dflags homeUnitEnv
         old_hpt = homeUnitEnv_hpt homeUnitEnv
 
-    (dbs,unit_state,home_unit,mconstants) <- State.initUnits (hsc_logger env) dflags cached_unit_dbs home_units
+    let old_unit_env = hsc_unit_env env
+    (unit_state,home_unit,mconstants) <- State.initUnits (hsc_logger env) dflags (ue_uic old_unit_env) home_units
+
 
     updated_dflags <- DynFlags.updatePlatformConstants dflags mconstants
     pure HomeUnitEnv
       { homeUnitEnv_units = unit_state
-      , homeUnitEnv_unit_dbs = Just dbs
       , homeUnitEnv_dflags = updated_dflags
       , homeUnitEnv_hpt = old_hpt
       , homeUnitEnv_home_unit = Just home_unit
@@ -134,6 +140,9 @@ initUnits unitDflags env = do
         , ue_eps             = ue_eps (hsc_unit_env env)
 #if MIN_VERSION_ghc(9,13,0)
         , ue_module_graph    = emptyMG
+#endif
+#if MIN_VERSION_ghc(9,14,1)
+        , ue_uic = hscUIC env
 #endif
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
@@ -167,7 +176,8 @@ lookupUnit :: HscEnv -> Unit -> Maybe UnitInfo
 lookupUnit env pid = State.lookupUnit (unitState env) pid
 
 preloadClosureUs :: HscEnv -> PreloadUnitClosure
-preloadClosureUs = State.preloadClosure . unitState
+-- See: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/16108
+preloadClosureUs = const UniqSet.emptyUniqSet
 
 unitHaddockInterfaces :: UnitInfo -> [FilePath]
 unitHaddockInterfaces =
