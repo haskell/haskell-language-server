@@ -902,11 +902,14 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file =
                 -- Fixes the bug in #4631
                 env = msrHscEnv msr
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
-            ifaces <- uses_ GetModIface deps
+            needsCode <- uses_ NeedsCompilation deps
+            let (codeDeps, plainDeps) = partition (isJust . snd) (zip deps needsCode)
+            ifaces <- (++) <$> uses_ GetModIface (map fst codeDeps)
+                           <*> (map hirIface <$> uses_ GetModArtefacts (map fst plainDeps))
             -- Load .hs-boot before .hs: the HPT is keyed by module name, and
             -- GHC's addHomeModInfoToHpt overwrites, so the non-boot must be last.
             let inLoadOrder = sortOn (not . isBootHmi)
-                  $ map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+                  $ map (\ModIfaceResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
                 isBootHmi hmi = case mi_hsc_src (hm_iface hmi) of
                   HsBootFile -> True
                   _          -> False
@@ -960,7 +963,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             { source_version = ver
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
-            , get_linkable_hashes = \fs -> map (fromJust . hirCoreFp) <$> uses_ GetModIface fs
+            , get_linkable_hashes = \fs -> uses_ GetCoreFileHash fs
             , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
@@ -988,7 +991,7 @@ getModIfaceFromDiskAndIndexRule recorder =
   se@ShakeExtras{withHieDb} <- getShakeExtras
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
-  let ms = hirModSummary x
+  let ms = hirModSummary (hirIface x)
       hie_loc = Compat.ml_hie_file $ ms_location ms
   fileHash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
@@ -1073,31 +1076,40 @@ generateCoreRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GenerateCore -> generateCore (RunSimplifier True)
 
 getModIfaceRule :: Recorder (WithPriority Log) -> Rules ()
-getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModIface f -> do
-  fileOfInterest <- use_ IsFileOfInterest f
-  res <- case fileOfInterest of
-    IsFOI status -> do
-      -- Never load from disk for files of interest
-      tmr <- use_ TypeCheck f
-      linkableType <- getLinkableType f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      hsc' <- setFileCacheHook hsc
-      let compile = fmap ([],) $ use GenerateCore f
-      se <- getShakeExtras
-      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc' linkableType compile tmr
-      let fp = hiFileFingerPrint <$> mbHiFile
-      hiDiags <- case mbHiFile of
-        Just hiFile
-          | OnDisk <- status
-          , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc' hiFile
-        _ -> pure []
-      return (fp, (diags++hiDiags, mbHiFile))
-    NotFOI -> do
-      hiFile <- use GetModIfaceFromDiskAndIndex f
-      let fp = hiFileFingerPrint <$> hiFile
-      return (fp, ([], hiFile))
-
-  pure res
+getModIfaceRule recorder = do
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModArtefacts f -> do
+    fileOfInterest <- use_ IsFileOfInterest f
+    res <- case fileOfInterest of
+      IsFOI status -> do
+        -- Never load from disk for files of interest
+        tmr <- use_ TypeCheck f
+        linkableType <- getLinkableType f
+        hsc <- hscEnv <$> use_ GhcSessionDeps f
+        hsc' <- setFileCacheHook hsc
+        let compile = fmap ([],) $ use GenerateCore f
+        se <- getShakeExtras
+        (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc' linkableType compile tmr
+        let fp = hiFileFingerPrint <$> mbHiFile
+        hiDiags <- case mbHiFile of
+          Just hiFile
+            | OnDisk <- status
+            , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc' hiFile
+          _ -> pure []
+        return (fp, (diags++hiDiags, mbHiFile))
+      NotFOI -> do
+        hiFile <- use GetModIfaceFromDiskAndIndex f
+        let fp = hiFileFingerPrint <$> hiFile
+        return (fp, ([], hiFile))
+    pure res
+  -- Variants of `GetModArtefacts`, so dependents can be more precise in what
+  -- they require from a module.
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetModIface file -> do
+    hir <- fmap hirIface <$> use GetModArtefacts file
+    return (hirIfaceFp <$> hir, hir)
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetCoreFileHash file -> do
+    hir <- use GetModArtefacts file
+    let h = hirCoreFp =<< hir
+    return (h, h)
 
 -- | Count of total times we asked GHC to recompile
 newtype RebuildCounter = RebuildCounter { getRebuildCountVar :: TVar Int }
@@ -1223,7 +1235,8 @@ usePropertyByPathAction path plId p = do
 getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
 getLinkableRule recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithOldValue $ \GetLinkable f old_value -> do
-    HiFileResult{hirModSummary, hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
+    ModIfaceResult{hirModSummary, hirModIface, hirModDetails} <- use_ GetModIface f
+    mbCoreFp <- use GetCoreFileHash f
     let obj_file  = ml_obj_file (ms_location hirModSummary)
         core_file = ml_core_file (ms_location hirModSummary)
 #if MIN_VERSION_ghc(9,11,0)
@@ -1241,7 +1254,7 @@ getLinkableRule recorder =
         -- An empty part list is treated as bytecode by isObjectLinkable
         keepLinkables t mod = [mkLinkable t mod (DotA "dummy"), LM t mod []]
 #endif
-    case hirCoreFp of
+    case mbCoreFp of
       Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
       Just fileHash -> do
         session <- use_ GhcSessionDeps f
