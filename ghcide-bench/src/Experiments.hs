@@ -64,6 +64,9 @@ import           System.FilePath                    ((<.>), (</>))
 import           System.IO
 import           System.Process
 import           System.Time.Extra
+import           Text.Layout.Table                  (columnHeaderTableS, def,
+                                                     rowsG, tableLines, titlesH)
+import           Text.Layout.Table.Style            (asciiS)
 import           Text.ParserCombinators.ReadP       (readP_to_S)
 import           Text.Printf
 
@@ -371,7 +374,7 @@ experiments =
                     , ">>> xs = ([minBound..maxBound] ++ [minBound..maxBound] :: [T])"
                     , ">>> nub xs"
                     , "-}"
-                    ]
+                   ]
             changeDoc doc [edit]
         )
         ( \docs -> do
@@ -562,10 +565,7 @@ runBenchmarksFun dir allBenchmarks = do
   writeFile (outputCSV ?config) csv
 
   -- print a nice table
-  let pads = map (maximum . map length) (transpose (headers : rowsHuman))
-      paddedHeaders = zipWith pad pads headers
-      outputRow = putStrLn . intercalate " | "
-      rowsHuman =
+  let rowsHuman =
         [ [ name,
             show success,
             show samples,
@@ -586,9 +586,8 @@ runBenchmarksFun dir allBenchmarks = do
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
         ]
-  outputRow paddedHeaders
-  outputRow $ (map . map) (const '-') paddedHeaders
-  forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
+  mapM_ putStrLn $ ruleHistogram results
+  mapM_ putStrLn $ renderTable headers rowsHuman
   where
     ghcideArgs dir =
         [ "--lsp",
@@ -629,6 +628,7 @@ data BenchRun = BenchRun
     firstResponse        :: !Seconds,
     firstResponseDelayed :: !Seconds,
     rulesBuilt           :: !Int,
+    rulesBuiltByRule     :: ![(Text, Int)],
     rulesChanged         :: !Int,
     rulesVisited         :: !Int,
     rulesTotal           :: !Int,
@@ -638,7 +638,7 @@ data BenchRun = BenchRun
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 0 0 0 [] 0 0 0 0 0 False
 
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
@@ -706,7 +706,9 @@ runBench runSess Bench{..} = handleAny (\e -> print e >> return badRun)
           (userWaits, delayedWork, (firstResponse, firstResponseDelayed)) = fromMaybe (0,0,(0,0)) result
 
       rulesTotal <- length <$> getStoredKeys
-      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+      builtKeys <- fromRight [] <$> getBuildKeysBuilt
+      let rulesBuilt = length builtKeys
+          rulesBuiltByRule = ruleCounts builtKeys
       rulesChanged <- either (const 0) length <$> getBuildKeysChanged
       rulesVisited <- either (const 0) length <$> getBuildKeysVisited
       edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
@@ -877,10 +879,27 @@ findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
 
-pad :: Int -> String -> String
-pad n []     = replicate n ' '
-pad 0 _      = error "pad"
-pad n (x:xx) = x : pad (n-1) xx
+ruleCounts :: [T.Text] -> [(T.Text, Int)]
+ruleCounts keys =
+    [ (k, length g)
+    | g@(k:_) <- group $ sort [ T.takeWhile (/= ';') t | t <- keys ] ]
+
+-- | Keys built per rule, one column per benchmark.
+ruleHistogram :: [(Bench, BenchRun)] -> [String]
+ruleHistogram results =
+    renderTable ("rule" : [ name | (Bench{name}, _) <- results ])
+                (map row rules ++ [totals])
+  where
+    counts = [ rulesBuiltByRule | (_, BenchRun{rulesBuiltByRule}) <- results ]
+    rules  = sortOn (\r -> (negate (total r), r)) $ nub (map fst (concat counts))
+    total r = sum [ n | c <- counts, Just n <- [lookup r c] ]
+    row r  = T.unpack r : [ maybe "0" show (lookup r c) | c <- counts ]
+    totals = "TOTAL" : [ show (sum (map snd c)) | c <- counts ]
+
+renderTable :: [String] -> [[String]] -> [String]
+renderTable hdrs rows =
+    tableLines $ columnHeaderTableS (map (const def) hdrs) asciiS
+                                    (titlesH hdrs) [rowsG rows]
 
 -- | Search for a position where:
 --     - get definition works and returns a uri other than this file
