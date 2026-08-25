@@ -94,9 +94,7 @@ mkCodeActionProvider mkSuggest state _plId
     parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-    activeDiagnosticsInRange (shakeExtras state) normalizedFilePath caRange >>= \case
-        Nothing -> pure $ LSP.InL []
-        Just fileDiags -> do
+    activeDiagnosticsInRange (shakeExtras state) normalizedFilePath caRange >>= \fileDiags -> do
             let actions = concatMap (mkSuggest parsedModuleDynFlags) fileDiags
             pure $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> nubOrdOn snd actions
 

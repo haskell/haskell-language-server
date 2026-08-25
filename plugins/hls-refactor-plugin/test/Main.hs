@@ -1290,7 +1290,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = 0"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 2 5) (Position 2 6))
             ["Add A to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -2958,7 +2958,7 @@ fillTypedHoleTests = let
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
-      actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
+      actions <- getCodeActions doc (Range (Position 2 12) (Position 2 13))
       chosen <- pickActionWithTitle "Replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
@@ -2971,7 +2971,7 @@ fillTypedHoleTests = let
               ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
-      actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
+      actions <- getCodeActions doc (Range (Position 2 18) (Position 2 19))
       chosen <- pickActionWithTitle "Replace _ with (<$>)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc

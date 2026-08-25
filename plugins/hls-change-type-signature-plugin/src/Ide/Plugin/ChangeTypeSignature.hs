@@ -92,11 +92,9 @@ codeActionHandler recorder plId ideState _ CodeActionParams{_textDocument, _rang
     nfp <- getNormalizedFilePathE uri
     decls <- getDecls plId ideState nfp
 
-    activeDiagnosticsInRange (shakeExtras ideState) nfp _range >>= \case
-        Nothing -> pure (InL [])
-        Just fileDiags -> do
-            actions <- lift $ mapM (generateAction recorder plId uri decls) fileDiags
-            pure (InL (catMaybes actions))
+    fileDiags <- activeDiagnosticsInRange (shakeExtras ideState) nfp _range
+    actions <- lift $ mapM (generateAction recorder plId uri decls) fileDiags
+    pure $ InL $ catMaybes actions
 
 getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
