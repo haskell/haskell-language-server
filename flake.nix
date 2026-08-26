@@ -54,7 +54,7 @@
             dest=$out/bin/gen-hls-changelogs
             mkdir -p $out/bin
             echo "#!${runtimeShell}" >> $dest
-            echo "${myGHC}/bin/runghc ${./GenChangelogs.hs}" >> $dest
+            echo '${myGHC}/bin/runghc ${./GenChangelogs.hs} "$@"' >> $dest
             chmod +x $dest
           '';
 
