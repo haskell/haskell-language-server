@@ -549,7 +549,7 @@ runBenchmarksFun dir allBenchmarks = do
             showMs $ firstResponse+firstResponseDelayed,
             -- Exclude first response as it has a lot of setup time included
             -- Assume that number of requests = number of modules * number of samples
-            showMs ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
+            showMs ((userWaits - firstResponse) / ((fromIntegral samples - 1) * modules)),
             showMs runExperiment,
             show rulesBuilt,
             show rulesChanged,
@@ -573,7 +573,7 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
-            showDuration firstResponse,
+            showDuration (firstResponse + firstResponseDelayed),
             showDuration ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
             showDuration runExperiment,
             show rulesBuilt,
