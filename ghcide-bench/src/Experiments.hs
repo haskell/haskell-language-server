@@ -40,10 +40,13 @@ import qualified Data.ByteString                    as BS
 import qualified Data.ByteString.Lazy               as BSL
 import           Data.Either                        (fromRight)
 import           Data.List
+import           Data.List.Extra                    (groupSort)
 import           Data.Maybe
+import           Data.Ord                           (Down (..))
 import           Data.Proxy
 import           Data.Text                          (Text)
 import qualified Data.Text                          as T
+import qualified Data.Text.IO                       as TIO
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
@@ -504,7 +507,6 @@ runBenchmarksFun dir allBenchmarks = do
           Language.LSP.Test.lspConfig = lspConfig,
           messageTimeout = timeoutLsp ?config
         }
-      modules = fromIntegral $ length $ exampleModules $ example ?config
   results <- forM benchmarks $ \b@Bench{name} ->  do
     let p = (proc (ghcide ?config) (allArgs name dir))
                 { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
@@ -519,75 +521,15 @@ runBenchmarksFun dir allBenchmarks = do
                         runSessionWithHandles' (Just pH) inH outH conf lspTestCaps dir sess
     (b,) <$> runBench run b
 
-  -- output raw data as CSV
-  let headers =
-        [ "name"
-        , "success"
-        , "samples"
-        , "startup"
-        , "setup"
-        , "userT"
-        , "delayedT"
-        , "1stBuildT"
-        , "avgPerRespT"
-        , "totalT"
-        , "rulesBuilt"
-        , "rulesChanged"
-        , "rulesVisited"
-        , "rulesTotal"
-        , "ruleEdges"
-        , "ghcRebuilds"
-        ]
-      rows =
-        [ [ name,
-            show success,
-            show samples,
-            showMs startup,
-            showMs runSetup',
-            showMs userWaits,
-            showMs delayedWork,
-            showMs $ firstResponse+firstResponseDelayed,
-            -- Exclude first response as it has a lot of setup time included
-            -- Assume that number of requests = number of modules * number of samples
-            showMs ((userWaits - firstResponse) / ((fromIntegral samples - 1) * modules)),
-            showMs runExperiment,
-            show rulesBuilt,
-            show rulesChanged,
-            show rulesVisited,
-            show rulesTotal,
-            show edgesTotal,
-            show rebuildsTotal
-          ]
-          | (Bench {name, samples}, BenchRun {..}) <- results,
-            let runSetup' = if runSetup < 0.01 then 0 else runSetup
-        ]
-      csv = unlines $ map (intercalate ", ") (headers : rows)
-  writeFile (outputCSV ?config) csv
+  let headers = map fst summaryColumns
+      summaryRow showTime b r = [ renderCell showTime (cell b r) | (_, cell) <- summaryColumns ]
+      csv = T.unlines $ map (T.intercalate ", ")
+              (headers : [ summaryRow showMs b r | (b, r) <- results ])
+  TIO.writeFile (outputCSV ?config) csv
 
-  -- print a nice table
-  let rowsHuman =
-        [ [ name,
-            show success,
-            show samples,
-            showDuration startup,
-            showDuration runSetup',
-            showDuration userWaits,
-            showDuration delayedWork,
-            showDuration (firstResponse + firstResponseDelayed),
-            showDuration ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
-            showDuration runExperiment,
-            show rulesBuilt,
-            show rulesChanged,
-            show rulesVisited,
-            show rulesTotal,
-            show edgesTotal,
-            show rebuildsTotal
-          ]
-          | (Bench {name, samples}, BenchRun {..}) <- results,
-            let runSetup' = if runSetup < 0.01 then 0 else runSetup
-        ]
   mapM_ putStrLn $ ruleHistogram results
-  mapM_ putStrLn $ renderTable headers rowsHuman
+  mapM_ putStrLn $ renderTable headers
+      [ summaryRow (T.pack . showDuration) b r | (b, r) <- results ]
   where
     ghcideArgs dir =
         [ "--lsp",
@@ -616,8 +558,8 @@ runBenchmarksFun dir allBenchmarks = do
         & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (ClientCodeActionResolveOptions ["edit"])
         & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
-showMs :: Seconds -> String
-showMs = printf "%.2f"
+showMs :: Seconds -> Text
+showMs = T.pack . printf "%.2f"
 
 data BenchRun = BenchRun
   { startup              :: !Seconds,
@@ -879,6 +821,40 @@ findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
 
+-- | A summary value
+data Cell = Time Seconds | Count Int | Str Text
+
+renderCell :: (Seconds -> Text) -> Cell -> Text
+renderCell showTime (Time s) = showTime s
+renderCell _ (Count n)       = T.pack (show n)
+renderCell _ (Str s)         = s
+
+summaryColumns :: HasConfig => [(Text, Bench -> BenchRun -> Cell)]
+summaryColumns =
+    [ ("name", \Bench{name} _ -> Str (T.pack name))
+    , ("success", \_ BenchRun{success} -> Str (T.pack (show success)))
+    , ("samples", \Bench{samples} _ -> Str (T.pack (show samples)))
+    , ("startup", \_ BenchRun{startup} -> Time startup)
+    , ("setup", \_ BenchRun{runSetup} -> Time (if runSetup < 0.01 then 0 else runSetup))
+    , ("userT", \_ BenchRun{userWaits} -> Time userWaits)
+    , ("delayedT", \_ BenchRun{delayedWork} -> Time delayedWork)
+    , ("1stBuildT", \_ BenchRun{firstResponse, firstResponseDelayed} ->
+        Time (firstResponse + firstResponseDelayed))
+      -- Exclude the first response as it has a lot of setup time included.
+      -- Assume that number of requests = number of modules * number of samples
+    , ("avgPerRespT",  \Bench{samples} BenchRun{userWaits, firstResponse} ->
+        Time ((userWaits - firstResponse) / ((fromIntegral samples - 1) * modules)))
+    , ("totalT",       \_ BenchRun{runExperiment} -> Time runExperiment)
+    , ("rulesBuilt",   \_ BenchRun{rulesBuilt} -> Count rulesBuilt)
+    , ("rulesChanged", \_ BenchRun{rulesChanged} -> Count rulesChanged)
+    , ("rulesVisited", \_ BenchRun{rulesVisited} -> Count rulesVisited)
+    , ("rulesTotal",   \_ BenchRun{rulesTotal} -> Count rulesTotal)
+    , ("ruleEdges",    \_ BenchRun{edgesTotal} -> Count edgesTotal)
+    , ("ghcRebuilds",  \_ BenchRun{rebuildsTotal} -> Count rebuildsTotal)
+    ]
+  where
+    modules = fromIntegral $ length $ exampleModules $ example ?config
+
 ruleCounts :: [T.Text] -> [(T.Text, Int)]
 ruleCounts keys =
     [ (k, length g)
@@ -887,16 +863,16 @@ ruleCounts keys =
 -- | Keys built per rule, one column per benchmark.
 ruleHistogram :: [(Bench, BenchRun)] -> [String]
 ruleHistogram results =
-    renderTable ("rule" : [ name | (Bench{name}, _) <- results ])
-                (map row rules ++ [totals])
+    renderTable ("rule" : [ T.pack name | (Bench{name}, _) <- results ]) (map row rules ++ [totals])
   where
     counts = [ rulesBuiltByRule | (_, BenchRun{rulesBuiltByRule}) <- results ]
-    rules  = sortOn (\r -> (negate (total r), r)) $ nub (map fst (concat counts))
-    total r = sum [ n | c <- counts, Just n <- [lookup r c] ]
-    row r  = T.unpack r : [ maybe "0" show (lookup r c) | c <- counts ]
-    totals = "TOTAL" : [ show (sum (map snd c)) | c <- counts ]
+    rules = map fst $ sortOn (\(r, n) -> (Down n, r)) groups
+    groups = [ (r, sum ns) | (r, ns) <- groupSort (concat counts) ]
+    row r = r : [ num (fromMaybe 0 (lookup r c)) | c <- counts ]
+    totals = "TOTAL" : [ num (sum (map snd c)) | c <- counts ]
+    num = T.pack . show
 
-renderTable :: [String] -> [[String]] -> [String]
+renderTable :: [Text] -> [[Text]] -> [String]
 renderTable hdrs rows =
     tableLines $ columnHeaderTableS (map (const def) hdrs) asciiS
                                     (titlesH hdrs) [rowsG rows]
