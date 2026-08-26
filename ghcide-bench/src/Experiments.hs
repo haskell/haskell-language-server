@@ -501,6 +501,7 @@ runBenchmarksFun dir allBenchmarks = do
           Language.LSP.Test.lspConfig = lspConfig,
           messageTimeout = timeoutLsp ?config
         }
+      modules = fromIntegral $ length $ exampleModules $ example ?config
   results <- forM benchmarks $ \b@Bench{name} ->  do
     let p = (proc (ghcide ?config) (allArgs name dir))
                 { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
@@ -556,7 +557,6 @@ runBenchmarksFun dir allBenchmarks = do
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
-                modules = fromIntegral $ length $ exampleModules $ example ?config
         ]
       csv = unlines $ map (intercalate ", ") (headers : rows)
   writeFile (outputCSV ?config) csv
@@ -574,6 +574,7 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration userWaits,
             showDuration delayedWork,
             showDuration firstResponse,
+            showDuration ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
             showDuration runExperiment,
             show rulesBuilt,
             show rulesChanged,
