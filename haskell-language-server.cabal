@@ -2251,6 +2251,7 @@ library ghcide-bench-lib
         process,
         safe-exceptions,
         shake,
+        table-layout,
         text,
         hls-test-utils,
         row-types
