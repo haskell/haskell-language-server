@@ -1028,8 +1028,8 @@ writeHiFile se hscEnv tc =
     atomicFileWrite se targetPath $ \fp ->
       writeIfaceFile hscEnv fp modIface
   where
-    modIface = hirModIface tc
-    targetPath = ml_hi_file $ ms_location $ hirModSummary tc
+    modIface = hirModIface (hirIface tc)
+    targetPath = ml_hi_file $ ms_location $ hirModSummary (hirIface tc)
     dflags = hsc_dflags hscEnv
 
 handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
@@ -1562,7 +1562,7 @@ loadInterface
   -> m ([FileDiagnostic], Maybe HiFileResult)
 loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
-        mb_old_iface = hirModIface . fst <$> old_value
+        mb_old_iface = hirModIface . hirIface . fst <$> old_value
 
         core_file = ml_core_file (ms_location ms)
         iface_file = ml_hi_file (ms_location ms)
