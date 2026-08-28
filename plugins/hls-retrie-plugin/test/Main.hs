@@ -69,6 +69,7 @@ inlineThisTests =
       , testResolve "where to let arg substitution" "WhereToLetSubst" 6 4
       , testResolve "qualified" "Qualified" 5 6
       , testResolve "single clause pattern" "Pattern" 5 4
+      , testResolve "rename let binding" "Capture" 7 6
       ]
     , expectFail $ testGroup "dispatch"
       [ testResolve "dispatch multi clause" "MultiClause" 7 4
