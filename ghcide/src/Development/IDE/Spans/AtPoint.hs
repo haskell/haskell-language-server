@@ -319,7 +319,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           | otherwise = do
             let
               typeSig = case identType dets of
-                Just t -> prettyType (Just n) locationsMap t
+                Just t  -> prettyType (Just n) locationsMap t
                 Nothing -> fromMaybe (wrapHaskell (printOutputable n)) maybeKind
 
               maybeKind = do
@@ -355,7 +355,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         packageNameForImportStatement mod = do
           mpkg <- case mEnv of
             Just env -> findImportedModule (setNonHomeFCHook env) mod
-            Nothing -> pure Nothing
+            Nothing  -> pure Nothing
           let moduleName = printOutputable mod
           case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName

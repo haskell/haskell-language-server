@@ -9,8 +9,8 @@ import           Data.Maybe                        (isNothing)
 import           Data.Set                          (Set)
 import qualified Data.Set                          as Set
 import           Development.IDE.Core.Compile      (indexHieFile)
-import           Development.IDE.Core.HieFile      (HieFileCheck (..), HieFileLog,
-                                                    checkHieFile)
+import           Development.IDE.Core.HieFile      (HieFileCheck (..),
+                                                    HieFileLog, checkHieFile)
 import           Development.IDE.Core.Shake        (HieDbWriter (indexQueue),
                                                     ShakeExtras (hiedbWriter, lspEnv, withHieDb))
 import           Development.IDE.Core.WorkerThread (writeTaskQueue)
@@ -19,9 +19,8 @@ import qualified Development.IDE.GHC.Compat        as Ghc
 import           Development.IDE.Types.Location    (NormalizedFilePath,
                                                     toNormalizedFilePath')
 import           GHC.Data.ShortText                (unpack)
-import           GHC.Types.Unique.Map              (filterWithKeyUniqMap,
-                                                    nonDetEltsUniqMap)
 import qualified GHC.Unit.Info                     as GHC
+import           GHC.Unit.State                    (listUnitInfo)
 import           HieDb                             (SourceFile (FakeFile),
                                                     lookupPackage,
                                                     removeDependencySrcFiles)
@@ -151,14 +150,13 @@ indexDependencyHieFiles recorder se hscEnv = do
         packages :: Set Package
         packages = Set.fromList
             $ map Package
-            $ nonDetEltsUniqMap
-            $ filterWithKeyUniqMap (\uid _ -> uid `Set.member` dependencyIds) unitInfoMap
+            $ matchingUnitInfos dependencyIds unitInfos
             where
-                unitInfoMap :: GHC.UnitInfoMap
-                unitInfoMap = GHC.getUnitInfoMap hscEnv
+                unitInfos :: [GHC.UnitInfo]
+                unitInfos = listUnitInfo $ GHC.unitState hscEnv
                 dependencyIds :: Set GHC.UnitId
                 dependencyIds =
-                    calculateTransitiveDependencies unitInfoMap directDependencyIds directDependencyIds
+                    calculateTransitiveDependencies unitInfos directDependencyIds directDependencyIds
                 directDependencyIds :: Set GHC.UnitId
                 directDependencyIds = Set.fromList
                     $ map GHC.toUnitId
@@ -167,14 +165,14 @@ indexDependencyHieFiles recorder se hscEnv = do
 
 -- | calculateTransitiveDependencies finds the UnitId keys in the UnitInfoMap
 -- that are dependencies or transitive dependencies.
-calculateTransitiveDependencies :: GHC.UnitInfoMap -> Set GHC.UnitId -> Set GHC.UnitId -> Set GHC.UnitId
-calculateTransitiveDependencies unitInfoMap allDependencies newDependencies
+calculateTransitiveDependencies :: [GHC.UnitInfo] -> Set GHC.UnitId -> Set GHC.UnitId -> Set GHC.UnitId
+calculateTransitiveDependencies unitInfos allDependencies newDependencies
     -- If there are no new dependencies, we have found them all,
     -- so return allDependencies
     | Set.null newDependencies = allDependencies
     -- Otherwise recursively add any dependencies of the newDependencies
     -- that are not in allDependencies already
-    | otherwise = calculateTransitiveDependencies unitInfoMap nextAll nextNew
+    | otherwise = calculateTransitiveDependencies unitInfos nextAll nextNew
     where
         nextAll :: Set GHC.UnitId
         nextAll = Set.union allDependencies nextNew
@@ -185,8 +183,12 @@ calculateTransitiveDependencies unitInfoMap allDependencies newDependencies
         nextNew = flip Set.difference allDependencies
             $ Set.unions
             $ map (Set.fromList . GHC.unitDepends)
-            $ nonDetEltsUniqMap
-            $ filterWithKeyUniqMap (\uid _ -> uid `Set.member` newDependencies) unitInfoMap
+            $ matchingUnitInfos newDependencies unitInfos
+
+matchingUnitInfos :: Set GHC.UnitId -> [GHC.UnitInfo] -> [GHC.UnitInfo]
+matchingUnitInfos unitIds =
+    filter $ \unitInfo -> GHC.unitId unitInfo `Set.member` unitIds
+
 getModulesForPackage :: Package -> [GHC.Module]
 getModulesForPackage (Package package) =
     map makeModule allModules

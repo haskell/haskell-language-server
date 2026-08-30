@@ -45,7 +45,7 @@ import           Language.LSP.Protocol.Types (NormalizedFilePath, Uri,
                                               fromNormalizedFilePath,
                                               toNormalizedUri,
                                               uriToNormalizedFilePath)
-import           System.FilePath             (takeExtension, splitDirectories)
+import           System.FilePath             (splitDirectories, takeExtension)
 
 -- | Associate a rule key @k@ with the type of input that identifies an
 -- invocation of that rule.

@@ -82,6 +82,7 @@ ofInterestRules recorder = do
   summarize (IsCabalFOI OnDisk)           = BS.singleton 1
   summarize (IsCabalFOI (Modified False)) = BS.singleton 2
   summarize (IsCabalFOI (Modified True))  = BS.singleton 3
+  summarize (IsCabalFOI ReadOnly)         = BS.singleton 4
 
 getCabalFilesOfInterestUntracked :: Action (HashMap CabalInput FileOfInterestStatus)
 getCabalFilesOfInterestUntracked = do

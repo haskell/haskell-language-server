@@ -5,24 +5,25 @@ module Development.IDE.Core.HieFile
   , HieFileLog(..)
   ) where
 
-import Control.Exception (SomeException, displayException)
-import Control.Monad.Except
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (asks)
-import Data.Bool (bool)
+import           Control.Exception               (SomeException,
+                                                  displayException)
+import           Control.Monad.Except
+import           Control.Monad.IO.Class          (liftIO)
+import           Control.Monad.Reader            (asks)
+import           Data.Bool                       (bool)
 
-import qualified Development.IDE.GHC.Compat as Compat
+import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat.Util as Util
 import qualified HieDb
 
-import Development.IDE.Core.Compile (loadHieFile)
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat (HieFile)
-import Development.IDE.Types.Location
-import Ide.Logger
-import System.Directory
-import Control.Exception.Safe (tryAny)
-import Control.Monad.Trans.Except (except)
+import           Control.Exception.Safe          (tryAny)
+import           Control.Monad.Trans.Except      (except)
+import           Development.IDE.Core.Compile    (loadHieFile)
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat      (HieFile)
+import           Development.IDE.Types.Location
+import           Ide.Logger
+import           System.Directory
 
 data HieFileLog
   = LogLoading !NormalizedFilePath

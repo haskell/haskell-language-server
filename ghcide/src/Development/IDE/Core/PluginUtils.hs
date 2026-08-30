@@ -58,7 +58,8 @@ import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
-import           Ide.PluginUtils                      (asPosition, rangesOverlap)
+import           Ide.PluginUtils                      (asPosition,
+                                                       rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
