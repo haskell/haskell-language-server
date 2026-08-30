@@ -51,6 +51,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
+import           Development.IDE.Core.RuleInput
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Functor.Classes
@@ -144,6 +145,7 @@ data GetAnnotatedParsedSource = GetAnnotatedParsedSource
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
+type instance RuleInput GetAnnotatedParsedSource = ProjectHaskellInput
 type instance RuleResult GetAnnotatedParsedSource = ParsedSource
 
 instance Show (HsModule GhcPs) where

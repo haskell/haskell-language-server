@@ -16,6 +16,7 @@ import qualified Ide.Plugin.Cabal.Diagnostics                 as Diagnostics
 
 import qualified Data.Text                                    as T
 import           Development.IDE
+import           Development.IDE.Core.RuleInput
 import qualified Distribution.Fields.Parser                   as Syntax
 import qualified Distribution.Parsec.Position                 as Syntax
 
@@ -27,7 +28,7 @@ parseCabalFileContents bs =
   runParseResult (parseGenericPackageDescription bs)
 
 readCabalFields ::
-  NormalizedFilePath ->
+  CabalInput ->
   BS.ByteString ->
   Either FileDiagnostic [Syntax.Field Syntax.Position]
 readCabalFields file contents  = do

@@ -6,18 +6,20 @@ module Config (tests) where
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Hashable
-import qualified Data.HashMap.Strict  as HM
-import qualified Data.Map             as Map
-import           Development.IDE      (RuleResult, action, define,
-                                       getFilesOfInterestUntracked,
-                                       getPluginConfigAction, ideErrorText,
-                                       uses_)
-import           Development.IDE.Test (ExpectedDiagnostic, expectDiagnostics)
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.Map                       as Map
+import           Development.IDE                (RuleResult, action, define,
+                                                 getFilesOfInterestUntracked,
+                                                 getPluginConfigAction,
+                                                 ideErrorText, uses_)
+import           Development.IDE.Core.RuleInput
+import           Development.IDE.Test           (ExpectedDiagnostic,
+                                                 expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
-import           Language.LSP.Test    as Test
-import           System.FilePath      ((</>))
+import           Language.LSP.Test              as Test
+import           System.FilePath                ((</>))
 import           Test.Hls
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -88,7 +90,7 @@ genericConfigTests = testGroup "generic plugin config"
                     files <- getFilesOfInterestUntracked
                     void $ uses_ GetTestDiagnostics $ HM.keys files
               define mempty $ \GetTestDiagnostics file -> do
-                let diags = [ideErrorText file "testplugin"]
+                let diags = [ideErrorText (inputFilePath file) "testplugin"]
                 return (diags,Nothing)
           }
         -- A config that disables the plugin initially
@@ -104,6 +106,7 @@ data GetTestDiagnostics = GetTestDiagnostics
     deriving (Eq, Show, Generic)
 instance Hashable GetTestDiagnostics
 instance NFData   GetTestDiagnostics
+type instance RuleInput GetTestDiagnostics = SomeHaskellInput
 type instance RuleResult GetTestDiagnostics = ()
 
 expectDiagnosticsFail

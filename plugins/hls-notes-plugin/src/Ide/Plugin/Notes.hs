@@ -17,6 +17,7 @@ import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Data.Traversable                 (for)
 import           Development.IDE                  hiding (line)
 import           Development.IDE.Core.PluginUtils (runActionE, useE)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake       (toKnownFiles)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.Core.Text        (lineAt)
@@ -45,6 +46,7 @@ data GetNotesInFile = MkGetNotesInFile
 -- The GetNotesInFile action scans the source file and extracts a map of note
 -- definitions (note name -> position) and a map of note references
 -- (note name -> [position]).
+type instance RuleInput GetNotesInFile = SomeFileInput
 type instance RuleResult GetNotesInFile = (HM.HashMap Text Position, HM.HashMap Text [Position])
 
 data GetNotes = MkGetNotes
@@ -52,6 +54,7 @@ data GetNotes = MkGetNotes
     deriving anyclass (Hashable, NFData)
 -- GetNotes collects all note definition across all files in the
 -- project. It returns a map from note name to pair of (filepath, position).
+type instance RuleInput GetNotes = NoInput
 type instance RuleResult GetNotes = HashMap Text (NormalizedFilePath, Position)
 
 data GetNoteReferences = MkGetNoteReferences
@@ -59,6 +62,7 @@ data GetNoteReferences = MkGetNoteReferences
     deriving anyclass (Hashable, NFData)
 -- GetNoteReferences collects all note references across all files in the
 -- project. It returns a map from note name to list of (filepath, position).
+type instance RuleInput GetNoteReferences = NoInput
 type instance RuleResult GetNoteReferences = HashMap Text [(NormalizedFilePath, Position)]
 
 instance Pretty Log where
@@ -87,17 +91,17 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definiti
 findNotesRules :: Recorder (WithPriority Log) -> Rules ()
 findNotesRules recorder = do
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MkGetNotesInFile nfp -> do
-        findNotesInFile nfp recorder
+        findNotesInFile (inputFilePath nfp) recorder
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MkGetNotes _ -> do
         targets <- toKnownFiles <$> useNoFile_ GetKnownTargets
-        definedNotes <- catMaybes <$> mapM (\nfp -> fmap (HM.map (nfp,) . fst) <$> use MkGetNotesInFile nfp) (HS.toList targets)
+        definedNotes <- catMaybes <$> mapM (\nfp -> fmap (HM.map (nfp,) . fst) <$> use MkGetNotesInFile (toSomeFileInput nfp)) (map inputFilePath (HS.toList targets))
         pure $ Just $ HM.unions definedNotes
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MkGetNoteReferences _ -> do
         targets <- toKnownFiles <$> useNoFile_ GetKnownTargets
-        definedReferences <- catMaybes <$> for (HS.toList targets) (\nfp -> do
-                references <- fmap snd <$> use MkGetNotesInFile nfp
+        definedReferences <- catMaybes <$> for (map inputFilePath (HS.toList targets)) (\nfp -> do
+                references <- fmap snd <$> use MkGetNotesInFile (toSomeFileInput nfp)
                 pure $ fmap (HM.map (fmap (nfp,))) references
             )
         pure $ Just $ List.foldl' (HM.unionWith (<>)) HM.empty definedReferences
@@ -109,7 +113,7 @@ getNote :: NormalizedFilePath -> IdeState -> Position -> ExceptT PluginError (Ha
 getNote nfp state (Position l c) = do
     contents <-
         err "Error getting file contents"
-        =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
+        =<< liftIO (runAction "notes.getfileContents" state (getFileContents (toSomeFileInput nfp)))
     line <- err "Line not found in file" (lineAt (fromIntegral l) contents)
     pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
   where
@@ -130,7 +134,7 @@ listReferences state _ param
         case noteOpt of
             Nothing -> pure (InR Null)
             Just note -> do
-                notes <- runActionE "notes.definedNoteReferencess" state $ useE MkGetNoteReferences nfp
+                notes <- runActionE "notes.definedNoteReferencess" state $ useE MkGetNoteReferences NoInput
                 case HM.lookup note notes of
                   Nothing -> pure (InL [])
                   Just poss -> pure $ InL $ mapMaybe (\(noteFp, pos@(Position l' _)) ->
@@ -151,7 +155,7 @@ jumpToNote state _ param
         case noteOpt of
             Nothing -> pure (InR (InR Null))
             Just note -> do
-                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
+                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes NoInput
                 case HM.lookup note notes of
                   Nothing -> pure (InR (InR Null))
                   Just (noteFp, pos) -> pure $ InL $ Definition $ InL $
@@ -164,7 +168,7 @@ findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (
 findNotesInFile file recorder = do
     -- GetFileContents only returns a value if the file is open in the editor of
     -- the user. If not, we need to read it from disk.
-    contentOpt <- (snd =<<) <$> use GetFileContents file
+    contentOpt <- (snd =<<) <$> use GetFileContents (toSomeFileInput file)
     content <- case contentOpt of
         Just x  -> pure $ Rope.toText x
         Nothing -> liftIO $ readFileUtf8 $ fromNormalizedFilePath file
@@ -284,7 +288,7 @@ hoverNote state _ params
         Nothing -> pure (InR Null)
 
         Just note -> do
-          mbRope <- liftIO $ runAction "notes.hoverLine" state (getFileContents nfp)
+          mbRope <- liftIO $ runAction "notes.hoverLine" state (getFileContents (toSomeFileInput nfp))
 
           -- compute precise hover range for highlighting corresponding Note Reference on Hover
           let lineText =
@@ -294,7 +298,7 @@ hoverNote state _ params
 
               mbRange = findNoteRange lineText note line
 
-          notes <- runActionE "notes.hover" state $ useE MkGetNotes nfp
+          notes <- runActionE "notes.hover" state $ useE MkGetNotes NoInput
           case HM.lookup note notes of
             Nothing -> pure $ InL $ Hover (InL $ MarkupContent MarkupKind_Markdown "_No declaration available_") mbRange
 
@@ -350,7 +354,7 @@ autocomplete state _ params = do
           case uriToNormalizedFilePath nuri of
             Nothing -> pure []
 
-            Just nfp -> do
+            Just _ -> do
               let typed =
                    case T.breakOnEnd "[" linePrefix of
                     (_, "")   -> ""
@@ -358,7 +362,7 @@ autocomplete state _ params = do
 
               notesMap <-
                 runActionE "notes.completion.notes" state $
-                  useE MkGetNotes nfp
+                  useE MkGetNotes NoInput
 
               let allNotes = HM.keys notesMap
                   matches =

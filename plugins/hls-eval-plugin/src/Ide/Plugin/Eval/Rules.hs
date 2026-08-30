@@ -17,7 +17,6 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        IdeState,
                                                        LinkableType (BCOLinkable),
                                                        NeedsCompilation (NeedsCompilation),
-                                                       NormalizedFilePath,
                                                        RuleBody (RuleNoDiagnostics),
                                                        Rules, defineEarlyCutoff,
                                                        encodeLinkableType,
@@ -25,6 +24,7 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        realSrcSpanToRange,
                                                        useWithStale_, use_)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules           (needsCompilationRule)
 import           Development.IDE.Core.Shake           (IsIdeGlobal,
                                                        RuleBody (RuleWithCustomNewnessCheck),
@@ -48,15 +48,15 @@ rules recorder = do
     isEvaluatingRule recorder
     addIdeGlobal . EvaluatingVar =<< liftIO(newIORef mempty)
 
-newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedFilePath))
+newtype EvaluatingVar = EvaluatingVar (IORef (HashSet ProjectHaskellInput))
 instance IsIdeGlobal EvaluatingVar
 
-queueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+queueForEvaluation :: IdeState -> ProjectHaskellInput -> IO ()
 queueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     atomicModifyIORef' var (\fs -> (Set.insert nfp fs, ()))
 
-unqueueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+unqueueForEvaluation :: IdeState -> ProjectHaskellInput -> IO ()
 unqueueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True
@@ -80,12 +80,12 @@ pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
-evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
-    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
+evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments input -> do
+    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments input
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
                     | FastString.unpackFS (srcSpanFile real) ==
-                        fromNormalizedFilePath nfp
+                        fromNormalizedFilePath (inputFilePath input)
                     , let ran0 = realSrcSpanToRange real
                     , Just curRan <- toCurrentRange posMap ran0
                     ->

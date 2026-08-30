@@ -9,29 +9,32 @@ module Development.IDE.Plugin.Completions.Types (
 ) where
 
 import           Control.DeepSeq
-import qualified Data.Map                     as Map
-import qualified Data.Text                    as T
+import qualified Data.Map                       as Map
+import qualified Data.Text                      as T
 
 import           Data.Aeson
 import           Data.Aeson.Types
-import           Data.Function                (on)
-import           Data.Hashable                (Hashable)
-import qualified Data.List                    as L
-import           Data.List.NonEmpty           (NonEmpty (..))
-import           Data.String                  (IsString (..))
-import           Data.Text                    (Text)
+import           Data.Function                  (on)
+import           Data.Hashable                  (Hashable)
+import qualified Data.List                      as L
+import           Data.List.NonEmpty             (NonEmpty (..))
+import           Data.String                    (IsString (..))
+import           Data.Text                      (Text)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Graph        (RuleResult)
-import           Development.IDE.Spans.Common ()
-import           GHC.Generics                 (Generic)
-import qualified GHC.Types.Name.Occurrence    as Occ
+import           Development.IDE.Graph          (RuleResult)
+import           Development.IDE.Spans.Common   ()
+import           GHC.Generics                   (Generic)
+import qualified GHC.Types.Name.Occurrence      as Occ
 import           Ide.Plugin.Properties
-import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
-import qualified Language.LSP.Protocol.Types  as J
+import           Language.LSP.Protocol.Types    (CompletionItemKind (..), Uri)
+import qualified Language.LSP.Protocol.Types    as J
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
+type instance RuleInput LocalCompletions = ProjectHaskellInput
 type instance RuleResult NonLocalCompletions = CachedCompletions
+type instance RuleInput NonLocalCompletions = ProjectHaskellInput
 
 data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Generic)
