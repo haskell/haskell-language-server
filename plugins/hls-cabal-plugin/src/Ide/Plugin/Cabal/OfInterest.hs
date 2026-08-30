@@ -16,6 +16,7 @@ import qualified Data.HashMap.Strict               as HashMap
 import           Data.Proxy
 import qualified Data.Text                         ()
 import           Development.IDE                   as D
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake        as Shake
 import           Development.IDE.Graph             (Key, alwaysRerun)
 import           Development.IDE.Types.Shake       (toKey)
@@ -25,7 +26,7 @@ import           Ide.Plugin.Cabal.Orphans          ()
 
 data Log
   = LogShake Shake.Log
-  | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
+  | LogFOI (HashMap CabalInput FileOfInterestStatus)
   deriving (Show)
 
 instance Pretty Log where
@@ -45,7 +46,7 @@ such as generating diagnostics, re-parsing, etc...
 We need to store the open files to parse them again if we restart the shake session.
 Restarting of the shake session happens whenever these files are modified.
 -}
-newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap CabalInput FileOfInterestStatus))
 
 instance Shake.IsIdeGlobal OfInterestCabalVar
 
@@ -54,6 +55,7 @@ data IsCabalFileOfInterest = IsCabalFileOfInterest
 instance Hashable IsCabalFileOfInterest
 instance NFData IsCabalFileOfInterest
 
+type instance RuleInput IsCabalFileOfInterest = CabalInput
 type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
 
 data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
@@ -81,12 +83,12 @@ ofInterestRules recorder = do
   summarize (IsCabalFOI (Modified False)) = BS.singleton 2
   summarize (IsCabalFOI (Modified True))  = BS.singleton 3
 
-getCabalFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getCabalFilesOfInterestUntracked :: Action (HashMap CabalInput FileOfInterestStatus)
 getCabalFilesOfInterestUntracked = do
   OfInterestCabalVar var <- Shake.getIdeGlobalAction
   liftIO $ readVar var
 
-addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO [Key]
+addFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> CabalInput -> FileOfInterestStatus -> IO [Key]
 addFileOfInterest recorder state f v = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   (prev, files) <- modifyVar var $ \dict -> do
@@ -100,12 +102,12 @@ addFileOfInterest recorder state f v = do
  where
   log' = logWith recorder
 
-deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO [Key]
+deleteFileOfInterest :: Recorder (WithPriority Log) -> IdeState -> CabalInput -> IO [Key]
 deleteFileOfInterest recorder state f = do
   OfInterestCabalVar var <- Shake.getIdeGlobalState state
   files <- modifyVar' var $ HashMap.delete f
   log' Debug $ LogFOI files
-  return [toKey IsFileOfInterest f]
+  return [toKey IsCabalFileOfInterest f]
  where
   log' = logWith recorder
 

@@ -15,6 +15,7 @@ import qualified Data.List.NonEmpty                 as NE
 import qualified Data.Map.Strict                    as Map
 import           Data.Maybe
 import qualified Data.Text                          as T
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake         hiding (Log, knownTargets,
                                                      withHieDb)
 import qualified Development.IDE.GHC.Compat         as Compat
@@ -101,7 +102,7 @@ data RawComponentInfo = RawComponentInfo
   -- | All targets of this components.
   , rawComponentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , rawComponentFP             :: NormalizedFilePath
+  , rawComponentFP             :: ProjectHaskellInput
   -- | Component Options used to load the component.
   , rawComponentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -120,7 +121,7 @@ data ComponentInfo = ComponentInfo
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , componentFP             :: NormalizedFilePath
+  , componentFP             :: ProjectHaskellInput
   -- | Component Options used to load the component.
   , componentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -145,7 +146,7 @@ addUnit unit_str = liftEwM $ do
 newComponentCache
          :: Recorder (WithPriority Log)
          -> [String]           -- ^ File extensions to consider
-         -> NormalizedFilePath -- ^ Path to file that caused the creation of this component
+         -> ProjectHaskellInput -- ^ Path to file that caused the creation of this component
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
@@ -172,7 +173,7 @@ newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
 #endif
         closure_err_to_multi_err err =
             ideErrorWithSource
-                (Just "cradle") (Just DiagnosticSeverity_Warning) cfp
+                (Just "cradle") (Just DiagnosticSeverity_Warning) (inputFilePath cfp)
                 (T.pack (Compat.printWithoutUniques (singleMessage err)))
                 (Just (fmap GhcDriverMessage err))
         multi_errs = map closure_err_to_multi_err closure_errs
@@ -200,7 +201,7 @@ newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
 
     -- A session representative file of this load. See Note [Session representatives]
     -- Not cfp which may be an error target.
-    let repr = fromMaybe cfp $ listToMaybe
+    let repr = fromMaybe (inputFilePath cfp) $ listToMaybe
           [ loc
           | ci <- Map.elems cis
           , t <- componentTargets ci
@@ -228,7 +229,7 @@ newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
 -- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m
     => OptHaddockParse
-    -> NormalizedFilePath
+    -> ProjectHaskellInput
     -> ComponentOptions
     -> DynFlags
     -> FilePath -- ^ root dir, see Note [Root Directory]
@@ -256,7 +257,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
         --
         -- If we don't end up with a target for the current file in the end, then
         -- we will report it as an error for that file
-        let abs_fp = toAbsolute rootDir (fromNormalizedFilePath cfp)
+        let abs_fp = toAbsolute rootDir (fromNormalizedFilePath (inputFilePath cfp))
         let special_target = Compat.mkSimpleTarget df abs_fp
         pure $ HomeUnitConfig df (special_target : targets) mHash :| []
     where
@@ -315,7 +316,7 @@ addComponentInfo ::
   (String -> Maybe B.ByteString -> [String] -> IO CacheDirs) ->
   DependencyInfo ->
   NonEmpty HomeUnitConfig->
-  (Maybe FilePath, NormalizedFilePath, ComponentOptions) ->
+  (Maybe FilePath, ProjectHaskellInput, ComponentOptions) ->
   Map.Map (Maybe FilePath) [RawComponentInfo] ->
   m (Map.Map (Maybe FilePath) [RawComponentInfo], ([ComponentInfo], [ComponentInfo]))
 addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts) m = do
@@ -508,7 +509,7 @@ data TargetDetails = TargetDetails
       targetTarget    :: !Target,
       targetEnv       :: !(IdeResult HscEnvEq),
       targetDepends   :: !DependencyInfo,
-      targetLocations :: ![NormalizedFilePath]
+      targetLocations :: ![ProjectHaskellInput]
   }
 
 -- | Candidate locations of a target, in search order.
@@ -537,12 +538,22 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> IdeResult HscEnvEq
              -> DependencyInfo
              -> IO [TargetDetails]
-fromTargetId is exts tid env dep =
-    return [TargetDetails target env dep (targetIdLocations is exts tid)]
-  where
-    target = case tid of
-      GHC.TargetModule modName -> TargetModule modName
-      GHC.TargetFile f _       -> TargetFile (toNormalizedFilePath' f)
+-- For a target module we consider all the import paths
+fromTargetId is exts (GHC.TargetModule modName) env dep = do
+    let fps = [i </> moduleNameSlashes modName -<.> ext <> boot
+              | ext <- exts
+              , i <- is
+              , boot <- ["", "-boot"]
+              ]
+    let locs = mapMaybe (toProjectHaskellInput . toNormalizedFilePath') fps
+    return [TargetDetails (TargetModule modName) env dep locs]
+-- For a 'TargetFile' we consider all the possible module names
+fromTargetId _ _ (GHC.TargetFile f _) env deps = do
+    let nf = ProjectHaskellInput (toNormalizedFilePath' f)
+    let other
+          | isSuffixOf "-boot" f = ProjectHaskellInput (toNormalizedFilePath' (L.dropEnd 5 (fromNormalizedFilePath (inputFilePath nf))))
+          | otherwise = ProjectHaskellInput (toNormalizedFilePath' (fromNormalizedFilePath (inputFilePath nf) ++ "-boot"))
+    return [TargetDetails (TargetFile nf) env deps [nf, other]]
 
 -- ----------------------------------------------------------------------------
 -- Backwards compatibility

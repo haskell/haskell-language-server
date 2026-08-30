@@ -16,6 +16,7 @@ import           Data.HashMap.Strict
 import qualified Data.HashMap.Strict            as HMap
 import           Data.HashSet
 import qualified Data.HashSet                   as HSet
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat     (ModuleName)
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location
@@ -100,7 +101,7 @@ instance Hashable KnownTargets where
 emptyKnownTargets :: KnownTargets
 emptyKnownTargets = KnownTargets HMap.empty HSet.empty HSet.empty
 
-data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
+data Target = TargetModule ModuleName | TargetFile ProjectHaskellInput
   deriving ( Eq, Ord, Generic, Show )
   deriving anyclass (Hashable, NFData)
 

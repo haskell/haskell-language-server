@@ -7,6 +7,7 @@ module Context where
 
 import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as Text
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Plugin.Completions.Types    (PosPrefixInfo (..))
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
@@ -207,7 +208,7 @@ getContextTests =
   where
     callGetContext :: Position -> T.Text -> T.Text -> IO Context
     callGetContext pos pref ls = do
-        case Parse.readCabalFields "not-real" (Text.encodeUtf8 ls) of
+        case Parse.readCabalFields (CabalInput "not-real.cabal") (Text.encodeUtf8 ls) of
             Left err -> fail $ show err
             Right fields -> do
                 getContext mempty (simpleCabalPrefixInfoFromPos pos pref) fields
