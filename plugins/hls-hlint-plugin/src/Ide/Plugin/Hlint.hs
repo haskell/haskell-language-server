@@ -3,6 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NoFieldSelectors      #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
@@ -30,19 +31,22 @@ import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
+import           Control.Monad.Trans                                (lift)
 import           Control.Monad.Trans.Except                         (ExceptT (..),
                                                                      runExceptT)
+import           Control.Monad.Trans.Maybe                          (hoistMaybe,
+                                                                     runMaybeT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
+import           Data.List                                          (find)
 import qualified Data.Map                                           as M
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
-import           Data.Text.Utf16.Rope.Mixed                         (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed                         as Rope
 import           Data.Typeable
 import           Development.IDE                                    hiding
@@ -64,18 +68,44 @@ import           System.Environment                                 (setEnv,
 #endif
 
 import           Development.IDE.GHC.Compat                         (DynFlags,
+                                                                     FamilyDecl (..),
+                                                                     ForeignDecl (..),
+                                                                     GenLocated (..),
+                                                                     GhcPs,
+                                                                     HsBindLR (..),
+                                                                     HsDecl (..),
+                                                                     LHsDecl,
+                                                                     PatSynBind (..),
+                                                                     Sig (..),
+                                                                     TyClDecl (..),
                                                                      extensionFlags,
+                                                                     getLoc,
+                                                                     hsmodDecls,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     occName,
+                                                                     occNameString,
+                                                                     pattern RealSrcLoc,
+                                                                     pattern UnhelpfulLoc,
+                                                                     pm_parsed_source,
+                                                                     srcLocLine,
+                                                                     srcSpanStart,
+                                                                     topDir,
+                                                                     unLoc)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
 import qualified GHC.Data.Strict                                    as Strict
 #endif
 #if MIN_GHC_API_VERSION(9,0,0)
-import           GHC.Types.SrcLoc                                   hiding
-                                                                    (RealSrcSpan)
-import qualified GHC.Types.SrcLoc                                   as GHC
+import           GHC.Types.SrcLoc                                   hiding (L,
+                                                                     RealSrcSpan,
+                                                                     SrcLoc (..),
+                                                                     getLoc,
+                                                                     srcLocLine,
+                                                                     srcSpanStart,
+                                                                     unLoc)
+import qualified GHC.Types.SrcLoc                                   as GHC hiding
+                                                                           (L)
 #else
 import qualified SrcLoc                                             as GHC
 import           SrcLoc                                             hiding
@@ -371,25 +401,25 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
         liftIO $
             runAction "Hlint.getVersionedTextDoc" ideState $
                 getVersionedTextDoc documentId
-    liftIO $ fmap (InL . map LSP.InR) $ do
-      allDiagnostics <- atomically $ getDiagnostics ideState
+    allDiagnostics <- liftIO $ atomically $ getDiagnostics ideState
 
-      let numHintsInDoc = length
+    let numHintsInDoc = length
             [lspDiagnostic
             | diag <- allDiagnostics
             , let lspDiagnostic = fdLspDiagnostic diag
             , validCommand lspDiagnostic
             , fdFilePath diag == docNormalizedFilePath
             ]
-      let numHintsInContext = length
+    let numHintsInContext = length
             [diagnostic | diagnostic <- diags
                         , validCommand diagnostic
             ]
-      let singleHintCodeActions = diags >>= diagnosticToCodeActions verTxtDocId
-      if numHintsInDoc > 1 && numHintsInContext > 0 then do
-        pure $ singleHintCodeActions ++ [applyAllAction verTxtDocId]
+    singleHintCodeActions <- concat <$> traverse (diagnosticToCodeActions docNormalizedFilePath ideState verTxtDocId) diags
+    pure . InL . map LSP.InR $
+      if numHintsInDoc > 1 && numHintsInContext > 0 then
+        singleHintCodeActions ++ [applyAllAction verTxtDocId]
       else
-        pure singleHintCodeActions
+        singleHintCodeActions
   | otherwise
   = pure $ InL []
 
@@ -413,8 +443,8 @@ resolveProvider recorder ideState _plId ca uri resolveValue = do
     (ApplyHint verTxtDocId oneHint) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (IgnoreHint verTxtDocId hintTitle ) -> do
-        edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
+    (IgnoreHint verTxtDocId hintTitle scope) -> do
+        edit <- ExceptT $ liftIO $ ignoreHint scope recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
 
 applyRefactAvailable :: Bool
@@ -426,14 +456,33 @@ applyRefactAvailable = False
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
-diagnosticToCodeActions :: VersionedTextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
-diagnosticToCodeActions verTxtDocId diagnostic
+diagnosticToCodeActions ::
+  MonadIO m =>
+  NormalizedFilePath -> IdeState -> VersionedTextDocumentIdentifier -> LSP.Diagnostic ->
+  ExceptT PluginError m [LSP.CodeAction]
+diagnosticToCodeActions nfp ideState verTxtDocId diagnostic
   | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code && applyRefactAvailable
   , let hint = T.replace "refact:" "" code
-  , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
+  , let suppressHintTitle s = "Ignore hint \"" <> hint <> "\" in this " <> s
   , let suppressHintArguments = IgnoreHint verTxtDocId hint
-  = catMaybes
+  = do
+    defIgnoreAction <- runMaybeT $ do
+      let err = throwError . PluginInternalError
+      (pm, _) <- lift $ runActionE "Hlint.GetParsedModule" ideState $ useWithStaleE GetParsedModule nfp
+      containingDecl <- maybe (err "no decl found covering expected source position") pure
+        $ find (maybe False (positionInRange start) . srcSpanToRange . getLoc)
+        $ hsmodDecls $ unLoc $ pm_parsed_source pm
+      -- When `declName` returns `Nothing`, that means HLint has no way of naming the declaration.
+      -- And therefore we can't offer an action to ignore the hint locally at all.
+      -- For example, we might be in an instance declaration.
+      name <- hoistMaybe $ T.pack <$> declName containingDecl
+      line <- case srcSpanStart $ getLoc containingDecl of
+        RealSrcLoc sl _ -> pure (srcLocLine sl - 1)
+        UnhelpfulLoc _  -> err "unhelpful loc"
+      pure $ mkCodeAction (suppressHintTitle "definition") diagnostic
+        (Just $ toJSON $ suppressHintArguments IgnoreInDefinition{line, name}) False
+    pure $ catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
@@ -441,9 +490,10 @@ diagnosticToCodeActions verTxtDocId diagnostic
                  applyHintArguments = ApplyHint verTxtDocId (Just $ OneHint start hint) ->
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
-      , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) False)
+      , Just (mkCodeAction (suppressHintTitle "module") diagnostic (Just (toJSON $ suppressHintArguments IgnoreInModule)) False)
+      , defIgnoreAction
       ]
-  | otherwise = []
+  | otherwise = pure []
 
 mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe Value -> Bool -> LSP.CodeAction
 mkCodeAction title diagnostic data_  isPreferred =
@@ -458,32 +508,32 @@ mkCodeAction title diagnostic data_  isPreferred =
     , _data_ = data_
     }
 
-mkSuppressHintTextEdits :: DynFlags -> Rope -> T.Text -> [LSP.TextEdit]
-mkSuppressHintTextEdits dynFlags fileContents hint =
+mkSuppressHintTextEdits :: Int -> T.Text -> Maybe LineSplitTextEdits -> Maybe T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits line hint lineSplitTextEdits defName =
   let
-    NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
-    nextPragmaLinePosition = Position (fromIntegral nextPragmaLine) 0
-    nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
-    textEdit = LSP.TextEdit nextPragmaRange $ "{- HLINT ignore \"" <> hint <> "\" -}\n"
+    pos = Position (fromIntegral line) 0
+    range = Range pos pos
+    textEdit = LSP.TextEdit range $ "{- HLINT ignore " <> foldMap (<> " ") defName <> "\"" <> hint <> "\" -}\n"
     lineSplitTextEditList = maybe [] (\LineSplitTextEdits{..} -> [lineSplitInsertTextEdit, lineSplitDeleteTextEdit]) lineSplitTextEdits
   in
     textEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
-ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
+ignoreHint :: IgnoreHintScope -> Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint scope _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
   (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
   (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
   case fileContents of
-    Just contents -> do
-        let dynFlags = ms_hspp_opts $ msrModSummary msr
-            textEdits = mkSuppressHintTextEdits dynFlags contents ignoreHintTitle
-            workspaceEdit =
-                LSP.WorkspaceEdit
-                  (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
-                  Nothing
-                  Nothing
-        pure workspaceEdit
+    Just contents -> pure $ LSP.WorkspaceEdit (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits)) Nothing Nothing
+      where
+        dynFlags = ms_hspp_opts $ msrModSummary msr
+        textEdits = case scope of
+          IgnoreInModule ->
+            mkSuppressHintTextEdits nextPragmaLine ignoreHintTitle lineSplitTextEdits Nothing
+            where
+              NextPragmaInfo{nextPragmaLine, lineSplitTextEdits} = getNextPragmaInfo dynFlags (Just contents)
+          IgnoreInDefinition defStartLine defName ->
+            mkSuppressHintTextEdits defStartLine ignoreHintTitle Nothing (Just defName)
     Nothing -> throwError $ PluginInternalError "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
@@ -497,6 +547,7 @@ data HlintResolveCommands =
   | IgnoreHint
       { verTxtDocId     :: VersionedTextDocumentIdentifier
       , ignoreHintTitle :: HintTitle
+      , scope           :: IgnoreHintScope
       } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
@@ -506,6 +557,11 @@ data OneHint =
     { oneHintPos   :: Position
     , oneHintTitle :: HintTitle
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
+
+data IgnoreHintScope
+  = IgnoreInModule
+  | IgnoreInDefinition {line :: Int, name :: T.Text}
+  deriving (Generic, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 #if !APPLY_REFACT
@@ -632,3 +688,20 @@ applyRefactorings  =
         where key = "GHC_EXACTPRINT_GHC_LIBDIR"
 #endif
 #endif
+
+-- TODO expose from HLint: https://github.com/ndmitchell/hlint/issues/1697
+declName :: LHsDecl GhcPs -> Maybe String
+declName (L _ x) = occNameString . occName <$> case x of
+  TyClD _ FamDecl{tcdFam=FamilyDecl{fdLName}} -> Just $ unLoc fdLName
+  TyClD _ SynDecl{tcdLName}                   -> Just $ unLoc tcdLName
+  TyClD _ DataDecl{tcdLName}                  -> Just $ unLoc tcdLName
+  TyClD _ ClassDecl{tcdLName}                 -> Just $ unLoc tcdLName
+  ValD _ FunBind{fun_id}                      -> Just $ unLoc fun_id
+  ValD _ VarBind{var_id}                      -> Just var_id
+  ValD _ (PatSynBind _ PSB{psb_id})           -> Just $ unLoc psb_id
+  SigD _ (TypeSig _ (x:_) _)                  -> Just $ unLoc x
+  SigD _ (PatSynSig _ (x:_) _)                -> Just $ unLoc x
+  SigD _ (ClassOpSig _ _ (x:_) _)             -> Just $ unLoc x
+  ForD _ ForeignImport{fd_name}               -> Just $ unLoc fd_name
+  ForD _ ForeignExport{fd_name}               -> Just $ unLoc fd_name
+  _                                           -> Nothing
