@@ -2,6 +2,33 @@
 
 ## 2.15.0.0
 
+- Remove `hls-retrie-plugin`
+- Add `hls-case-split-plugin`
+- Add `hls-export-plugin`
+- Enable `hls-semantic-tokens-plugin` by default
+- Prefer multi-component loading by default
+- Replace the `sessionLoading` config with `componentsLoading`
+- Support for Ormolu and Fourmolu on GHC 9.14
+- Improvements to ghcide
+  - Point documentation and source links at Hackage
+  - Stop unloading all bytecode whenever new bytecode is generated
+  - Unload linkables when any transitive dependency changes
+- Improvements to `hls-rename-plugin`
+  - Improved limited cross-module renaming
+- Improvements to `hls-refactor-plugin`
+  - Code action to delete all unused bindings, including `let` bindings
+- Improvements to `hls-eval-plugin`
+  - Capture `stdout` and `stderr` from evaluated expressions
+- Improvements to `hls-splice-plugin`
+  - Support declaration splices
+- Optimizations
+  - Speed up dependency graph building
+  - Load core files on demand and improve freshness checking
+- Bug fixes
+  - Correct code action edits across several plugins
+  - Match GHC when resolving imports and boot files
+  - Avoid serving stale completions, documentation and diagnostics
+
 ### Pull Requests
 
 - Split module interface rule into interface and code outputs
