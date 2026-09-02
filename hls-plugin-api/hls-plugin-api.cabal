@@ -53,6 +53,7 @@ library
 
   hs-source-dirs:     src
   build-depends:
+    , split ^>=0.2.5
     , aeson
     , base                  >=4.12    && <5
     , co-log-core

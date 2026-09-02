@@ -45,8 +45,7 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
 
   -- Windows support
-  , expectFailBecause "https://github.com/haskell/haskell-language-server/issues/5059"
-    $ goldenWithClass "Like TNoPatternsNoBraces, but lacks line terminator at EOF" "TNoPatternsNoBracesWindows" $
+  , goldenWithClass "Like TNoPatternsNoBraces, but lacks line terminator at EOF" "TNoPatternsNoBracesWindows" $
       Prelude.flip inspectCodeAction [title]
 
   -- Patterns with irregular indentation

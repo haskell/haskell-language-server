@@ -46,6 +46,8 @@ codeActionTests = testGroup
       ]
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $
       getActionByTitle "Add placeholders for '=='"
+  , goldenWithClass "Like previous one, but this file has no line terminator" "T1W" "eq" $
+      getActionByTitle "Add placeholders for '=='"
   , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $
       getActionByTitle "Add placeholders for '/='"
   , goldenWithClass "Creates a placeholder for both '==' and '/='" "T1" "all" $
