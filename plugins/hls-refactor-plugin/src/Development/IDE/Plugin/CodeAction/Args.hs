@@ -22,8 +22,7 @@ import           Data.Either                                  (fromRight,
 import           Data.Functor                                 ((<&>))
 import           Data.IORef.Extra
 import qualified Data.Map                                     as Map
-import           Data.Maybe                                   (fromMaybe,
-                                                               maybeToList)
+import           Data.Maybe                                   (fromMaybe)
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope.Mixed                   as Rope
 import           Development.IDE                              hiding
@@ -80,7 +79,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
         caaHar <- onceIO $ runRule GetHieAst
         caaBindings <- onceIO $ runRule GetBindings
         caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
-        diags <- concat . maybeToList <$> activeDiagnosticsInRange (shakeExtras state) nfp _range
+        diags <- activeDiagnosticsInRange (shakeExtras state) nfp _range
         results <- liftIO $
             sequence
                 [

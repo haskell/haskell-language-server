@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eux
+set -euxo pipefail
 
 . .github/scripts/env.sh
 . .github/scripts/common.sh

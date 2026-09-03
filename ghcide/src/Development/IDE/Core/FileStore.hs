@@ -307,6 +307,18 @@ setSomethingModified vfs state reason actionBetweenSession = do
     atomically $ writeTaskQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
     void $ restartShakeSession (shakeExtras state) vfs reason [] actionBetweenSession
 
+{- Note [Unique file watcher registration ids]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We send more than one 'client/registerCapability' for watched files: one for
+the global source globs, plus one foreach cradle dependency that the globs
+do not already cover, see 'addWatchedFileRule'. These are logically distinct
+registrations, so they must not share an id.
+
+LSP leaves the meaning of a repeated id undefined. emacs' eglot unregisters the
+old watches before re-registering, while neovim and vscode accumulate. We derive
+the id from the globs to keep them distinct and idempotent, while supporting
+potentially de-registering in the future.
+-}
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do
       watchSupported <- isWatchSupported
@@ -314,12 +326,11 @@ registerFileWatches globs = do
       then do
         let
           regParams    = LSP.RegistrationParams  [toUntypedRegistration registration]
-          -- The registration ID is arbitrary and is only used in case we want to deregister (which we won't).
-          -- We could also use something like a random UUID, as some other servers do, but this works for
-          -- our purposes.
-          registration = LSP.TRegistration { _id ="globalFileWatches"
+          -- See Note [Unique file watcher registration ids]
+          registration = LSP.TRegistration { _id = registrationId
                                            , _method = LSP.SMethod_WorkspaceDidChangeWatchedFiles
                                            , _registerOptions = Just regOptions}
+          registrationId = "hls-file-watches:" <> Text.intercalate "," (map Text.pack globs)
           regOptions =
             DidChangeWatchedFilesRegistrationOptions { _watchers = watchers }
           -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
