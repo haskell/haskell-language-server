@@ -1883,6 +1883,7 @@ library hls-exactprint-utils
   exposed-modules:
     Development.IDE.GHC.ExactPrint.Annotation
     Development.IDE.GHC.ExactPrint.CPP
+    Development.IDE.GHC.ExactPrint.IE
   hs-source-dirs:     hls-exactprint-utils/src
   build-depends:
     , ghc
