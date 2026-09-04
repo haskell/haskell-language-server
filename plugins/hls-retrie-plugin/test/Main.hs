@@ -115,6 +115,10 @@ inlineThisTests =
       , testInline "appends an import once when other uses remain" "CrossFileUses" 6 4
       , testInline "import unqualified to match template" "QualifiedScopeUse" 6 4
       , testInline "import qualified" "QualifiedBodyUse" 5 4
+      , testRefused "different field selector" "FieldClash" 9 4
+      , testRefused "local variable clashes with field selector" "VarClash" 10 4
+      , testRefused "clashing field selectors" "FieldFieldClash" 9 4
+      , testRefused "clashing record label" "ConPatNoDisamb" 9 4
       , testInline "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
       , testInline "import a method exported without its class" "ChildExportUse" 5 4
       , testInline "import a method imported without its class" "LoneMethodUse" 5 4

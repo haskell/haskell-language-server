@@ -76,8 +76,9 @@ import           Development.IDE.GHC.Compat                (RealSrcSpan,
 #endif
 #if MIN_VERSION_ghc(9,7,0)
 import           Development.IDE.GHC.Compat                (LookupGRE (LookupRdrName),
-                                                            WhichGREs (SameNameSpace),
                                                             lookupGRE)
+import           GHC.Types.Name.Reader                     (FieldsOrSelectors (..),
+                                                            WhichGREs (..))
 #else
 import           Development.IDE.GHC.Compat                (lookupGRE_RdrName)
 #endif
@@ -187,7 +188,7 @@ extractInlineImports def tgt matches = sequence $ map importName names
       -- built-in syntax ([], (:), tuples) is not importable, so ignore it
       isBuiltInSyntax name ||
       -- already in scope in the target module
-      inScope targetEnv rdr name ||
+      (inScope targetEnv rdr name && not (contested targetEnv rdr name)) ||
       -- renamer synthesized names such as 'GHC.Internal.Base.>>'
       isExact rdr
 
@@ -232,10 +233,16 @@ contested env rdr name = any ((/= name) . gre_name) (lookupGRERdr env rdr)
 inScope :: GlobalRdrEnv -> RdrName -> Name -> Bool
 inScope env rdr name = any ((== name) . gre_name) (lookupGRERdr env rdr)
 
--- FIXME(simon): wrong namespace
 lookupGRERdr :: GlobalRdrEnv -> RdrName -> [GlobalRdrElt]
 #if MIN_VERSION_ghc(9,7,0)
-lookupGRERdr env rdr = lookupGRE env (LookupRdrName rdr SameNameSpace)
+lookupGRERdr env rdr = lookupGRE env (LookupRdrName rdr which)
+  where
+    which =
+      RelevantGREs
+        { includeFieldSelectors = WantBoth
+        , lookupVariablesForFields = True
+        , lookupTyConsAsWell = False
+        }
 #else
 lookupGRERdr env rdr = lookupGRE_RdrName rdr env
 #endif
