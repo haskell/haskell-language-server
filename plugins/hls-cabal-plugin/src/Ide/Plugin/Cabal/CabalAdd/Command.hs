@@ -29,6 +29,7 @@ import           Data.Text.Encoding                (encodeUtf8)
 import qualified Data.Text.Encoding                as T
 import           Data.Text.Utf16.Rope.Mixed        as Rope
 import           Development.IDE.Core.FileStore    (getFileContents)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules        (IdeState)
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (useWithStale)
@@ -187,10 +188,11 @@ mkCabalAddConfig ::
   ExceptT PluginError m WorkspaceEdit
 mkCabalAddConfig recorder env cabalFilePath mkConfig = do
   let (state, caps, verTxtDocId) = env
+  let input = CabalInput (toNormalizedFilePath cabalFilePath)
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-    contents <- getFileContents $ toNormalizedFilePath cabalFilePath
-    inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-    inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+    contents <- getFileContents (SomeFileCabalInput input)
+    inFields <- useWithStale ParseCabalFields input
+    inPackDescr <- useWithStale ParseCabalFile input
     let mbCnfOrigContents = case contents of
           (Just txt) -> Just $ encodeUtf8 $ Rope.toText txt
           _          -> Nothing

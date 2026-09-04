@@ -20,6 +20,7 @@ import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (idDelta)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
@@ -27,7 +28,6 @@ import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
 import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
-import           Ide.Plugin.Error
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -43,10 +43,10 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides fixit
 
 hover :: PluginMethodHandler IdeState Method_TextDocumentHover
 hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
-    nfp <- getNormalizedFilePathE uri
+    nfp <- classifyAsProjectHaskell uri
     runIdeActionE "ExplicitFixity" (shakeExtras state) $ do
       (FixityMap fixmap, _) <-  useWithStaleFastE GetFixity nfp
-      (HAR{hieAst}, mapping) <- useWithStaleFastE GetHieAst nfp
+      (HAR{hieAst}, mapping) <- useWithStaleFastE GetHieAst (SomeProjectHaskellInput nfp)
       let ns = getNamesAtPoint hieAst pos mapping
           fs = mapMaybe (\n -> (n,) <$> M.lookup n fixmap) ns
       pure $ maybeToNull $ toHover fs
@@ -63,10 +63,11 @@ hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
         fixityText :: (Name, Fixity) -> T.Text
 #if MIN_VERSION_GLASGOW_HASKELL(9,12,0,0)
         fixityText (name, Fixity precedence direction) =
+            printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
 #else
         fixityText (name, Fixity _ precedence direction) =
-#endif
             printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
+#endif
 
 newtype FixityMap = FixityMap (M.Map Name Fixity)
 instance Show FixityMap where
@@ -91,6 +92,7 @@ data GetFixity = GetFixity deriving (Show, Eq, Generic)
 instance Hashable GetFixity
 instance NFData GetFixity
 
+type instance RuleInput GetFixity = ProjectHaskellInput
 type instance RuleResult GetFixity = FixityMap
 
 -- | Convert a HieAST to FixityTree with fixity info gathered
@@ -113,7 +115,7 @@ lookupFixities hscEnv tcGblEnv names
 fixityRule :: Recorder (WithPriority Log) -> Rules ()
 fixityRule recorder = do
     define (cmapWithPrio LogShake recorder) $ \GetFixity nfp -> do
-        HAR{refMap} <- use_ GetHieAst nfp
+        HAR{refMap} <- use_ GetHieAst (SomeProjectHaskellInput nfp)
         env <- hscEnv <$> use_ GhcSessionDeps nfp -- deps necessary so that we can consult already loaded in ifaces instead of loading in duplicates
         tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
         fs <- lookupFixities env tcGblEnv (S.mapMonotonic (\(Right n) -> n) $ S.filter isRight $ M.keysSet refMap)

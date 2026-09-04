@@ -9,6 +9,7 @@ import           Data.List
 import           Data.List.Extra                   (split)
 import           Data.Maybe
 import qualified Data.Text                         as T
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
@@ -40,8 +41,8 @@ data UnknownModuleDetails =
   the cradle error occurred (of the file we attempted to load).
   Depicts the cradle error in a user-friendly way.
 -}
-renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
-renderCradleError cradleError cradle nfp =
+renderCradleError :: CradleError -> Cradle a -> ProjectHaskellInput -> FileDiagnostic
+renderCradleError cradleError cradle input =
   let noDetails =
         ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
   in
@@ -54,6 +55,7 @@ renderCradleError cradleError cradle nfp =
             }
      else noDetails
   where
+    nfp = inputFilePath input
     ms = cradleErrorStderr cradleError
 
     absDeps = fmap (cradleRootDir cradle </>) (cradleErrorDependencies cradleError)

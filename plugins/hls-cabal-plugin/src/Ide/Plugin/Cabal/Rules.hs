@@ -16,6 +16,7 @@ import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as Encoding
 import           Data.Text.Utf16.Rope.Mixed        as Rope
 import           Development.IDE                   as D
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake        as Shake
 import qualified Distribution.CabalSpecVersion     as Cabal
 import qualified Distribution.Fields               as Syntax
@@ -32,7 +33,7 @@ import           Ide.Types
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedFilePath FileVersion
+  = LogModificationTime CabalInput FileVersion
   | LogShake Shake.Log
   | LogOfInterest OfInterest.Log
   | LogDocSaved Uri
@@ -43,7 +44,7 @@ instance Pretty Log where
     LogShake log' -> pretty log'
     LogOfInterest log' -> pretty log'
     LogModificationTime nfp modTime ->
-      "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
+      "Modified:" <+> pretty (fromNormalizedFilePath (inputFilePath nfp)) <+> pretty (show modTime)
     LogDocSaved uri ->
       "Saved text document:" <+> pretty (getUri uri)
 
@@ -59,13 +60,13 @@ cabalRules recorder plId = do
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
+        (t, mCabalSource) <- use_ GetFileContents (SomeFileCabalInput file)
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
             pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            liftIO $ BS.readFile $ fromNormalizedFilePath (inputFilePath file)
 
         case Parse.readCabalFields file contents of
           Left _ ->
@@ -91,13 +92,13 @@ cabalRules recorder plId = do
       else do
         -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
         -- we rerun this rule because this rule *depends* on GetModificationTime.
-        (t, mCabalSource) <- use_ GetFileContents file
+        (t, mCabalSource) <- use_ GetFileContents (SomeFileCabalInput file)
         log' Debug $ LogModificationTime file t
         contents <- case mCabalSource of
           Just sources ->
             pure $ Encoding.encodeUtf8 $ Rope.toText sources
           Nothing -> do
-            liftIO $ BS.readFile $ fromNormalizedFilePath file
+            liftIO $ BS.readFile $ fromNormalizedFilePath (inputFilePath file)
 
         -- Instead of fully reparsing the sources to get a 'GenericPackageDescription',
         -- we would much rather re-use the already parsed results of 'ParseCabalFields'.

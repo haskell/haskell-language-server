@@ -38,6 +38,7 @@ import           Development.IDE                          (Action,
                                                            toNormalizedFilePath')
 import           Development.IDE.Core.PluginUtils         (runActionE, useE,
                                                            useWithStaleE)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
@@ -50,7 +51,6 @@ import           GHC.Iface.Ext.Types                      (HieASTs (getAsts),
                                                            pattern HiePath)
 import           Ide.Logger                               (logWith)
 import           Ide.Plugin.Error                         (PluginError (PluginInternalError),
-                                                           getNormalizedFilePathE,
                                                            handleMaybe,
                                                            handleMaybeM)
 import           Ide.Plugin.SemanticTokens.Mappings
@@ -62,8 +62,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
-import           Language.LSP.Protocol.Types              (NormalizedFilePath,
-                                                           SemanticTokens,
+import           Language.LSP.Protocol.Types              (SemanticTokens,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM
@@ -75,7 +74,7 @@ $mkSemanticConfigFunctions
 ---- the api
 -----------------------
 
-computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
+computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> ProjectHaskellInput -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
@@ -88,7 +87,7 @@ semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanti
   where
     computeSemanticTokensFull :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
     computeSemanticTokensFull = do
-      nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
+      nfp <- classifyAsProjectHaskell (param ^. L.textDocument . L.uri)
       items <- computeSemanticTokens recorder pid state nfp
       lift $ setSemanticTokens nfp items
       return $ InL items
@@ -96,11 +95,11 @@ semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanti
 
 semanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFullDelta
 semanticTokensFullDelta recorder state pid param = do
-  nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
+  nfp <- classifyAsProjectHaskell (param ^. L.textDocument . L.uri)
   let previousVersionFromParam = param ^. L.previousResultId
   runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp
   where
-    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> ProjectHaskellInput -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
     computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
       semanticTokens <- computeSemanticTokens recorder pid state nfp
       previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nfp
@@ -128,15 +127,15 @@ semanticTokensFullDelta recorder state pid param = do
 getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
-    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
+    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst (SomeProjectHaskellInput nfp)
     (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
     -- On Windows, 'nfp' contains escaped backslashes \\\\. For files that use
     -- the CPP extension, 'hieAst' contains forward slashes '/', because the C
     -- preprocessor conflicts with backslashes. We need to "renormalize" it,
     -- so both paths have uniform separators
     let renormalize = \(HiePath p) -> HiePath . mkFastString . fromNormalizedFilePath . toNormalizedFilePath' . unpackFS $ p
-    ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys renormalize $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
-    virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
+    ast <- handleMaybe (LogNoAST $ show nfp) $ (M.mapKeys renormalize $ getAsts hieAst) M.!? (HiePath . mkFastString . fromNormalizedFilePath) (inputFilePath nfp)
+    virtualFile <- handleMaybeM LogNoVF $ getVirtualFile (SomeFileHaskellInput (SomeProjectHaskellInput nfp))
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 
@@ -166,8 +165,8 @@ getAndIncreaseSemanticTokensId = do
     i <- stateTVar semanticTokensId (\val -> (val, val+1))
     return $ T.pack $ show i
 
-getPreviousSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
-getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
+getPreviousSemanticTokens :: ProjectHaskellInput -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup (SomeProjectHaskellInput uri) . semanticTokensCache
 
-setSemanticTokens :: NormalizedFilePath -> SemanticTokens -> Action ()
-setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache
+setSemanticTokens :: ProjectHaskellInput -> SemanticTokens -> Action ()
+setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens (SomeProjectHaskellInput uri) . semanticTokensCache
