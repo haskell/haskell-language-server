@@ -2215,6 +2215,7 @@ test-suite ghcide-tests
     HieDbRetry
     HighlightTests
     Hover
+    HoverRangeTests
     IfaceTests
     InitializeResponseTests
     LogType
