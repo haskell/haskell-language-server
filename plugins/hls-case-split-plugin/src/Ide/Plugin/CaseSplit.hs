@@ -95,6 +95,7 @@ import           Development.IDE                       (FileDiagnostic (fdStruct
                                                         IdeState (shakeExtras),
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
+                                                        getExtensionsSet,
                                                         runAction,
                                                         spanContainsRange)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
@@ -137,6 +138,7 @@ import           GHC                                   (AnnList (AnnList),
                                                         ParsedModule (pm_parsed_source),
                                                         ParsedSource,
                                                         realSrcSpan)
+import           GHC.Data.EnumSet                      (member)
 import           GHC.Driver.DynFlags                   (OnOff (On))
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
@@ -227,8 +229,9 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 
   let diagAndMissingCtors = getInnermost . extractDiagAndMissingCtors $ fileDiags
 
-  arrowSyntax <- getArrowSyntax state nfp
-  psOld <- getParsedSource state nfp
+  pmOld <- getParsedModule state nfp
+  arrowSyntax <- getArrowSyntax pmOld state nfp
+  let psOld = pm_parsed_source pmOld
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
 
@@ -265,19 +268,21 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config VersionedTextDocumentIdentifier
 getVerTxtDocId state textDoc = liftIO $ runAction "CaseSplit.GetVersionedTextDoc" state $ getVersionedTextDoc textDoc
 
--- | Retrieve 'ParsedSource' from the handler.
-getParsedSource :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedSource
-getParsedSource state nfp = pm_parsed_source <$> runActionE "CaseSplit.GetParsedModule"
-                                                            state
-                                                            (useE GetParsedModule nfp)
+-- | Retrieve 'ParsedModule' from the handler.
+getParsedModule :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedModule
+getParsedModule state nfp = runActionE "CaseSplit.GetParsedModule"
+                                       state
+                                       (useE GetParsedModule nfp)
 
 -- | Retrieve 'IsUnicodeSyntax' from the handler.
-getArrowSyntax :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) IsUnicodeSyntax
-getArrowSyntax state nfp = do
-  (hsc_dflags . hscEnv -> dynFlags) <- runActionE "CaseSplit.GhcSessionDeps" state $ useE GhcSessionDeps nfp
-  pure $ if On Ext.UnicodeSyntax `elem` extensions dynFlags
-    then UnicodeSyntax
-    else NormalSyntax
+getArrowSyntax :: ParsedModule -> IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) IsUnicodeSyntax
+getArrowSyntax pm state nfp
+  | Ext.UnicodeSyntax `member` getExtensionsSet pm
+  = do (hsc_dflags . hscEnv -> dynFlags) <- runActionE "CaseSplit.GhcSessionDeps" state $ useE GhcSessionDeps nfp
+       pure $ if On Ext.UnicodeSyntax `elem` extensions dynFlags
+         then UnicodeSyntax
+         else NormalSyntax
+  | otherwise = pure NormalSyntax
 
 -- | Obtain a 'WorkspaceEdit' as 'diffText' of 'exactPrint'-ed versions of old
 -- and new 'ParsedSource's.
