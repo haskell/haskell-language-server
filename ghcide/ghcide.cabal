@@ -129,8 +129,10 @@ library
     Development.IDE.Core.Actions
     Development.IDE.Core.Compile
     Development.IDE.Core.Debouncer
+    Development.IDE.Core.Dependencies
     Development.IDE.Core.FileStore
     Development.IDE.Core.FileUtils
+    Development.IDE.Core.HieFile
     Development.IDE.Core.IdeConfiguration
     Development.IDE.Core.LookupMod
     Development.IDE.Core.OfInterest
@@ -138,6 +140,7 @@ library
     Development.IDE.Core.PositionMapping
     Development.IDE.Core.Preprocessor
     Development.IDE.Core.ProgressReporting
+    Development.IDE.Core.RuleInput
     Development.IDE.Core.Rules
     Development.IDE.Core.RuleTypes
     Development.IDE.Core.Service

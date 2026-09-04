@@ -50,6 +50,7 @@ import           Development.IDE                                    hiding
                                                                      getExtensions)
 import           Development.IDE.Core.Compile                       (sourceParser)
 import           Development.IDE.Core.FileStore                     (getVersionedTextDoc)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
@@ -186,6 +187,7 @@ data GetHlintDiagnostics = GetHlintDiagnostics
 instance Hashable GetHlintDiagnostics
 instance NFData   GetHlintDiagnostics
 
+type instance RuleInput GetHlintDiagnostics = ProjectHaskellInput
 type instance RuleResult GetHlintDiagnostics = ()
 
 -- | Hlint rules to generate file diagnostics based on hlint hints
@@ -201,14 +203,14 @@ rules recorder plugin = do
     config <- getPluginConfigAction plugin
     let hlintOn = plcGlobalOn config && plcDiagnosticsOn config
     ideas <- if hlintOn then getIdeas recorder file else return (Right [])
-    return (diagnostics file ideas, Just ())
+    return (diagnostics (inputFilePath file) ideas, Just ())
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
     liftIO $ argsSettings flags
 
   action $ do
-    files <- Map.keys <$> getFilesOfInterestUntracked
+    files <- mapMaybe (toProjectHaskellInput . inputFilePath) . Map.keys <$> getFilesOfInterestUntracked
     Shake.runWithSignal (Proxy @"kick/start/hlint") (Proxy @"kick/done/hlint") files GetHlintDiagnostics
 
   where
@@ -287,8 +289,8 @@ rules recorder plugin = do
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
-getIdeas :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action (Either ParseError [Idea])
-getIdeas recorder nfp = do
+getIdeas :: Recorder (WithPriority Log) -> ProjectHaskellInput -> Action (Either ParseError [Idea])
+getIdeas recorder input = do
   logWith recorder Debug $ LogGetIdeas nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
@@ -298,21 +300,22 @@ getIdeas recorder nfp = do
 
   fmap applyHints' (moduleEx flags)
 
-  where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
+  where nfp = inputFilePath input
+        moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
         moduleEx flags = do
-          mbpm <- getParsedModuleWithComments nfp
+          mbpm <- getParsedModuleWithComments input
           -- If ghc was not able to parse the module, we disable hlint diagnostics
           if isNothing mbpm
               then return Nothing
               else do
                      flags' <- setExtensions flags
-                     contents <- getFileContents nfp
+                     contents <- getFileContents (toSomeFileInput nfp)
                      let fp = fromNormalizedFilePath nfp
                      let contents' = T.unpack . Rope.toText <$> contents
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hlintExts <- getExtensions nfp
+          hlintExts <- getExtensions input
           logWith recorder Debug $ LogUsingExtensions nfp (fmap show hlintExts)
           return $ flags { enabledExtensions = hlintExts }
 
@@ -321,15 +324,15 @@ getIdeas recorder nfp = do
 -- and the ModSummary dynflags. However using the parsedFlags extensions
 -- can sometimes interfere with the hlint parsing of the file.
 -- See https://github.com/haskell/haskell-language-server/issues/1279
-getExtensions :: NormalizedFilePath -> Action [Extension]
-getExtensions nfp = do
+getExtensions :: ProjectHaskellInput -> Action [Extension]
+getExtensions input = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
     return hscExts'
   where getFlags :: Action DynFlags
         getFlags = do
-          modsum <- use_ GetModSummary nfp
+          modsum <- use_ GetModSummary input
           return $ ms_hspp_opts $ msrModSummary modsum
 
 -- ---------------------------------------------------------------------
@@ -344,6 +347,7 @@ instance NFData ParseFlags where rnf = rwhnf
 instance Show Hint where show = const "<hint>"
 instance Show ParseFlags where show = const "<parseFlags>"
 
+type instance RuleInput GetHlintSettings = NoInput
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
 -- ---------------------------------------------------------------------
@@ -408,7 +412,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
 resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
 resolveProvider recorder ideState _plId ca uri resolveValue = do
-  file <-  getNormalizedFilePathE uri
+  file <- classifyAsProjectHaskell uri
   case resolveValue of
     (ApplyHint verTxtDocId oneHint) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
@@ -470,10 +474,11 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     textEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
-ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
-  (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
-  (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
+ignoreHint :: Recorder (WithPriority Log) -> IdeState -> ProjectHaskellInput -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint _recorder ideState input verTxtDocId ignoreHintTitle = runExceptT $ do
+  let nfp = inputFilePath input
+  (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents (toSomeFileInput nfp)
+  (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps input
   case fileContents of
     Just contents -> do
         let dynFlags = ms_hspp_opts $ msrModSummary msr
@@ -507,27 +512,28 @@ data OneHint =
     , oneHintTitle :: HintTitle
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
-applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
+applyHint :: Recorder (WithPriority Log) -> IdeState -> ProjectHaskellInput -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 #if !APPLY_REFACT
 applyHint _ _ _ _ _ =
   -- https://github.com/ndmitchell/hlint/pull/1594#issuecomment-2338898673
   evaluate $ error "Cannot apply refactoring: apply-refact does not work on GHC 9.10"
 #else
-applyHint recorder ide nfp mhint verTxtDocId =
+applyHint recorder ide input mhint verTxtDocId =
   runExceptT $ do
+    let nfp = inputFilePath input
     let runAction' :: Action a -> IO a
         runAction' = runAction "applyHint" ide
     let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
                         , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                         ]
-    ideas <- bimapExceptT (PluginInternalError . T.pack . showParseError) id $ ExceptT $ runAction' $ getIdeas recorder nfp
+    ideas <- bimapExceptT (PluginInternalError . T.pack . showParseError) id $ ExceptT $ runAction' $ getIdeas recorder input
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
     let fp = fromNormalizedFilePath nfp
-    mbOldContent <- fmap (fmap Rope.toText) $ liftIO $ runAction' $ getFileContents nfp
+    mbOldContent <- fmap (fmap Rope.toText) $ liftIO $ runAction' $ getFileContents (toSomeFileInput nfp)
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
-    modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
+    modsum <- liftIO $ runAction' $ use_ GetModSummary input
     let dflags = ms_hspp_opts $ msrModSummary modsum
 
     -- set Nothing as "position" for "applyRefactorings" because
@@ -545,7 +551,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            exts <- runAction' $ getExtensions nfp
+            exts <- runAction' $ getExtensions input
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled

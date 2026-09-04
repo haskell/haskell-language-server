@@ -2,46 +2,49 @@
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
-import           Control.DeepSeq             (NFData)
-import           Control.Monad               (void)
-import           Control.Monad.IO.Class      (liftIO)
-import           Data.Foldable               (toList)
-import           Data.Hashable               (Hashable)
-import qualified Data.HashMap.Strict         as HM
-import           Data.Maybe                  (mapMaybe)
-import qualified Data.Text                   as T
+import           Control.DeepSeq                (NFData)
+import           Control.Monad                  (void)
+import           Control.Monad.IO.Class         (liftIO)
+import           Data.Foldable                  (toList)
+import           Data.Hashable                  (Hashable)
+import qualified Data.HashMap.Strict            as HM
+import           Data.Maybe                     (mapMaybe)
+import qualified Data.Text                      as T
 import           Development.IDE
-import           Development.IDE.Core.Rules  (getHieFile)
-import qualified Development.IDE.Core.Shake  as Shake
-import           Development.IDE.GHC.Compat  (HieFile (..))
-import           GHC.Generics                (Generic)
-import           Ide.Plugin.Config           (PluginConfig (..))
-import           Ide.Types                   (PluginDescriptor (..), PluginId,
-                                              configHasDiagnostics,
-                                              configInitialGenericConfig,
-                                              defaultConfigDescriptor,
-                                              defaultPluginDescriptor)
-import qualified Language.LSP.Protocol.Types as LSP
-import           Stan                        (createCabalExtensionsMap,
-                                              getStanConfig)
-import           Stan.Analysis               (Analysis (..), runAnalysis)
-import           Stan.Category               (Category (..))
-import           Stan.Cli                    (StanArgs (..))
-import           Stan.Config                 (Config, ConfigP (..), applyConfig)
-import           Stan.Config.Pretty          (prettyConfigCli)
-import           Stan.Core.Id                (Id (..))
-import           Stan.EnvVars                (EnvVars (..), envVarsToText)
-import           Stan.Inspection             (Inspection (..))
-import           Stan.Inspection.All         (inspectionsIds, inspectionsMap)
-import           Stan.Observation            (Observation (..))
-import           Stan.Report.Settings        (OutputSettings (..),
-                                              ToggleSolution (..),
-                                              Verbosity (..))
-import           Stan.Toml                   (usedTomlFiles)
-import           System.Directory            (makeRelativeToCurrentDirectory)
-import           Trial                       (Fatality, Trial (..), fiasco,
-                                              pattern FiascoL, pattern ResultL,
-                                              prettyTrial, prettyTrialWith)
+import           Development.IDE.Core.RuleInput
+import           Development.IDE.Core.Rules     (getHieFile)
+import qualified Development.IDE.Core.Shake     as Shake
+import           Development.IDE.GHC.Compat     (HieFile (..))
+import           GHC.Generics                   (Generic)
+import           Ide.Plugin.Config              (PluginConfig (..))
+import           Ide.Types                      (PluginDescriptor (..),
+                                                 PluginId, configHasDiagnostics,
+                                                 configInitialGenericConfig,
+                                                 defaultConfigDescriptor,
+                                                 defaultPluginDescriptor)
+import qualified Language.LSP.Protocol.Types    as LSP
+import           Stan                           (createCabalExtensionsMap,
+                                                 getStanConfig)
+import           Stan.Analysis                  (Analysis (..), runAnalysis)
+import           Stan.Category                  (Category (..))
+import           Stan.Cli                       (StanArgs (..))
+import           Stan.Config                    (Config, ConfigP (..),
+                                                 applyConfig)
+import           Stan.Config.Pretty             (prettyConfigCli)
+import           Stan.Core.Id                   (Id (..))
+import           Stan.EnvVars                   (EnvVars (..), envVarsToText)
+import           Stan.Inspection                (Inspection (..))
+import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
+import           Stan.Observation               (Observation (..))
+import           Stan.Report.Settings           (OutputSettings (..),
+                                                 ToggleSolution (..),
+                                                 Verbosity (..))
+import           Stan.Toml                      (usedTomlFiles)
+import           System.Directory               (makeRelativeToCurrentDirectory)
+import           Trial                          (Fatality, Trial (..), fiasco,
+                                                 pattern FiascoL,
+                                                 pattern ResultL, prettyTrial,
+                                                 prettyTrialWith)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
@@ -101,15 +104,17 @@ instance Hashable GetStanDiagnostics
 
 instance NFData GetStanDiagnostics
 
+type instance RuleInput GetStanDiagnostics = ProjectHaskellInput
 type instance RuleResult GetStanDiagnostics = ()
 
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
-    \GetStanDiagnostics file -> do
+    \GetStanDiagnostics input -> do
+      let file = inputFilePath input
       config <- getPluginConfigAction plId
       if plcGlobalOn config && plcDiagnosticsOn config then do
-          maybeHie <- getHieFile file
+          maybeHie <- getHieFile (SomeProjectHaskellInput input)
           case maybeHie of
             Nothing -> return ([], Nothing)
             Just hie -> do
@@ -163,7 +168,7 @@ rules recorder plId = do
 
   action $ do
     files <- getFilesOfInterestUntracked
-    void $ uses GetStanDiagnostics $ HM.keys files
+    void $ uses GetStanDiagnostics $ mapMaybe toProjectHaskellInput (inputFilePath <$> HM.keys files)
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations

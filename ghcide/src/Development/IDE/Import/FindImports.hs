@@ -26,6 +26,7 @@ import qualified Data.List.NonEmpty                as NE
 import           Data.Map.Strict                   (Map)
 import qualified Data.Map.Strict                   as Map
 import qualified Data.Set                          as S
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
@@ -50,7 +51,7 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath    :: !NormalizedFilePath
+  { artifactFilePath    :: !ProjectHaskellInput
   , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ 'True' for a real Haskell source file ('HsSrcFile');
                                           -- 'False' for a boot ('HsBootFile') or signature ('HsigFile') file.
@@ -67,13 +68,14 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
+modSummaryToArtifactsLocation :: ProjectHaskellInput -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation input ms = ArtifactsLocation input (ms_location <$> ms) source mbMod
   where
+    file = inputFilePath input
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath file
       Just modSum -> isSource (ms_hsc_src modSum)
     mbMod = ms_mod <$> ms
 
@@ -237,11 +239,14 @@ locateModule moduleMaps env unit_visibility modName mbPkgName isSource = do
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
 
-    toModLocation uid file = liftIO $ do
-        loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
-        let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
-            loc' = if isSource then addBootSuffixLocnOut loc else loc
-        return $ Right $ FileImport $ ArtifactsLocation file (Just loc') (not isSource) (Just genMod)
+    toModLocation uid file =
+      case toProjectHaskellInput file of
+        Nothing -> moduleNotFound
+        Just input -> liftIO $ do
+          loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath (inputFilePath input))
+          let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
+              loc' = if isSource then addBootSuffixLocnOut loc else loc
+          return $ Right $ FileImport $ ArtifactsLocation input (Just loc') (not isSource) (Just genMod)
 
     lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of

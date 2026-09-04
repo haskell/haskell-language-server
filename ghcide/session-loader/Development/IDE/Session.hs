@@ -43,6 +43,7 @@ import           Data.Maybe
 import           Data.Proxy
 import qualified Data.Text                           as T
 import           Data.Version
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake          hiding (Log, knownTargets,
                                                       withHieDb)
@@ -109,11 +110,12 @@ import           Text.ParserCombinators.ReadP        (readP_to_S)
 import           Control.Concurrent.STM              (STM, TVar)
 import qualified Control.Monad.STM                   as STM
 import           Control.Monad.Trans.Reader
+import           Development.IDE.Core.Dependencies   (indexDependencyHieFiles)
+import qualified Development.IDE.Core.HieFile        as HieFile
 import qualified Development.IDE.Session.Ghc         as Ghc
 import qualified Development.IDE.Session.OrderedSet  as S
 import qualified Focus
 import qualified StmContainers.Map                   as STM
-
 data Log
   = LogSettingInitialDynFlags
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
@@ -122,7 +124,7 @@ data Log
   | LogHieDbRetriesExhausted !Int !Int !Int !SomeException
   | LogHieDbWriterThreadSQLiteError !SQLError
   | LogHieDbWriterThreadException !SomeException
-  | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedFilePath))
+  | LogKnownFilesUpdated !(HashMap Target (HashSet ProjectHaskellInput))
   | LogCradlePath !FilePath
   | LogCradleNotFound !FilePath
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath, String))
@@ -137,6 +139,7 @@ data Log
   | LogLookupSessionCache !FilePath
   | LogTime !String
   | LogSessionGhc Ghc.Log
+  | LogHieFile HieFile.HieFileLog
 deriving instance Show Log
 
 instance Pretty Log where
@@ -193,7 +196,7 @@ instance Pretty Log where
       nest 2 $
         vcat
           [ "Known files updated:"
-          , viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
+          , viaShow $ (HM.map . Set.map) (fromNormalizedFilePath . inputFilePath) targetToPathsMap
           ]
     LogCradlePath path ->
       "Cradle path:" <+> pretty path
@@ -208,6 +211,7 @@ instance Pretty Log where
       "Cradle:" <+> viaShow cradle
     LogHieBios msg -> pretty msg
     LogSessionGhc msg -> pretty msg
+    LogHieFile msg -> pretty msg
     LogSessionLoadingChanged ->
       "Session Loading config changed, reloading the full session."
 
@@ -415,11 +419,11 @@ getHieDbLocIn base dir = do
 -- This approach ensures efficient batch loading while isolating problematic files for individual handling.
 
 -- SBL3
-handleBatchLoadSuccess :: Foldable t => Recorder (WithPriority Log) -> SessionState -> Maybe FilePath -> HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo) -> t TargetDetails -> IO ()
+handleBatchLoadSuccess :: Foldable t => Recorder (WithPriority Log) -> SessionState -> Maybe FilePath -> HashMap ProjectHaskellInput (IdeResult HscEnvEq, DependencyInfo) -> t TargetDetails -> IO ()
 handleBatchLoadSuccess recorder sessionState hieYaml this_flags_map all_targets =  do
   pendings <- getPendingFiles sessionState
   -- this_flags_map might contains files not in pendingFiles, take the intersection
-  let newLoaded = pendings `Set.intersection` Set.fromList (fromNormalizedFilePath <$> HM.keys this_flags_map)
+  let newLoaded = pendings `Set.intersection` Set.fromList (map (fromNormalizedFilePath . inputFilePath) (HM.keys this_flags_map))
   atomically $ do
     STM.insert this_flags_map hieYaml (fileToFlags sessionState)
     insertAllFileMappings sessionState $ map ((hieYaml,) . fst) $ concatMap toFlagsMap all_targets
@@ -530,17 +534,17 @@ resetFileMaps state = do
   STM.reset (fileToFlags state)
 
 -- | Insert or update file flags for a specific hieYaml and normalized file path
-insertFileFlags :: SessionState -> Maybe FilePath -> NormalizedFilePath -> (IdeResult HscEnvEq, DependencyInfo) -> STM ()
+insertFileFlags :: SessionState -> Maybe FilePath -> ProjectHaskellInput -> (IdeResult HscEnvEq, DependencyInfo) -> STM ()
 insertFileFlags state hieYaml ncfp flags =
   STM.focus (Focus.insertOrMerge HM.union (HM.singleton ncfp flags)) hieYaml (fileToFlags state)
 
 -- | Insert a file mapping from normalized path to hieYaml location
-insertFileMapping :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMapping :: SessionState -> Maybe FilePath -> ProjectHaskellInput -> STM ()
 insertFileMapping state hieYaml ncfp =
   STM.insert hieYaml ncfp (filesMap state)
 
 -- | Same as 'insertFileMapping', but never overwrites an existing value.
-insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> NormalizedFilePath -> STM ()
+insertFileMappingIfMissing :: SessionState -> Maybe FilePath -> ProjectHaskellInput -> STM ()
 insertFileMappingIfMissing state hieYaml ncfp =
   STM.focus (Focus.alter (<|> Just hieYaml)) ncfp (filesMap state)
 
@@ -555,7 +559,7 @@ addToPending state file =
   S.insert file (pendingFiles state)
 
 -- | Insert multiple file mappings at once
-insertAllFileMappings :: SessionState -> [(Maybe FilePath, NormalizedFilePath)] -> STM ()
+insertAllFileMappings :: SessionState -> [(Maybe FilePath, ProjectHaskellInput)] -> STM ()
 insertAllFileMappings state mappings =
   mapM_ (\(yaml, path) -> insertFileMapping state yaml path) mappings
 
@@ -576,7 +580,7 @@ handleSingleFileProcessingError' state hieYaml file e = do
 handleSingleFileProcessingError :: SessionState -> Maybe FilePath -> FilePath -> [FileDiagnostic] -> [FilePath] -> SessionM ()
 handleSingleFileProcessingError state hieYaml file diags extraDepFiles = liftIO $ do
   dep <- getDependencyInfo $ maybeToList hieYaml <> extraDepFiles
-  let ncfp = toNormalizedFilePath' file
+  let ncfp = ProjectHaskellInput (toNormalizedFilePath' file)
   let flags = ((diags, Nothing), dep)
   handleSingleLoadFailure state file
   atomically $ do
@@ -606,7 +610,7 @@ getExtraFilesToLoad state hieYaml cfp = do
   filterM ownedByThisCradle (Set.toList candidates)
   where
     ownedByThisCradle file = do
-      owner <- atomically $ STM.lookup (toNormalizedFilePath' file) (filesMap state)
+      owner <- atomically $ STM.lookup (ProjectHaskellInput (toNormalizedFilePath' file)) (filesMap state)
       pure $ owner == Just hieYaml
 
 -- | We allow users to specify a loading strategy.
@@ -704,6 +708,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionClientConfig = clientConfig
               , sessionSharedNameCache = ideNc
               , sessionLoadingOptions = newSessionLoadingOptions
+              , sessionShakeExtras = extras
               }
 
         writeTaskQueue que (runReaderT (getOptionsLoop recorder sessionShake sessionState knownTargetsVar) sessionEnv)
@@ -724,7 +729,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 -- and wait until the options are available
 lookupOrWaitCache :: Recorder (WithPriority Log) -> SessionState -> (FilePath -> IO (Maybe FilePath)) -> FilePath -> IO (IdeResult HscEnvEq, DependencyInfo)
 lookupOrWaitCache recorder sessionState cradleLoc absFile = do
-  let ncfp = toNormalizedFilePath' absFile
+  let ncfp = ProjectHaskellInput (toNormalizedFilePath' absFile)
   cacheResult <- maybeM
     (return Nothing)
     (guardedA (checkDependencyInfo . snd))
@@ -750,7 +755,7 @@ lookupOrWaitCache recorder sessionState cradleLoc absFile = do
         addToPending sessionState absFile
       lookupOrWaitCache recorder sessionState cradleLoc absFile
 
-checkInCache :: SessionState -> NormalizedFilePath -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
+checkInCache :: SessionState -> ProjectHaskellInput -> STM (Maybe (IdeResult HscEnvEq, DependencyInfo))
 checkInCache sessionState ncfp = runMaybeT $ do
   cachedHieYamlLocation <- MaybeT $ STM.lookup ncfp (filesMap sessionState)
   m <- MaybeT $ STM.lookup cachedHieYamlLocation (fileToFlags sessionState)
@@ -772,6 +777,7 @@ data SessionEnv = SessionEnv
   , sessionClientConfig    :: Config
   , sessionSharedNameCache :: NameCache
   , sessionLoadingOptions  :: SessionLoadingOptions
+  , sessionShakeExtras     :: ShakeExtras
   }
 
 type SessionM = ReaderT SessionEnv IO
@@ -803,7 +809,7 @@ getOptionsLoop recorder sessionShake sessionState knownTargetsVar = forever $ do
 
 findHieYamlForTarget :: FilesMap -> FilePath -> SessionM (Maybe FilePath)
 findHieYamlForTarget filesMapping file = do
-  let ncfp = toNormalizedFilePath' file
+  let ncfp = ProjectHaskellInput (toNormalizedFilePath' file)
   cachedHieYamlLocation <- join <$> liftIO (atomically (STM.lookup ncfp filesMapping))
   sessionLoadingOptions <- asks sessionLoadingOptions
   hieYaml <- liftIO $ findCradle sessionLoadingOptions file
@@ -825,7 +831,7 @@ sessionOpts recorder sessionShake sessionState knownTargetsVar (hieYaml, file) =
     liftIO $ restartSession sessionShake VFSUnmodified "didSessionLoadingPreferenceConfigChange" [] (return [cacheKey])
 
   v <- liftIO $ atomically $ STM.lookup hieYaml (fileToFlags sessionState)
-  case v >>= HM.lookup (toNormalizedFilePath' file) of
+  case v >>= HM.lookup (ProjectHaskellInput (toNormalizedFilePath' file)) of
     Just (_opts, old_di) -> do
       deps_ok <- liftIO $ checkDependencyInfo old_di
       if not deps_ok
@@ -853,7 +859,7 @@ consultCradle recorder sessionShake sessionState knownTargetsVar hieYaml cfp = d
   (cradle, eopts) <- loadCradleWithNotifications recorder sessionState hieYaml cfp
 
   logWith recorder Debug $ LogSessionLoadingResult eopts
-  let ncfp = toNormalizedFilePath' cfp
+  let ncfp = ProjectHaskellInput (toNormalizedFilePath' cfp)
   case eopts of
     -- The cradle gave us some options so get to work turning them
     -- into and HscEnv.
@@ -904,7 +910,7 @@ session ::
     SessionShake ->
     SessionState ->
     TVar (Hashed KnownTargets) ->
-    (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath) ->
+    (Maybe FilePath, ProjectHaskellInput, ComponentOptions, FilePath) ->
     SessionM ()
 session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, libDir) = do
   let initEmptyHscEnv = emptyHscEnvM libDir
@@ -916,7 +922,9 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
   -- HscEnv but set the active component accordingly
   hscEnv <- initEmptyHscEnv
   ideOptions <- asks sessionIdeOptions
-  let new_cache = newComponentCache (cmapWithPrio LogSessionGhc recorder) (optExtensions ideOptions) cfp hscEnv
+  extras <- asks sessionShakeExtras
+  let indexDependencies env = indexDependencyHieFiles (cmapWithPrio LogHieFile recorder) extras env
+      new_cache = newComponentCache (cmapWithPrio LogSessionGhc recorder) indexDependencies (optExtensions ideOptions) cfp hscEnv
   all_target_details <- liftIO $ new_cache old_components_info new_components_info
   (all_targets, this_flags_map) <- liftIO $ addErrorTargetIfUnknown all_target_details hieYaml cfp
   -- The VFS doesn't change on cradle edits, re-use the old one.
@@ -933,10 +941,11 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         keys1 <- extendKnownTargets recorder knownTargetsVar all_targets
         -- Typecheck all files in the project on startup
         unless (null new_components_info || not checkProject) $ do
-            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
+            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath . inputFilePath) (concatMap targetLocations all_targets)
             void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
-                mmt <- uses GetModificationTime cfps'
-                let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+                let files = map ( SomeFileHaskellInput . SomeProjectHaskellInput) cfps'
+                mmt <- uses GetModificationTime files
+                let cs_exist = map fst (filter (isJust . snd) (zip cfps' mmt))
                 modIfaces <- uses GetModIface cs_exist
                 -- update exports map
                 shakeExtras <- getShakeExtras
@@ -945,7 +954,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         return [keys1, keys2]
 
 -- | Create a new HscEnv from a hieYaml root and a set of options
-packageSetup :: Recorder (WithPriority Log) -> SessionState -> SessionM HscEnv -> (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> SessionM ([ComponentInfo], [ComponentInfo])
+packageSetup :: Recorder (WithPriority Log) -> SessionState -> SessionM HscEnv -> (Maybe FilePath, ProjectHaskellInput, ComponentOptions) -> SessionM ([ComponentInfo], [ComponentInfo])
 packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
   getCacheDirs <- asks (getCacheDirs . sessionLoadingOptions)
   haddockparse <- asks (optHaddockParse . sessionIdeOptions)
@@ -975,7 +984,7 @@ directories and never the target list, and a module missing from the targets is
 a warning (-Wmissing-home-modules), not an error. A file below no import path
 is still an error, we have no options to compile it with.
 -}
-addErrorTargetIfUnknown :: Foldable t => t [TargetDetails] -> Maybe FilePath -> NormalizedFilePath -> IO ([TargetDetails], HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
+addErrorTargetIfUnknown :: Foldable t => t [TargetDetails] -> Maybe FilePath -> ProjectHaskellInput -> IO ([TargetDetails], HashMap ProjectHaskellInput (IdeResult HscEnvEq, DependencyInfo))
 addErrorTargetIfUnknown all_target_details hieYaml cfp = do
   let flags_map' = HM.fromList (concatMap toFlagsMap all_targets')
       all_targets' = concat all_target_details
@@ -987,11 +996,11 @@ addErrorTargetIfUnknown all_target_details hieYaml cfp = do
                 this_target_details = TargetDetails (TargetFile cfp) this_env this_dep_info [cfp]
                 this_flags = (this_env, this_dep_info)
                 -- See Note [Modules the build tool has not been told about]
-                this_env = case owningComponent all_targets' cfp of
-                  Just env -> (missingHomeModuleWarning env cfp, Just env)
+                this_env = case owningComponent all_targets' (inputFilePath cfp) of
+                  Just env -> (missingHomeModuleWarning env (inputFilePath cfp), Just env)
                   Nothing  -> ([noTargetError], Nothing)
                 noTargetError =
-                  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp
+                  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (inputFilePath cfp)
                     (T.unlines
                       [ "No cradle target found. Is this file listed in the targets of your cradle?"
                       , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
@@ -1061,11 +1070,11 @@ extendKnownTargets recorder knownTargetsVar newTargets = do
         -- If we don't generate a TargetFile for each potential location, we will only have
         -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
         -- and also not find 'TargetModule Foo'.
-        fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-        pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
+        fs <- filterM (IO.doesFileExist . fromNormalizedFilePath . inputFilePath) targetLocations
+        pure $ map (\fp -> (TargetFile fp, Set.singleton (inputFilePath fp))) (nubOrd (f:fs))
       TargetModule _ -> do
-        found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-        return [(targetTarget, Set.fromList found)]
+        found <- filterM (IO.doesFileExist . fromNormalizedFilePath . inputFilePath) targetLocations
+        return [(targetTarget, Set.fromList (map inputFilePath found))]
   hasUpdate <- atomically $ do
     known <- readTVar knownTargetsVar
     let known' = flip mapHashed known $ \k -> unionKnownTargets k (mkKnownTargets knownTargets)
@@ -1073,7 +1082,7 @@ extendKnownTargets recorder knownTargetsVar newTargets = do
     writeTVar knownTargetsVar known'
     pure hasUpdate
   for_ hasUpdate $ \x ->
-    logWith recorder Debug $ LogKnownFilesUpdated (targetMap x)
+    logWith recorder Debug $ LogKnownFilesUpdated (HM.map (Set.fromList . mapMaybe toProjectHaskellInput . Set.toList) (targetMap x))
   return $ toNoFileKey GetKnownTargets
 
 
@@ -1160,7 +1169,7 @@ emptyHscEnvM libDir = do
   nc <- asks sessionSharedNameCache
   liftIO $ Ghc.emptyHscEnv nc libDir
 
-toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
+toFlagsMap :: TargetDetails -> [(ProjectHaskellInput, (IdeResult HscEnvEq, DependencyInfo))]
 toFlagsMap TargetDetails{..} =
     [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
 
@@ -1172,10 +1181,10 @@ type HieMap = Map.Map (Maybe FilePath) [RawComponentInfo]
 
 -- | Maps a @hie.yaml@ location to all its Target Filepaths and options.
 -- Reverse of 'FilesMap'.
-type FlagsMap = STM.Map (Maybe FilePath) (HM.HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
+type FlagsMap = STM.Map (Maybe FilePath) (HM.HashMap ProjectHaskellInput (IdeResult HscEnvEq, DependencyInfo))
 -- | Maps a Filepath to its respective @hie.yaml@ location.
 -- It aims to be the reverse of 'FlagsMap'.
-type FilesMap = STM.Map NormalizedFilePath (Maybe FilePath)
+type FilesMap = STM.Map ProjectHaskellInput (Maybe FilePath)
 
 -- | Memoize an IO function, with the characteristics:
 --

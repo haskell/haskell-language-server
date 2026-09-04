@@ -43,12 +43,12 @@ import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
-                                                       getNormalizedFilePathE,
                                                        handleMaybe)
 import qualified Ide.Plugin.RangeMap                  as RM (RangeMap,
                                                              filterByRange,
@@ -145,7 +145,7 @@ runImportCommand _ _ _ rd = do
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
-    nfp <- getNormalizedFilePathE _uri
+    nfp <- classifyAsProjectHaskell _uri
     (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
     let lens = [ generateLens _uri newRange int
                -- provide ExplicitImport only if the client does not support inlay hints
@@ -169,7 +169,7 @@ lensProvider _ state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_
 
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
-    nfp <- getNormalizedFilePathE uri
+    nfp <- classifyAsProjectHaskell uri
     (ImportActionsResult{forResolve}, _) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
     target <- handleMaybe PluginStaleResolve $ forResolve IM.!? uid
     let updatedCodeLens = cl & L.command ?~ mkCommand plId target
@@ -196,7 +196,7 @@ inlayHintProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState
 inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentifier {_uri}, _range = visibleRange} =
     if isInlayHintsSupported state
     then do
-        nfp <- getNormalizedFilePathE _uri
+        nfp <- classifyAsProjectHaskell _uri
         (ImportActionsResult {forLens, forResolve}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
         let inlayHints = [ inlayHint
                          | (range, (int, _)) <- forLens
@@ -243,7 +243,7 @@ inlayHintProvider _ state _ InlayHintParams {_textDocument = TextDocumentIdentif
 -- that specific import, and one code action to refine all imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context) = do
-    nfp <- getNormalizedFilePathE _uri
+    nfp <- classifyAsProjectHaskell _uri
     (ImportActionsResult{forCodeActions}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
     newRange <- toCurrentRangeE pm range
     let relevantCodeActions = RM.filterByRange newRange forCodeActions
@@ -286,17 +286,17 @@ resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (HandlerM C
 -- Providing the edit for the command, or the resolve for the code action is
 -- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsProjectHaskell uri
   (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
   iEdit <- handleMaybe PluginStaleResolve $ forResolve IM.!? int
   pure $ mkWorkspaceEdit uri [iEdit] pm
 resolveWTextEdit ideState (ExplicitAll uri) = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsProjectHaskell uri
   (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
   let edits = [ ie | ie@ImportEdit{ieResType = ExplicitImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
 resolveWTextEdit ideState (RefineAll uri) = do
-  nfp <- getNormalizedFilePathE uri
+  nfp <- classifyAsProjectHaskell uri
   (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
   let edits = [ re | re@ImportEdit{ieResType = RefineImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
@@ -319,6 +319,7 @@ instance Hashable ImportActions
 instance NFData ImportActions
 
 type instance RuleResult ImportActions = ImportActionsResult
+type instance RuleInput ImportActions = ProjectHaskellInput
 
 data ResultType = ExplicitImport | RefineImport
   deriving Eq
@@ -380,8 +381,8 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
     for currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
       ImportMap importIm <- MaybeT $ use GetImportMap path
-      for importIm $ \imp_path -> do
-        imp_hir <- MaybeT $ use GetModIface imp_path
+      for importIm $ \impPath -> do
+        imp_hir <- MaybeT $ use GetModIface impPath
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports

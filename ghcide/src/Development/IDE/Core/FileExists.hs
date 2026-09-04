@@ -23,6 +23,7 @@ import           Data.Maybe
 import           Development.IDE.Core.FileStore        hiding (Log, LogShake)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
@@ -84,7 +85,7 @@ fast path by a check that the path also matches our watching patterns.
 -- | A map for tracking the file existence.
 -- If a path maps to 'True' then it exists; if it maps to 'False' then it doesn't exist'; and
 -- if it's not in the map then we don't know.
-type FileExistsMap = STM.Map NormalizedFilePath Bool
+type FileExistsMap = STM.Map SomeFileInput Bool
 
 -- | A wrapper around a mutable 'FileExistsState'
 newtype FileExistsMapVar = FileExistsMapVar FileExistsMap
@@ -108,7 +109,7 @@ getFileExistsMapUntracked = do
   return v
 
 -- | Modify the global store of file exists and return the keys that need to be marked as dirty
-modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO [Key]
+modifyFileExists :: IdeState -> [(SomeFileInput, FileChangeType)] -> IO [Key]
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
@@ -134,7 +135,7 @@ fromChange FileChangeType_Changed = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
-getFileExists :: NormalizedFilePath -> Action Bool
+getFileExists :: SomeFileInput -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
@@ -186,7 +187,7 @@ fileExistsRules recorder lspEnv = do
       isWatched = if supportsWatchedFiles
         then \f -> do
             isWF <- isWorkspaceFile f
-            return $ isWF && fpMatches (fromNormalizedFilePath f)
+            return $ isWF && fpMatches (fromNormalizedFilePath (inputFilePath f))
         else const $ pure False
 
   if supportsWatchedFiles
@@ -196,7 +197,7 @@ fileExistsRules recorder lspEnv = do
   fileStoreRules (cmapWithPrio LogFileStore recorder) isWatched
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileExistsRulesFast :: Recorder (WithPriority Log) -> (SomeFileInput -> Action Bool) -> Rules ()
 fileExistsRulesFast recorder isWatched =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
         isWF <- isWatched file
@@ -221,11 +222,10 @@ For the VFS lookup, however, we won't get prompted to flush the result, so inste
 we use 'alwaysRerun'.
 -}
 
-fileExistsFast :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
+fileExistsFast :: SomeFileInput -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsFast file = do
     -- Could in principle use 'alwaysRerun' here, but it's too slwo, See Note [Invalidating file existence results]
     mp <- getFileExistsMapUntracked
-
     mbFilesWatched <- liftIO $ atomically $ STM.lookup file mp
     exist <- case mbFilesWatched of
       Just exist -> pure exist
@@ -241,17 +241,18 @@ fileExistsRulesSlow :: Recorder (WithPriority Log) -> Rules ()
 fileExistsRulesSlow recorder =
   defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow file
 
-fileExistsSlow :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
+fileExistsSlow :: SomeFileInput -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow file = do
     -- See Note [Invalidating file existence results]
     alwaysRerun
     exist <- getFileExistsVFS file
     pure (summarizeExists exist, Just exist)
 
-getFileExistsVFS :: NormalizedFilePath -> Action Bool
+getFileExistsVFS :: SomeFileInput -> Action Bool
 getFileExistsVFS file = do
+  let srcPath = inputFilePath file
   vf <- getVirtualFile file
   if isJust vf
   then pure True
   else liftIO $ handle (\(_ :: IOException) -> return False) $
-         Dir.doesFileExist (fromNormalizedFilePath file)
+         Dir.doesFileExist (fromNormalizedFilePath srcPath)

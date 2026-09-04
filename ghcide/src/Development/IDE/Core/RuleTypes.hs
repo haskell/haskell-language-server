@@ -34,11 +34,14 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 import           GHC.Iface.Ext.Types                          (HieASTs,
-                                                               TypeIndex)
-import           GHC.Iface.Ext.Utils                          (RefMap)
+                                                               TypeIndex,
+                                                               getAsts)
+import           GHC.Iface.Ext.Utils                          (RefMap,
+                                                               generateReferencesMap)
 
 import           Data.ByteString                              (ByteString)
 import           Data.Text.Utf16.Rope.Mixed                   (Rope)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Import.FindImports           (ArtifactsLocation,
                                                                ModuleToFilenames)
 import           Development.IDE.Spans.Common
@@ -48,8 +51,7 @@ import           GHC.Driver.Errors.Types                      (WarningMessages)
 import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
-import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+import           Language.LSP.Protocol.Types                  (Int32)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -70,27 +72,37 @@ encodeLinkableType (Just ObjectLinkable) = "2"
 
 -- | The parse tree for the file using GetFileContents
 type instance RuleResult GetParsedModule = ParsedModule
+type instance RuleInput GetParsedModule = ProjectHaskellInput
 
 -- | The parse tree for the file using GetFileContents,
 -- all comments included using Opt_KeepRawTokenStream
 type instance RuleResult GetParsedModuleWithComments = ParsedModule
+type instance RuleInput GetParsedModuleWithComments = ProjectHaskellInput
 
 type instance RuleResult GetModuleGraph = DependencyInformation
+type instance RuleInput GetModuleGraph = NoInput
 
 -- | it only compute the fingerprint of the module graph for a file and its dependencies
 -- we need this to trigger recompilation when the sub module graph for a file changes
 type instance RuleResult GetModuleGraphTransDepsFingerprints = Fingerprint
+type instance RuleInput GetModuleGraphTransDepsFingerprints = ProjectHaskellInput
+
 type instance RuleResult GetModuleGraphTransReverseDepsFingerprints = Fingerprint
+type instance RuleInput GetModuleGraphTransReverseDepsFingerprints = ProjectHaskellInput
+
 type instance RuleResult GetModuleGraphImmediateReverseDepsFingerprints = Fingerprint
+type instance RuleInput GetModuleGraphImmediateReverseDepsFingerprints = ProjectHaskellInput
 
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
 instance Hashable GetKnownTargets
 instance NFData   GetKnownTargets
 type instance RuleResult GetKnownTargets = KnownTargets
+type instance RuleInput GetKnownTargets = NoInput
 
 -- | Convert to Core, requires TypeCheck*
 type instance RuleResult GenerateCore = ModGuts
+type instance RuleInput GenerateCore = ProjectHaskellInput
 
 data GenerateCore = GenerateCore
     deriving (Eq, Show, Generic)
@@ -98,6 +110,7 @@ instance Hashable GenerateCore
 instance NFData   GenerateCore
 
 type instance RuleResult GetLinkable = LinkableResult
+type instance RuleInput GetLinkable = ProjectHaskellInput
 
 data LinkableResult
   = LinkableResult
@@ -126,8 +139,9 @@ instance Hashable GetImportMap
 instance NFData   GetImportMap
 
 type instance RuleResult GetImportMap = ImportMap
+type instance RuleInput GetImportMap = ProjectHaskellInput
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName ProjectHaskellInput -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 
@@ -243,6 +257,19 @@ data HieAstResult
   -- ^ Is this hie file loaded from the disk, or freshly computed?
   }
 
+-- | Make an HieAstResult from loaded HieFile
+makeHieAstResult :: HieFile -> HieAstResult
+makeHieAstResult hieFile =
+    HAR
+        (hie_module hieFile)
+        hieAst
+        (generateReferencesMap $ M.elems $ getAsts hieAst)
+        mempty
+        (HieFromDisk hieFile)
+    where
+        hieAst :: HieASTs TypeIndex
+        hieAst = hie_asts hieFile
+
 data HieKind a where
   HieFromDisk :: !HieFile -> HieKind TypeIndex
   HieFresh :: HieKind Type
@@ -259,12 +286,15 @@ instance Show HieAstResult where
 
 -- | The type checked version of this file, requires TypeCheck+
 type instance RuleResult TypeCheck = TcModuleResult
+type instance RuleInput TypeCheck = ProjectHaskellInput
 
 -- | The uncompressed HieAST
 type instance RuleResult GetHieAst = HieAstResult
+type instance RuleInput GetHieAst = SomeHaskellInput
 
 -- | A IntervalMap telling us what is in scope at each point
 type instance RuleResult GetBindings = Bindings
+type instance RuleInput GetBindings = ProjectHaskellInput
 
 data DocAndTyThingMap = DKMap
     { getDocMap     :: !DocMap
@@ -280,47 +310,61 @@ instance Show DocAndTyThingMap where
     show = const "docmap"
 
 type instance RuleResult GetDocMap = DocAndTyThingMap
+type instance RuleInput GetDocMap = ProjectHaskellInput
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
+type instance RuleInput GhcSession = ProjectHaskellInput
 
 -- | A GHC session preloaded with all the dependencies
 -- This rule is also responsible for calling ReportImportCycles for the direct dependencies
 type instance RuleResult GhcSessionDeps = HscEnvEq
+type instance RuleInput GhcSessionDeps = ProjectHaskellInput
 
 -- | Resolve the imports in a module to the file path of a module in the same package
 type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe ArtifactsLocation)]
+type instance RuleInput GetLocatedImports = ProjectHaskellInput
 
 -- | This rule is used to report import cycles. It depends on GetModuleGraph.
 -- We cannot report the cycles directly from GetModuleGraph since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
+type instance RuleInput ReportImportCycles = ProjectHaskellInput
 
 -- | Read the module interface file from disk. Throws an error for VFS files.
 --   This is an internal rule, use 'GetModIface' instead.
 type instance RuleResult GetModIfaceFromDisk = HiFileResult
+type instance RuleInput GetModIfaceFromDisk = ProjectHaskellInput
 
 -- | GetModIfaceFromDisk and index the `.hie` file into the database.
 --   This is an internal rule, use 'GetModIface' instead.
 type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
+type instance RuleInput GetModIfaceFromDiskAndIndex = ProjectHaskellInput
 
 -- | Get a module interface details, either from an interface file or a typechecked module.
 type instance RuleResult GetModIface = ModIfaceResult
+type instance RuleInput GetModIface = ProjectHaskellInput
 
 -- | Get a compiled module's interface and the core file hash.
 type instance RuleResult GetModArtefacts = HiFileResult
+type instance RuleInput GetModArtefacts = ProjectHaskellInput
 
 -- | Get a module's core file. Depend on this when you need generated code.
 type instance RuleResult GetCoreFileHash = ByteString
+type instance RuleInput GetCoreFileHash = ProjectHaskellInput
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
+type instance RuleInput GetFileContents = SomeFileInput
 
 type instance RuleResult GetFileExists = Bool
+type instance RuleInput GetFileExists = SomeFileInput
 
 type instance RuleResult GetFileHash = Fingerprint
+type instance RuleInput GetFileHash = SomeFileInput
 
 type instance RuleResult AddWatchedFile = Bool
+type instance RuleInput AddWatchedFile = SomeFileInput
 
 
 -- The Shake key type for getModificationTime queries
@@ -351,12 +395,14 @@ data GetPhysicalModificationTime = GetPhysicalModificationTime
 
 -- | Get the modification time of a file on disk, ignoring any version in the VFS.
 type instance RuleResult GetPhysicalModificationTime = FileVersion
+type instance RuleInput GetPhysicalModificationTime = SomeFileInput
 
 pattern GetModificationTime :: GetModificationTime
 pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
 
 -- | Get the modification time of a file.
 type instance RuleResult GetModificationTime = FileVersion
+type instance RuleInput GetModificationTime = SomeFileInput
 
 -- | Either the mtime from disk or an LSP version
 --   LSP versions always compare as greater than on disk versions
@@ -390,6 +436,7 @@ instance Hashable GetFileHash
 
 data FileOfInterestStatus
   = OnDisk
+  | ReadOnly
   | Modified { firstOpen :: !Bool -- ^ was this file just opened
              }
   deriving (Eq, Show, Generic)
@@ -405,6 +452,7 @@ instance Hashable IsFileOfInterestResult
 instance NFData   IsFileOfInterestResult
 
 type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
+type instance RuleInput IsFileOfInterest = SomeHaskellInput
 
 data ModSummaryResult = ModSummaryResult
   { msrModSummary  :: !ModSummary
@@ -427,11 +475,14 @@ instance NFData ModSummaryResult where
 -- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
 -- without needing to parse the entire source
 type instance RuleResult GetModSummary = ModSummaryResult
+type instance RuleInput GetModSummary = ProjectHaskellInput
 
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
+type instance RuleInput GetModSummaryWithoutTimestamps = ProjectHaskellInput
 
 type instance RuleResult GetModulesPaths = ModuleToFilenames
+type instance RuleInput GetModulesPaths = ProjectHaskellInput
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Generic)
@@ -450,6 +501,7 @@ instance NFData   GetLocatedImports
 
 -- | Does this module need to be compiled?
 type instance RuleResult NeedsCompilation = Maybe LinkableType
+type instance RuleInput NeedsCompilation = ProjectHaskellInput
 
 data NeedsCompilation = NeedsCompilation
     deriving (Eq, Show, Generic)
@@ -575,6 +627,7 @@ instance Hashable GetClientSettings
 instance NFData   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
+type instance RuleInput GetClientSettings = NoInput
 
 data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Generic)
 instance Hashable AddWatchedFile
@@ -585,6 +638,7 @@ instance NFData   AddWatchedFile
 -- thread killed exception issues, so we lift it to a full rule.
 -- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
 type instance RuleResult GhcSessionIO = IdeGhcSession
+type instance RuleInput GhcSessionIO = NoInput
 
 data IdeGhcSession = IdeGhcSession
   { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])

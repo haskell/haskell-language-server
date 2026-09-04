@@ -23,6 +23,7 @@ import           Control.Arrow                                     (second,
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Lens                                      hiding (List,
                                                                     uncons, use)
+import           Control.Monad.Except                              (runExcept)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
@@ -43,6 +44,7 @@ import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope.Mixed                        as Rope
 import           Development.IDE.Core.FileStore                    (getUriContents)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -103,8 +105,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                                    type (|?) (InL, InR),
-                                                                    uriToFilePath)
+                                                                    type (|?) (InL, InR))
 import qualified Language.LSP.Protocol.Types                       as TE (TextEdit (..))
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~~))
@@ -160,9 +161,10 @@ codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   contents <- liftIO $ runAction "hls-refactor-plugin.codeAction.getUriContents" state $ getUriContents $ toNormalizedUri uri
   liftIO $ do
-    let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
+    let mbInput = either (const Nothing) Just $ runExcept $ classifyAsProjectHaskell uri
+        mbFile = inputFilePath <$> mbInput
     allDiags <- atomically $ filter (\d -> mbFile == Just (fdFilePath d)) <$> getDiagnostics state
-    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
+    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbInput
     let
       textContents = fmap Rope.toText contents
       actions = caRemoveRedundantImports parsedModule textContents allDiags range uri
@@ -251,16 +253,16 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}
-  | Just fp <- uriToFilePath doc,
-    nfp <- toNormalizedFilePath' fp =
+  | Right input <- runExcept $ classifyAsProjectHaskell doc
+  , nfp <- inputFilePath input =
     do
       (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
         runAction "extend import" ideState $
           runMaybeT $ do
             -- We want accurate edits, so do not use stale data here
-            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            (_, contents) <- MaybeT $ use GetFileContents nfp
+            msr <- MaybeT $ use GetModSummaryWithoutTimestamps input
+            ps <- MaybeT $ use GetAnnotatedParsedSource input
+            (_, contents) <- MaybeT $ use GetFileContents (SomeFileHaskellInput $ SomeProjectHaskellInput input)
             return (msr, ps, contents)
       let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)

@@ -70,6 +70,7 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.Shake           (ShakeExtras (..),
                                                        runIdeAction)
 import           Development.IDE.Types.Shake          (WithHieDb)
@@ -98,7 +99,7 @@ import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
 
 -- | HieFileResult for files of interest, along with the position mappings
-newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
+newtype FOIReferences = FOIReferences (HM.HashMap SomeHaskellInput (HieAstResult, PositionMapping))
 
 computeTypeReferences :: Foldable f => f (HieAST Type) -> M.Map Name [Span]
 computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
@@ -115,7 +116,7 @@ computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
 -- | Given a file and position, return the names at a point, the references for
 -- those names in the FOIs, and a list of file paths we already searched through
 foiReferencesAtPoint
-  :: NormalizedFilePath
+  :: SomeHaskellInput
   -> Position
   -> FOIReferences
   -> ([Name],[Location],[FilePath])
@@ -131,7 +132,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                                (mapMaybe (\n -> M.lookup (Right n) rf) names)
               typerefs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation))
                                    (mapMaybe (`M.lookup` tr) names)
-        in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
+        in (names, adjustedLocs,map (fromNormalizedFilePath . inputFilePath) $ HM.keys asts)
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
 getNamesAtPoint hf pos mapping =
@@ -146,7 +147,7 @@ toCurrentLocation mapping (Location uri range) =
 referencesAtPoint
   :: MonadIO m
   => WithHieDb
-  -> NormalizedFilePath -- ^ The file the cursor is in
+  -> SomeHaskellInput -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
   -> m [Location]
@@ -233,7 +234,7 @@ gotoDefinition
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName SomeHaskellInput
   -> HieAstResult
   -> Position
   -> MaybeT m [(Location, Identifier)]
@@ -258,12 +259,12 @@ atPoint
   :: IdeOptions
   -> ShakeExtras
   -> HieAstResult
-  -> DocAndTyThingMap
-  -> HscEnv
+  -> Maybe DocAndTyThingMap
+  -> Maybe HscEnv
   -> Position
-  -> Util.EnumSet Extension
+  -> Maybe (Util.EnumSet Extension)
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) mDkMap mEnv pos mEnabledExtensions =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -318,12 +319,21 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           | otherwise = do
             let
               typeSig = case identType dets of
-                Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
-                  Just kind -> prettyTypeFromType (Just n) locationsMap kind
-                  Nothing   -> wrapHaskell (printOutputable n)
+                Just t  -> prettyType (Just n) locationsMap t
+                Nothing -> fromMaybe (wrapHaskell (printOutputable n)) maybeKind
+
+              maybeKind = do
+                (DKMap _ km _) <- mDkMap
+                kind <-
+                  safeTyThingType (maybe False (Util.member LinearTypes) mEnabledExtensions)
+                  =<< lookupNameEnv km n
+                pure $ prettyTypeFromType (Just n) locationsMap kind
+
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
-              docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
+
+              docs = maybeToList $ do
+                (DKMap dm _ _ ) <- mDkMap
+                T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
 
             pure $ T.unlines $ [typeSig] ++ definitionLoc ++ docs
           where
@@ -343,7 +353,9 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- the package(with version) this `ModuleName` belongs to.
         packageNameForImportStatement :: ModuleName -> IO T.Text
         packageNameForImportStatement mod = do
-          mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
+          mpkg <- case mEnv of
+            Just env -> findImportedModule (setNonHomeFCHook env) mod
+            Nothing  -> pure Nothing
           let moduleName = printOutputable mod
           case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName
@@ -352,12 +364,23 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
         packageNameWithVersion :: Module -> Maybe T.Text
-        packageNameWithVersion m = do
-          let pid = moduleUnit m
-          conf <- lookupUnit env pid
-          let pkgName = T.pack $ unitPackageNameString conf
-              version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ pkgName <> "-" <> version
+        packageNameWithVersion m =
+          let pid = moduleUnit m in
+          case mEnv of
+              -- If we have an HscEnv (because this is a project file),
+              -- we can get the package name from that.
+              Just env -> do
+                conf <- lookupUnit env pid
+                let pkgName = T.pack $ unitPackageNameString conf
+                    version = T.pack $ showVersion (unitPackageVersion conf)
+                pure $ pkgName <> "-" <> version
+              -- If we don't have an HscEnv (because this is a dependency file)
+              -- then we get a similar format for the package name
+              -- from the UnitId
+              Nothing ->
+                let uid = toUnitId pid
+                    pkgStr = takeWhile (/= ':') $ show uid
+                in Just $ T.pack pkgStr
 
         -- Type info for the current node, it may contain several symbols
         -- for one range, like wildcard
@@ -567,7 +590,7 @@ locationsAtPoint
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedFilePath
+  -> M.Map ModuleName SomeHaskellInput
   -> Position
   -> HieAstResult
   -> m [(Location, Identifier)]
@@ -575,7 +598,7 @@ locationsAtPoint withHieDb lookupModule _ideOptions imports pos (HAR _ ast _rm _
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
-      modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' fs) zeroRange)) $ M.lookup m imports
+      modToLocation m = fmap (\fs -> pure (Location (inputUri fs) zeroRange)) $ M.lookup m imports
    in fmap (nubOrd . concat) $ mapMaybeM
         (either (\m -> pure ((fmap $ fmap (,Left m)) (modToLocation m)))
                 (\n -> fmap (fmap $ fmap (,Right n)) (nameToLocation withHieDb lookupModule n)))

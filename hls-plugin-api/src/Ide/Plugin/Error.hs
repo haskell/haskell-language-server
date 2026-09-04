@@ -66,6 +66,11 @@ data PluginError
     -- It will be logged with Warning and takes medium precedence (2) in being
     -- returned as a response to the client.
   | PluginInvalidParams T.Text
+    -- | Plugin received a request for an URI it doesn't support.
+    -- For example, in a haskell plugin, code actions were requested for non-haskell files.
+    --
+    -- TODO: we should record the supported uri types
+  | PluginUnsupportedUriType Uri
     -- |PluginInvalidUserState should be thrown when a function that your plugin
     -- depends on fails. This should only be used when the function fails
     -- because the user's code is in an invalid state.
@@ -109,31 +114,36 @@ instance Pretty PluginError where
       PluginStaleResolve          -> "Stale Resolve"
       PluginRuleFailed rule       -> "Rule Failed:"        <+> pretty rule
       PluginInvalidParams text    -> "Invalid Params:"     <+> pretty text
+      PluginUnsupportedUriType uri -> "Unsupported URI type:" <+>
+                                      pretty (show uri)
       PluginInvalidUserState text -> "Invalid User State:" <+> pretty text
       PluginRequestRefused msg    -> "Request Refused: "   <+> pretty msg
 
 -- |Converts to ErrorCode used in LSP ResponseErrors
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
-toErrorCode (PluginInternalError _)    = InR ErrorCodes_InternalError
-toErrorCode (PluginInvalidParams _)    = InR ErrorCodes_InvalidParams
-toErrorCode (PluginInvalidUserState _) = InL LSPErrorCodes_RequestFailed
+toErrorCode (PluginInternalError _)      = InR ErrorCodes_InternalError
+toErrorCode (PluginInvalidParams _)      = InR ErrorCodes_InvalidParams
+-- TODO: should be a custom error code
+toErrorCode (PluginUnsupportedUriType _) = InR ErrorCodes_InvalidParams
+toErrorCode (PluginInvalidUserState _)   = InL LSPErrorCodes_RequestFailed
 -- PluginRequestRefused should never be a argument to `toResponseError`, as
 -- it should be dealt with in `extensiblePlugins`, but this is here to make
 -- this function complete
-toErrorCode (PluginRequestRefused _)   = InR ErrorCodes_MethodNotFound
-toErrorCode (PluginRuleFailed _)       = InL LSPErrorCodes_RequestFailed
-toErrorCode PluginStaleResolve         = InL LSPErrorCodes_ContentModified
+toErrorCode (PluginRequestRefused _)     = InR ErrorCodes_MethodNotFound
+toErrorCode (PluginRuleFailed _)         = InL LSPErrorCodes_RequestFailed
+toErrorCode PluginStaleResolve           = InL LSPErrorCodes_ContentModified
 
 -- |Converts to a logging priority. In addition to being used by the logger,
 -- `combineResponses` currently uses this to  choose which response to return,
 -- so care should be taken in changing it.
 toPriority :: PluginError -> Priority
-toPriority (PluginInternalError _)    = Error
-toPriority (PluginInvalidParams _)    = Warning
-toPriority (PluginInvalidUserState _) = Debug
-toPriority (PluginRequestRefused _)   = Debug
-toPriority (PluginRuleFailed _)       = Debug
-toPriority PluginStaleResolve         = Debug
+toPriority (PluginInternalError _)      = Error
+toPriority (PluginInvalidParams _)      = Warning
+toPriority (PluginUnsupportedUriType _) = Warning
+toPriority (PluginInvalidUserState _)   = Debug
+toPriority (PluginRequestRefused _)     = Debug
+toPriority (PluginRuleFailed _)         = Debug
+toPriority PluginStaleResolve           = Debug
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return

@@ -21,6 +21,7 @@ import           Development.IDE.Core.LookupMod       (lookupMod)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleInput
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
@@ -45,29 +46,38 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
 -- block waiting for the rule to be properly computed.
 
 -- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPoint :: SomeHaskellInput -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
 getAtPoint file pos = runMaybeT $ do
   ide <- ask
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   shakeExtras <- lift askShake
-
-  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  modSummary <- fst <$> useWithStaleFastMT GetModSummary file
-  dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
-  let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+  -- The HscEnv and DKMap are not strictly necessary for hover
+  -- to work, so we only calculate them for project files, not
+  -- for dependency files. They provide information that will
+  -- not be displayed in dependency files. See the atPoint
+  -- function in ghcide/src/Development/IDE/Spans/AtPoint.hs
+  -- for the specifics of how they are used.
+  (mEnv, mDkMap, mEnabledExtensions) <- case file of
+    SomeNonProjectHaskellInput _ -> pure (Nothing, Nothing, Nothing)
+    SomeProjectHaskellInput projectFile -> do
+      env <- hscEnv . fst <$> useWithStaleFastMT GhcSession projectFile
+      modSummary <- fst <$> useWithStaleFastMT GetModSummary projectFile
+      dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap projectFile)
+      let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
+      pure (Just env, Just dkMap, Just enabledExtensions)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
+    AtPoint.atPoint opts shakeExtras hf mDkMap mEnv pos' mEnabledExtensions
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.
 toCurrentLocation
   :: PositionMapping
-  -> NormalizedFilePath
+  -> SomeFileInput
   -> Location
   -> IdeAction (Maybe Location)
 toCurrentLocation mapping file (Location uri range) =
@@ -75,7 +85,7 @@ toCurrentLocation mapping file (Location uri range) =
   -- file than the one we are calling gotoDefinition from.
   -- So we check that the location file matches the file
   -- we are in.
-  if nUri == normalizedFilePathToUri file
+  if nUri == normalizedFilePathToUri (inputFilePath file)
   -- The Location matches the file, so use the PositionMapping
   -- we have.
   then pure $ Location uri <$> toCurrentRange mapping range
@@ -84,28 +94,34 @@ toCurrentLocation mapping file (Location uri range) =
   else do
     otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
       otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
-      useWithStaleFastMT GetHieAst otherLocationFile
+      otherHaskellFile <- MaybeT $ pure $ toSomeHaskellInput otherLocationFile
+      useWithStaleFastMT GetHieAst otherHaskellFile
     pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
   where
     nUri :: NormalizedUri
     nUri = toNormalizedUri uri
 
 -- | Goto Definition.
-getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
+
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
-    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
+
+    ImportMap imports <- case file of
+      SomeNonProjectHaskellInput _ -> pure $ ImportMap mempty
+      SomeProjectHaskellInput pFile -> fst <$> useWithStaleFastMT GetImportMap pFile
+
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
-    locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
+    locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts (fmap SomeProjectHaskellInput imports) hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping (SomeFileHaskellInput file) location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
 
-getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getTypeDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getTypeDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
@@ -113,20 +129,20 @@ getTypeDefinition file pos = runMaybeT $ do
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
     mapMaybeM (\(location, identifier) -> do
-      fixedLocation <- MaybeT $ toCurrentLocation mapping file location
+      fixedLocation <- MaybeT $ toCurrentLocation mapping (SomeFileHaskellInput file) location
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
-getImplementationDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
+getImplementationDefinition :: SomeHaskellInput -> Position -> IdeAction (Maybe [Location])
 getImplementationDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'
-    traverse (MaybeT . toCurrentLocation mapping file) locs
+    traverse (MaybeT . toCurrentLocation mapping (SomeFileHaskellInput file)) locs
 
-highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
+highlightAtPoint :: SomeHaskellInput -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
     (HAR _ hf rf _ _,mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
@@ -134,7 +150,7 @@ highlightAtPoint file pos = runMaybeT $ do
     mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
 
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
+refsAtPoint :: SomeHaskellInput -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked
