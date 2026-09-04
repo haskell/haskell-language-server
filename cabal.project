@@ -84,3 +84,13 @@ if impl(ghc >= 9.14)
     time-compat:time,
     uuid-types:template-haskell,
     websockets:containers,
+
+source-repository-package
+    type: git
+    location: https://github.com/guibou/ghc-exactprint
+    branch: ghc_9142
+
+source-repository-package
+    type: git
+    location: https://github.com/novainsilico/hie-bios.git
+    branch: ghc_9142
