@@ -76,6 +76,7 @@ data Log
     | LogEvalImport String
     | LogEvalDeclaration String
     | LogEvalFailedSettingInteractivePrintFunction
+    | LogEvalCaptureStdHandles String String
 
 instance Pretty Log where
     pretty = \case
@@ -99,15 +100,18 @@ instance Pretty Log where
         LogEvalFlags flags -> "{:SET" <+> pretty flags
         LogEvalPreSetDynFlags dynFlags -> "pre set" <+> pretty (showDynFlags dynFlags)
         LogEvalParsedFlags eans -> "parsed flags" <+> viaShow (eans
-              <&> (_1 %~ showDynFlags >>> _3 %~ prettyWarnings))
+          <&> (_1 %~ showDynFlags >>> _3 %~ prettyWarnings))
         LogEvalPostSetDynFlags dynFlags -> "post set" <+> pretty (showDynFlags dynFlags)
         LogEvalStmtStart stmt -> "{STMT" <+> pretty stmt
         LogEvalStmtResult result -> "STMT}" <+> pretty result
         LogEvalImport stmt -> "{IMPORT" <+> pretty stmt
         LogEvalDeclaration stmt -> "{DECL" <+> pretty stmt
         LogEvalFailedSettingInteractivePrintFunction -> pretty $
-               "Return value will not be captured: "
-            ++ "Failed setting the interactive print function."
+             "Return value will not be captured: "
+          ++ "Failed setting the interactive print function."
+        LogEvalCaptureStdHandles phase err -> pretty $
+             "Redirecting stdout/stderr failed during "
+          ++ phase ++ ": " ++ err
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
