@@ -11,6 +11,7 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , removeTrailingCommaAnn
   , ensureTrailingComma
   , withTrailingComma
+  , withCommas
   , modifyAnns
   , addParens
   , parenthesizeName
@@ -84,6 +85,12 @@ ensureTrailingComma :: SrcSpanAnnA -> SrcSpanAnnA
 ensureTrailingComma ann
   | any isCommaAnn (trailingAnns ann) = ann
   | otherwise = addComma ann
+
+-- | Add a trailing comma to every element but the last.
+withCommas :: [LocatedAn AnnListItem a] -> [LocatedAn AnnListItem a]
+withCommas []           = []
+withCommas [x]          = [x]
+withCommas (L l e : xs) = L (ensureTrailingComma l) e : withCommas xs
 
 -- | Replace an item's trailing comma with @c@, preserving its delta.
 withTrailingComma :: TrailingAnn -> SrcSpanAnnA -> SrcSpanAnnA
