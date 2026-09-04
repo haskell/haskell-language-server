@@ -20,9 +20,9 @@ import           Ide.Plugin.Properties       (KeyNamePath (..),
                                               usePropertyByPath,
                                               usePropertyByPathEither)
 import qualified Ide.Plugin.RangeMap         as RangeMap
-import           Ide.PluginUtils             (extractTextInRange, unescape)
+import           Ide.PluginUtils             (extractTextInRange, unescape, diffTextEdit, WithDeletions (IncludeDeletions))
 import           Language.LSP.Protocol.Types (Position (..), Range (Range),
-                                              UInt, isSubrangeOf)
+                                              UInt, isSubrangeOf, TextEdit(TextEdit), mkRange)
 import           Test.Tasty
 import           Test.Tasty.Golden           (goldenVsStringDiff)
 import           Test.Tasty.HUnit
@@ -31,6 +31,7 @@ import           Test.Tasty.QuickCheck
 tests :: TestTree
 tests = testGroup "PluginUtils"
     [ unescapeTest
+    , diffTextEditTest
     , extractTextInRangeTest
     , localOption (QuickCheckMaxSize 10000) $
         testProperty "RangeMap-List filtering identical" $
@@ -55,6 +56,56 @@ unescapeTest = testGroup "unescape"
     , testCase "control characters should not be escaped" $
         unescape "\"\\n\\t\"" @?= "\"\\n\\t\""
     ]
+
+diffTextEditTest :: TestTree
+diffTextEditTest = testGroup "diffTextEdit"
+    [ testGroup "inserting line at EOF"
+      [ testCase "both newline-terminated (linux-style vs linux-style)"
+          $ diffTextEditComplete "foo\n"
+                                 "foo\nbar\n"
+                        @?= [textEdit "bar\n"
+                                      (mkRange 1 0 1 0)]
+      , testCase "neither newline-terminated (win-style vs win-style)"
+          $ diffTextEditComplete "foo"
+                                 "foo\nbar"
+                   @?= [textEdit "foo\nbar"
+                                 (mkRange 0 0 0 3)]
+      , testCase "only left newline-terminated"
+          $ diffTextEditComplete "foo\n"
+                                 "foo\nbar"
+                        @?= [textEdit "bar"
+                                      (mkRange 1 0 1 0)]
+      , testCase "only right newline-terminated"
+          $ diffTextEditComplete "foo"
+                                 "foo\nbar\n"
+                   @?= [textEdit "foo\nbar\n"
+                                 (mkRange 0 0 0 3)]
+      ]
+    , testGroup "deleting line at EOF"
+      [ testCase "both newline-terminated (linux-style vs linux-style)"
+          $ diffTextEditComplete "foo\nbar\n"
+                                 "foo\n"
+                        @?= [textEdit ""
+                                      (mkRange 1 0 2 0)]
+      , testCase "neither newline-terminated (win-style vs win-style)"
+          $ diffTextEditComplete "foo\nbar"
+                                 "foo"
+                   @?= [textEdit "foo"
+                                 (mkRange 0 0 1 3)]
+      , testCase "only left newline-terminated"
+          $ diffTextEditComplete "foo\nbar"
+                                 "foo\n"
+                        @?= [textEdit ""
+                                      (mkRange 1 0 2 0)]
+      , testCase "only right newline-terminated"
+          $ diffTextEditComplete "foo\nbar\n"
+                                 "foo"
+                      @?= [textEdit "foo"
+                                    (mkRange 0 0 1 4)]
+      ]
+    ]
+    where diffTextEditComplete from to = diffTextEdit from to IncludeDeletions
+          textEdit = flip TextEdit
 
 extractTextInRangeTest :: TestTree
 extractTextInRangeTest = testGroup "extractTextInRange"
