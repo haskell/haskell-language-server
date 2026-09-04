@@ -5,13 +5,19 @@ module ActionSpec where
 
 import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
+import           Control.Concurrent.Async                (AsyncCancelled (..))
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class                  (MonadIO (..))
+import           Data.IORef                              (newIORef, readIORef,
+                                                          writeIORef)
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase,
                                                           shakeRunDatabaseForKeys)
-import           Development.IDE.Graph.Internal.Database (build, incDatabase)
+import           Development.IDE.Graph.Internal.Database (build, cleanupAsync,
+                                                          incDatabase, newScope,
+                                                          scopeSize,
+                                                          spawnInScope)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
@@ -129,3 +135,36 @@ spec = do
     res `shouldBe` [[True]]
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
+
+  describe "Closing escaped rule computations" $ do
+    it "runs a spawned body and cancels it at teardown" $ do
+      scope <- newScope
+      started <- C.newEmptyMVar
+      waitForIt <- spawnInScope scope $ do
+        C.putMVar started ()
+        C.threadDelay maxBound
+      scopeSize scope `shouldReturn` Just 1
+      -- The signal only arrives if the body really started running.
+      C.takeMVar started
+      cleanupAsync scope
+      scopeSize scope `shouldReturn` Nothing
+      waitForIt `shouldThrow` \(_ :: AsyncCancelled) -> True
+    it "spawns nothing into a closed scope" $ do
+      scope <- newScope
+      cleanupAsync scope
+      ran <- newIORef False
+      waitForIt <- spawnInScope scope $ writeIORef ran True
+      -- Still closed, so nothing was added behind teardown's back.
+      scopeSize scope `shouldReturn` Nothing
+      -- Nobody gets a result, and the body never ran.
+      waitForIt `shouldThrow` \ScopeClosed -> True
+      readIORef ran `shouldReturn` False
+    it "recomputes a key whose scope died before forcing it" $ do
+      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions ruleCycleAfterVictim
+      -- The cycle tears down the inner scope while 'CycleRule 1' sits 'Running'
+      -- with a thunk that scope never forced.
+      build theDb emptyStack [CycleRule 0] `shouldThrow` \StackException{} -> True
+      -- Same step, so the stale entry is still visible and gets waited on rather
+      -- than respawned.
+      res <- build theDb emptyStack [CycleRule 1]
+      snd res `shouldBe` [1 :: Int]

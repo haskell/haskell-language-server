@@ -8,7 +8,20 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
+module Development.IDE.Graph.Internal.Database
+  ( compute
+  , newDatabase
+  , incDatabase
+  , build
+  , getDirtySet
+  , getKeysAndVisitAge
+    -- * Exposed for testing
+  , Scope
+  , newScope
+  , scopeSize
+  , spawnInScope
+  , cleanupAsync
+  ) where
 
 import           Prelude                              hiding (unzip)
 
@@ -88,14 +101,17 @@ build
     => Database -> Stack -> f key -> IO (f Key, f value)
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
-    built <- runAIO $ do
-        built <- builder db stack (fmap newKey keys)
-        case built of
-          Left clean  -> return clean
-          Right dirty -> liftIO dirty
+    -- 'repairRefusal' demoted the key before the refusal escaped, so the retry
+    -- recomputes it in a live scope. See Note [Closing escaped rule computations].
+    built <- attempt `catch` \ScopeClosed -> attempt
     let (ids, vs) = unzip built
     pure (ids, fmap (asV . resultValue) vs)
     where
+        attempt = runAIO $ do
+            built <- builder db stack (fmap newKey keys)
+            case built of
+              Left clean  -> return clean
+              Right dirty -> liftIO dirty
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
 
@@ -124,7 +140,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                     pure val
                 Dirty s -> do
                     let act = run (refresh db stack id s)
-                        (force, val) = splitIO (join act)
+                        (force, val) = splitIO (repairRefusal db current id (join act))
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
                     modifyTVar' toForce (Spawn force:)
                     pure val
@@ -227,6 +243,27 @@ updateStatus res = Focus.alter
     (Just . maybe (KeyDetails res mempty)
     (\it -> it{keyStatus = res}))
 
+-- | Drop a refused key's 'Running' status before rethrowing, so its next build
+-- recomputes it in a live scope. Refusing the spawn stops the thread leaking.
+-- The entry it leaves behind is bound to the dead scope, so every later force
+-- in this step refuses too.
+--
+-- See Note [Closing escaped rule computations].
+repairRefusal :: Database -> Step -> Key -> IO a -> IO a
+repairRefusal db step key act = act `catch` \e@ScopeClosed ->
+    -- Masking stops a second exception from skipping the repair and leaving the
+    -- poisoned entry installed.
+    mask_ $ do
+        -- By the time the repair runs, 'compute' may have written 'Clean' or a
+        -- newer step may have taken the key over.
+        let demote = Focus.adjust $ \it -> case keyStatus it of
+                Running s _ _ prev | s == step -> it{keyStatus = Dirty prev}
+                _                              -> it
+
+        atomicallyNamed "builder repair refused" $
+            SMap.focus demote key (databaseValues db)
+        throwIO e
+
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
 getDirtySet :: Database -> IO [(Key, Int)]
 getDirtySet db = do
@@ -300,27 +337,78 @@ transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
 -- Asynchronous computations with cancellation
 
 -- | A simple monad to implement cancellation on top of 'Async',
---   generalizing 'withAsync' to monadic scopes.
-newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
+-- generalizing 'withAsync' to monadic scopes.
+--
+-- See Note [Closing escaped rule computations].
+newtype AIO a = AIO { unAIO :: ReaderT Scope IO a }
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
--- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
+-- | The threads a scope owns, or 'Nothing' once it has closed.
+-- See Note [Closing escaped rule computations].
+newtype Scope = Scope
+    { scopeAsyncs :: MVar (Maybe [Async ()])
+    }
+
+newScope :: IO Scope
+newScope = Scope <$> newMVar (Just [])
+
+-- | How many asyncs the scope owns, or 'Nothing' if it has closed.
+scopeSize :: Scope -> IO (Maybe Int)
+scopeSize = fmap (fmap length) . readMVar . scopeAsyncs
+
+-- | Run the monadic computation, cancelling whatever it leaves spawned at exit.
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
-    asyncs <- newIORef []
-    runReaderT act asyncs `onException` cleanupAsync asyncs
+    scope <- newScope
+    -- A normal return has already waited on what it spawned, so anything left
+    -- escaped. See Note [Closing escaped rule computations].
+    runReaderT act scope `finally` cleanupAsync scope
+
+{- Note [Closing escaped rule computations]
+
+A 'Running' status memoizes a 'splitIO' thunk bound to the AIO scope that
+created it. Forcing that thunk after its scope has ended spawns an async with no
+parent to cancel it, so on a restart it escapes the step bump and leaks.
+
+  See https://github.com/haskell/haskell-language-server/issues/4985.
+
+Example trace of a thunk escaping scope, all at one step S:
+  1. A build opens scope-1 and installs 'Running S' for the key.
+  2. That build throws before forcing the thunk, so scope-1 spawned nothing for
+     the key and its teardown finds nothing to cancel. The 'Running S' entry
+     survives.
+  3. A second build at step S opens scope-2, sees that entry, waits on the
+     thunk, and forces it on scope-2's thread.
+
+'scopeAsyncs' serialises spawning against teardown:
+  * Spawn wins the lock, it'll be registered and teardown cancels it.
+  * Teardown wins, so nothing starts and the thread raises 'ScopeClosed'.
+
+A refusal unwinds and retries:
+  * 'repairRefusal' demotes the key to 'Dirty' before re-throwing.
+  * 'build' retries once, so the demoted key recomputes in a live scope.
+  * 'isAsyncException' classes it async, so it isn't swallowed.
+-}
+
+-- | Spawn one async into the scope, or refuse if the scope has closed.
+-- See Note [Closing escaped rule computations].
+spawnInScope :: Scope -> IO a -> IO (IO a)
+spawnInScope Scope{scopeAsyncs} io =
+    mask_ $ modifyMVar scopeAsyncs $ \case
+        Nothing -> pure (Nothing, throwIO ScopeClosed)
+        Just as -> do
+            a <- asyncWithUnmask $ \unmask -> unmask io
+            pure (Just (void a : as), wait a)
 
 -- | Like 'async' but with built-in cancellation.
---   Returns an IO action to wait on the result.
+-- Returns an IO action to wait on the result.
+--
+-- See Note [Closing escaped rule computations].
 asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
-    st <- AIO ask
+    scope <- AIO ask
     io <- unliftAIO act
-    -- mask to make sure we keep track of the spawned async
-    liftIO $ uninterruptibleMask $ \restore -> do
-        a <- async $ restore io
-        atomicModifyIORef'_ st (void a :)
-        return $ wait a
+    liftIO $ spawnInScope scope io
 
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
@@ -334,46 +422,47 @@ withRunInIO k = do
     st <- AIO ask
     k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
 
-cleanupAsync :: IORef [Async a] -> IO ()
+-- | Close the scope so no later force can spawn into it, handing back whatever
+-- asyncs it still owns.
+closeScope :: Scope -> IO [Async ()]
+closeScope Scope{scopeAsyncs} =
+    mask_ $ modifyMVar scopeAsyncs $ \m -> pure (Nothing, fromMaybe [] m)
+
+cleanupAsync :: Scope -> IO ()
 -- mask to make sure we interrupt all the asyncs
-cleanupAsync ref = uninterruptibleMask $ \unmask -> do
-    asyncs <- atomicModifyIORef' ref ([],)
-    -- interrupt all the asyncs without waiting
-    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
-    -- Wait until all the asyncs are done
-    -- But if it takes more than 10 seconds, log to stderr
+cleanupAsync scope = uninterruptibleMask $ \unmask -> do
+    asyncs <- closeScope scope
+    -- Every scope tears down through here, so keep the empty case free.
     unless (null asyncs) $ do
         let warnIfTakingTooLong = unmask $ forever $ do
                 sleep 10
                 traceM "cleanupAsync: waiting for asyncs to finish"
         withAsync warnIfTakingTooLong $ \_ ->
-            mapM_ waitCatch asyncs
+            mapConcurrently_ cancel asyncs
 
 data Wait
-    = Wait {justWait :: !(IO ())}
-    | Spawn {justWait :: !(IO ())}
+    = Wait !(IO ())
+    | Spawn !(IO ())
 
-fmapWait :: (IO () -> IO ()) -> Wait -> Wait
-fmapWait f (Wait io)  = Wait (f io)
-fmapWait f (Spawn io) = Spawn (f io)
+partitionWaits :: [Wait] -> ([IO ()], [IO ()])
+partitionWaits = partitionEithers . map toEither
+  where
+    toEither (Wait io)  = Left io
+    toEither (Spawn io) = Right io
 
-waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
-waitOrSpawn (Wait io)  = pure $ Left io
-waitOrSpawn (Spawn io) = Right <$> async io
+justWait :: Wait -> IO ()
+justWait (Wait io)  = io
+justWait (Spawn io) = io
 
 waitConcurrently_ :: [Wait] -> AIO ()
 waitConcurrently_ [] = pure ()
-waitConcurrently_ [one] = liftIO $ justWait one
-waitConcurrently_ many = do
-    ref <- AIO ask
-    -- spawn the async computations.
-    -- mask to make sure we keep track of all the asyncs.
-    (asyncs, syncs) <- liftIO $ uninterruptibleMask $ \unmask -> do
-        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
-        let (syncs, asyncs) = partitionEithers waits
-        liftIO $ atomicModifyIORef'_ ref (asyncs ++)
-        return (asyncs, syncs)
-    -- work on the sync computations
+waitConcurrently_ [one] = liftIO $ justWait one -- Avoid spawning when only a single action
+waitConcurrently_ waits = do
+    scope <- AIO ask
+    let (syncs, spawns) = partitionWaits waits
+    waitAll <- liftIO $ case spawns of
+        []  -> pure $ pure ()
+        [s] -> spawnInScope scope s
+        ss  -> spawnInScope scope (mapConcurrently_ id ss)
     liftIO $ sequence_ syncs
-    -- wait for the async computations before returning
-    liftIO $ traverse_ wait asyncs
+    liftIO waitAll
