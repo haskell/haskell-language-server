@@ -7,6 +7,7 @@ module Development.IDE.Core.FileStore(
     getFileContents,
     getUriContents,
     getVersionedTextDoc,
+    getVersionedTextDocForNormalizedFilePath,
     setFileModified,
     setSomethingModified,
     fileStoreRules,
@@ -25,6 +26,7 @@ module Development.IDE.Core.FileStore(
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically)
+import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Lens                                 ((^.))
 import           Control.Monad.Extra
@@ -255,6 +257,14 @@ getVersionedTextDoc doc = do
         Just (VirtualFile lspver _ _ _) -> lspver
         Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
+
+getVersionedTextDocForNormalizedFilePath :: NormalizedFilePath -> Action VersionedTextDocumentIdentifier
+getVersionedTextDocForNormalizedFilePath nfp = do
+  mvf <- getVirtualFile nfp
+  let ver = case mvf of
+        Just (VirtualFile lspver _ _ _) -> lspver
+        Nothing                         -> 0
+  return (VersionedTextDocumentIdentifier (fromNormalizedUri $ filePathToUri' nfp) ver)
 
 fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
