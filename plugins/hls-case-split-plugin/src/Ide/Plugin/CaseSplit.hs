@@ -64,7 +64,10 @@ module Ide.Plugin.CaseSplit
   , Log
   ) where
 
-import           Control.Applicative                   (ZipList (ZipList, getZipList))
+import Language.Haskell.GHC.ExactPrint.Transform (
+          appendMissingPats
+        , MatchLayout(..)
+        , Matches(..))
 import           Control.Arrow                         ((&&&), (>>>))
 import           Control.Lens                          ((^.), (^?))
 import           Control.Monad                         ((>=>))
@@ -77,15 +80,11 @@ import           Control.Monad.Trans.Except            (ExceptT)
 import           Data.Data                             (Data)
 import           Data.Function                         (on, (&))
 import           Data.Generics.Schemes                 (everywhereM)
-import           Data.List.Extra                       (chunksOf, dropEnd,
-                                                        takeEnd)
-import           Data.List.NonEmpty                    (NonEmpty ((:|)),
+import           Data.List.NonEmpty                    (NonEmpty (),
                                                         nonEmpty)
 import qualified Data.List.NonEmpty                    as NE
-import           Data.List.NonEmpty.Extra              ((|:))
-import           Data.Maybe                            (isJust, listToMaybe,
+import           Data.Maybe                            (listToMaybe,
                                                         mapMaybe, maybeToList)
-import           Data.Semigroup                        (sconcat)
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE                       (FileDiagnostic (fdStructuredMessage),
@@ -107,24 +106,18 @@ import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, Real
                                                         NamedThing (getName),
                                                         Outputable (ppr),
                                                         getLoc, showSDocUnsafe)
-import           Development.IDE.GHC.Compat.Core       (AnnListItem,
-                                                        EpAnnHsCase (EpAnnHsCase),
+import           Development.IDE.GHC.Compat.Core       (EpAnnHsCase (EpAnnHsCase),
                                                         GrhsAnn (..),
                                                         HasSrcSpan,
                                                         HsLamVariant (LamCase),
                                                         HsMatchContext (LamAlt),
-                                                        LocatedAn,
-                                                        lann_trailing,
-                                                        srcSpanStartCol,
-                                                        srcSpanStartLine)
+                                                        srcSpanStartCol)
 import qualified Development.IDE.GHC.Compat.Core       as Ext
 import           Development.IDE.GHC.Compat.Error      (DsMessage (DsNonExhaustivePatterns),
                                                         _DsMessage,
                                                         msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.ExactPrint (d0, d1, exactPrint,
-                                                        getEntryDP,
-                                                        noAnnSrcSpanDP1,
-                                                        setEntryDP)
+                                                        noAnnSrcSpanDP1)
 import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDiagnostic),
                                                         _SomeStructuredMessage)
 import           GHC                                   (AnnList (AnnList),
@@ -138,12 +131,10 @@ import           GHC                                   (AnnList (AnnList),
                                                         ParsedSource,
                                                         realSrcSpan)
 import           GHC.Driver.DynFlags                   (OnOff (On))
-import           GHC.Hs                                (DeltaPos (deltaColumn),
-                                                        EpAnnLam (EpAnnLam),
+import           GHC.Hs                                (EpAnnLam (EpAnnLam),
                                                         GhcPs,
                                                         HsRecFields (HsRecFields),
-                                                        XCase, XLam, deltaPos,
-                                                        getDeltaLine,
+                                                        XCase, XLam,
                                                         unnamedHoleRdrName)
 import           GHC.HsToCore.Pmc.Solver.Types         (Nabla (nabla_tm_st),
                                                         PmAltCon (..),
@@ -152,8 +143,6 @@ import           GHC.HsToCore.Pmc.Solver.Types         (Nabla (nabla_tm_st),
                                                         VarInfo (vi_pos))
 import           GHC.Parser.Annotation                 (EpUniToken (EpUniTok),
                                                         IsUnicodeSyntax (NormalSyntax, UnicodeSyntax),
-                                                        TrailingAnn (AddSemiAnn),
-                                                        addTrailingAnnToA,
                                                         emptyComments,
                                                         noSrcSpanA)
 import           GHC.Types.Name.Reader                 (nameRdrName)
@@ -436,19 +425,6 @@ parseCaseLikeExpr (HsLam ext LamCase matchGroup)
 
 parseCaseLikeExpr _ = Nothing
 
--- | Isomorphic to @'Maybe' 'Matches'@, this type encodes whether a @case@-like
--- expression has braces; if it does, the type also records whether there are
--- pre-existing matches.
-data MatchLayout = Braced Matches | NonBraced
-
--- | Isomorphic to @Maybe Int@, this type encodes whether there are
--- pre-existing matches in a @case@-like expression **with braces**, and - if
--- there are -  what's the indentation of the first of them.
---
--- Note: it could also model the same concept for the non-braced case, but that's
--- not needed (see also 'MatchLayout').
-data Matches = NoMatches | SomeMatches !Int
-
 -- | Given a 'MatchGroup', this function returns its 'MatchLayout'.
 parseMatchLayout :: MatchGroup GhcPs (LHsExpr GhcPs) -> MatchLayout
 parseMatchLayout (MG { mg_alts = L altsLoc existingMatches })
@@ -472,146 +448,6 @@ setMatches (LambdaCase x _) mg = HsLam x LamCase mg
 caseExprSpan :: SrcSpan -> SrcSpan -> SrcSpan -> SrcSpan
 caseExprSpan caseSSpan _ endSSpan@(RealSrcSpan _ _) = combineSrcSpans caseSSpan endSSpan
 caseExprSpan caseSSpan ofSSpan _ = combineSrcSpans caseSSpan ofSSpan
-
--- | Given a 'MatchGroup' and a list of 'LMatch'es, this function inserts the
--- latter matches in the former group, trying to honor the existing layout,
--- returning the new 'MatchGroup' in the 'Maybe' monad to account for failure.
---
--- For the meaning of the first argument of type @Maybe Int@, see
--- 'getIndentation'.
---
--- Honoring the existing layout means two things:
---
---   1. producing valid code, which means:
---
---      - adding semicolons wherever they are needed, i.e.
---
---        - if matches are braced, for every matches,
---
---        - otherwise, for all but the last matches for groups of matches
---          that are not aligned vertically, e.g.
---
---            - matches shown on the same line, which this plugin can produce,
---
---            - matches shown on different lines but in a "staircase" way,
---              which this plugin never produces).
---
---      - using the correct indentation when matches are not braced (when
---        matches are braced, the code will stay valid irrespective of the
---        indentation of the alternatives).
---
---   2. such valid code tries to adhere to the existing layout, which means:
---
---      - don't alter position of existing matches nor of the opening @{@;
---
---      - when matches are not braced, we align the first match we insert
---        with the pre-existing previous match
---
---      - we have to make some arbitrary decision
---
---        - when matches are not braced and no previous match exists,
---          we indent by @indentation def@ with respect to whatever layout
---          context is the current one;
---
---        - as regards the number of matches to print per line, we inspect the
---          last group of matches appearing on one line, to determine how many
---          matches per line we insert.
---
---        - when matches are braced, we also align them vertically (it would
---          not be necessary, in principle).
---
---
--- Refer to test cases to see practical examples.
-appendMissingPats :: MatchLayout
-                  -> MatchGroup GhcPs (LHsExpr GhcPs)
-                  -> NonEmpty (LMatch GhcPs (LHsExpr GhcPs))
-                  -> MatchGroup GhcPs (LHsExpr GhcPs)
-appendMissingPats matchLayout mg@(MG { mg_alts = L altsLoc existingMatches }) missingMatches
-  = let -- Choose how many patterns per line we are emitting:
-        chunkSize = case existingMatches of
-                 [] -> 1 -- trivially 1 if there's no existing matches,
-                      -- otherwise, set the size equal to the length
-                      -- of the last group of @existingMatches@ that
-                      -- are on the same line:
-                 _ -> NE.length
-                    $ NE.last
-                    $ NE.groupBy1 startSameLine (NE.fromList existingMatches)
-
-        -- Chunkify the matches to be inserted:
-        missingGroup :| missingGroups = prettyChunksOf chunkSize missingMatches
-
-        -- Detect if the list of alternatives is between @{@ and @}@:
-        isBraced = isJust $ getOpeningBraceCol altsLoc
-
-        -- Finally, lay out the missing matches:
-        missingMatchesEP = -- indent the first group and the following ones (see discussion above)
-                           mapFirst indentHead missingGroup :| map (mapFirst indentTail) missingGroups
-                           -- add a semicolon to the end of each group only if the alternatives are braced
-                         & (if isBraced then addSemicols else id)
-                           -- put each group on its own line
-                         & NE.map (mapFirst putOnNewLine)
-                           -- concatenate the groups
-                         & sconcat
-                           -- turn into an ordinary list
-                         & NE.toList
-          where
-            -- add semicolons:
-            addSemicols = NE.zipWith ($)
-                                      -- for each one-line group of matches,
-                                     (replicate (length missingGroups)
-                                                -- only to the last match of the group,
-                                                (mapLast addSemiCol)
-                                      -- except for the last group
-                                      |: id)
-
-            -- Indentation is complicated.
-            --
-            -- For a non-braced @case@-like expression, the first match **of the
-            -- whole expression** (I mean, not the first match **to be inserted**)
-            -- has some anchor that depends on the surrounding code, while the
-            -- following matches all use their own predecessor as the anchor.
-            --
-            -- Otherwise (i.e. for a braced @case@-like expression), all matches
-            -- including the first one have the same anchor that depends on the
-            -- surrounding code.
-            --
-            -- Therefore, here's how we set the DeltaPos for the first and
-            -- following matches:
-            (setDPCol -> indentHead, setDPCol -> indentTail)
-               = case matchLayout of
-                   NonBraced | null existingMatches  -> (indentation def, 0)
-                   NonBraced                         -> (0, 0)
-                   Braced (SomeMatches indent)       -> (indent, indent)
-                   Braced NoMatches                  -> let indent = indentation def
-                                                        in (indent, indent)
-
-        -- Only if there's braces do we need to make sure the last of the
-        -- existing matches ends with @;@:
-        existingMatchesEP = if isBraced
-                               then dropEnd 1 existingMatches <> (addSemiCol <$> takeEnd 1 existingMatches)
-                               else existingMatches
-
-    in mg { mg_alts = L altsLoc (existingMatchesEP <> missingMatchesEP) }
-
--- | Accepts a @NonEmpty (LocatedAn AnnListItem a)@ and chunkifies it by the given 'size',
--- putting all matches of each chunk on the same line, leaving 1 space in between, and
--- keeping the code valid by adding semicolons to all but the last match of each chunk.
-prettyChunksOf :: Int -> NonEmpty (LocatedAn AnnListItem a) -> NonEmpty (NonEmpty (LocatedAn AnnListItem a))
-prettyChunksOf size allMatches = do
-  -- For each chunk
-  chunk <- chunksOf1 size allMatches
-  pure $ fromZipList
-       $ do -- of all the matches of chunk
-            match       <- toZipList chunk
-            -- from the second match onwards, they go the same line, one space apart
-            putBeside   <- toZipList $ id :| repeat (setDP 0 1)
-            -- all but the last match get a semicolon
-            addSemicols <- toZipList $ replicate (length chunk - 1) addSemiCol |: id
-            -- apply
-            pure $ addSemicols $ putBeside match
-  where
-    toZipList = ZipList . NE.toList
-    fromZipList = NE.fromList . getZipList
 
 -- | Given a 'IsUnicodeSyntax', describing whether to use @->@ or @→@, and a
 -- 'PmAltConApp', this function produces an 'LMatch' (to be inserted in the
@@ -699,16 +535,6 @@ def :: Default
 def = Default { maxUnderscores = 3
               , indentation = 2 }
 
--- | Predicate telling if two located annotations are (actually, start) on the
--- same line.
-startSameLine :: LocatedAn ann e -> LocatedAn ann e -> Bool
-startSameLine = (==) `on` getStartLine
-  where
-    -- | Get the starting line of an 'HasSrcSpan'.
-    getStartLine :: HasSrcSpan a => a -> Int
-    getStartLine = srcSpanStartLine . realSrcSpan . getLoc
-
-
 -- | Given an @EpAnn (AnnList a)@ return the starting column of
 -- its opening brace, if any, otherwise 'Nothing'.
 getOpeningBraceCol :: EpAnn (AnnList a) -> Maybe Int
@@ -718,58 +544,3 @@ getOpeningBraceCol _ = Nothing
 -- | Get the starting column of an 'HasSrcSpan'.
 getStartCol :: HasSrcSpan a => a -> Int
 getStartCol = srcSpanStartCol . realSrcSpan . getLoc
-
--- | Set the DeltaPos for the given annotation.
-setDP :: Int -> Int -> LocatedAn t a -> LocatedAn t a
-setDP deltaLine deltaColumn lann = setEntryDP lann $ deltaPos deltaLine deltaColumn
-
--- | Set the deltaColumn for the given annotation.
-setDPCol :: Int -> LocatedAn t a -> LocatedAn t a
-setDPCol deltaColumn lann = setEntryDP lann
-                          $ (\d -> deltaPos (getDeltaLine d) deltaColumn)
-                          $ getEntryDP lann
-
--- | Set the deltaLine for the given annotation.
-setDPLine :: Int -> LocatedAn t a -> LocatedAn t a
-setDPLine deltaLine lann = setEntryDP lann
-                          $ (\d -> deltaPos deltaLine (deltaColumn d))
-                          $ getEntryDP lann
-
--- | Useful helper.
-putOnNewLine :: LocatedAn t a -> LocatedAn t a
-putOnNewLine = setDPLine 1
-
--- | Add semicolon, unless one is already present.
-addSemiCol :: LocatedAn AnnListItem a -> LocatedAn AnnListItem a
-addSemiCol (L l@(EpAnn _ ls _) e)
-  | none isSemiCol (lann_trailing ls)
-  = L (addTrailingAnnToA (AddSemiAnn (EpTok d0)) emptyComments l) e
-  where
-    isSemiCol :: TrailingAnn -> Bool
-    isSemiCol (AddSemiAnn _) = True
-    isSemiCol _              = False
-addSemiCol l = l
-
--- | Version of 'Data.List.Extra.chunksOf' (**not** to be confused with
--- 'Data.List.Split.chunksOf') for a 'NonEmpty' lists.
-chunksOf1 :: Int -> NonEmpty a -> NonEmpty (NonEmpty a)
-chunksOf1 n xs
-  | n >= 1
-  , (b:before, after) <- NE.splitAt n xs
-    = (b :| before) :| case after of
-                         [] -> []
-                         _  -> map NE.fromList $ chunksOf n after
-  | otherwise = error "chunksOf1: the `Int` argument should be ≥ 1"
-
--- | Maps a function @f@ over the first element of a 'NonEmpty' list.
-mapFirst :: (a -> a) -> NonEmpty a -> NonEmpty a
-mapFirst f (a :| as) = f a :| as
-
--- | Maps a function @f@ over the last element of a 'NonEmpty' list.
-mapLast :: (a -> a) -> NonEmpty a -> NonEmpty a
-mapLast f (a :| [])     = f a :| []
-mapLast f (a :| b : cs) = a :| NE.toList (mapLast f $ b :| cs)
-
--- | Convenient negation of 'any'.
-none :: Foldable t => (a -> Bool) -> t a -> Bool
-none p xs = not $ any p xs
