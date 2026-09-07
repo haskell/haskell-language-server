@@ -1,0 +1,32 @@
+cabal-version: 3.4
+name: rename
+version: 0.1.0.0
+build-type: Simple
+
+library lib
+  exposed-modules: LibLib
+  build-depends: base
+
+library
+  hs-source-dirs: lib
+  other-modules: MainLib
+  build-depends: base
+  default-language: Haskell2010
+
+executable exe
+  hs-source-dirs: .
+  other-modules: Exe
+  build-depends: base
+  default-language: Haskell2010
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules: Test
+  build-depends: base
+
+benchmark bench
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  build-depends: base
+  other-modules: Bench

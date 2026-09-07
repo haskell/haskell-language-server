@@ -9,25 +9,24 @@ module Ide.Plugin.Cabal.Definition where
 import           Control.Lens                                  ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
+import           Data.Foldable                                 (asum)
 import           Data.List                                     (find)
 import qualified Data.Maybe                                    as Maybe
 import qualified Data.Text                                     as T
 import           Development.IDE                               as D
 import           Development.IDE.Core.PluginUtils
 import qualified Distribution.Fields                           as Syntax
-import           Distribution.PackageDescription               (Benchmark (..),
-                                                                BuildInfo (..),
-                                                                Executable (..),
-                                                                ForeignLib (..),
+import           Distribution.PackageDescription               (Benchmark (Benchmark, benchmarkBuildInfo, benchmarkName),
+                                                                BuildInfo (hsSourceDirs),
+                                                                Executable (Executable, buildInfo, exeName),
+                                                                ForeignLib (ForeignLib, foreignLibBuildInfo, foreignLibName),
                                                                 GenericPackageDescription,
-                                                                Library (..),
-                                                                LibraryName (LMainLibName, LSubLibName),
+                                                                Library (Library, libBuildInfo, libName),
                                                                 PackageDescription (..),
-                                                                TestSuite (..),
-                                                                library,
-                                                                unUnqualComponentName)
+                                                                TestSuite (TestSuite, testBuildInfo, testName))
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import qualified Distribution.Parsec.Position                  as Syntax
+import           Distribution.Types.ComponentName              (ComponentName (..))
 import           Distribution.Utils.Generic                    (safeHead)
 import           Distribution.Utils.Path                       (getSymbolicPath)
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
@@ -142,50 +141,48 @@ gotoModulesDefinition nfp gpd cursor fieldsOfInterest = do
     isModuleName (Just name) (_,  moduleName) = name == moduleName
     isModuleName _ _                          = False
 
--- | Gives all `buildInfo`s given a target name.
+-- | Gives all 'BuildInfo's given a target name.
 --
--- `Maybe buildTargetName` is provided, and if it's
--- Nothing we assume, that it's a main library.
--- Otherwise looks for the provided name.
-lookupBuildTargetPackageDescription :: PackageDescription -> Maybe T.Text -> [BuildInfo]
+-- Takes a @'Maybe' 'ComponentName'@ and looks for the coresponding Buildinfo if it is Just.
+-- If Nothing is passed we assume that we are looking for a main library.
+-- If no main library can be found, returns Nothing.
+lookupBuildTargetPackageDescription :: PackageDescription -> Maybe ComponentName -> Maybe BuildInfo
 lookupBuildTargetPackageDescription (PackageDescription {..}) Nothing =
   case library of
-    Nothing                       -> [] -- Target is a main library but no main library was found
-    Just (Library {libBuildInfo}) -> [libBuildInfo]
+    Nothing                       -> Nothing -- Target is a main library but no main library was found
+    Just (Library {libBuildInfo}) -> Just libBuildInfo
 lookupBuildTargetPackageDescription (PackageDescription {..}) (Just buildTargetName) =
-  Maybe.catMaybes $
+    asum $
+    foldMap libraryNameLookup library :
     map executableNameLookup executables <>
-    map subLibraryNameLookup subLibraries <>
+    map libraryNameLookup subLibraries <>
     map foreignLibsNameLookup foreignLibs <>
     map testSuiteNameLookup testSuites <>
     map benchmarkNameLookup benchmarks
   where
     executableNameLookup :: Executable -> Maybe BuildInfo
     executableNameLookup (Executable {exeName, buildInfo}) =
-      if T.pack (unUnqualComponentName exeName) == buildTargetName
+      if CExeName exeName == buildTargetName
         then Just buildInfo
         else Nothing
-    subLibraryNameLookup :: Library -> Maybe BuildInfo
-    subLibraryNameLookup (Library {libName, libBuildInfo}) =
-      case libName of
-        (LSubLibName name) ->
-          if T.pack (unUnqualComponentName name) == buildTargetName
-            then Just libBuildInfo
-            else Nothing
-        LMainLibName -> Nothing
+    libraryNameLookup :: Library -> Maybe BuildInfo
+    libraryNameLookup (Library {libName, libBuildInfo}) =
+      if CLibName libName == buildTargetName
+        then Just libBuildInfo
+        else Nothing
     foreignLibsNameLookup :: ForeignLib -> Maybe BuildInfo
     foreignLibsNameLookup (ForeignLib {foreignLibName, foreignLibBuildInfo}) =
-        if T.pack (unUnqualComponentName foreignLibName) == buildTargetName
+      if CFLibName foreignLibName == buildTargetName
         then Just foreignLibBuildInfo
         else Nothing
     testSuiteNameLookup :: TestSuite -> Maybe BuildInfo
     testSuiteNameLookup (TestSuite {testName, testBuildInfo}) =
-      if T.pack (unUnqualComponentName testName) == buildTargetName
+      if CTestName testName == buildTargetName
         then Just testBuildInfo
         else Nothing
     benchmarkNameLookup :: Benchmark -> Maybe BuildInfo
     benchmarkNameLookup (Benchmark {benchmarkName, benchmarkBuildInfo}) =
-        if T.pack (unUnqualComponentName benchmarkName) == buildTargetName
+      if CBenchName benchmarkName == buildTargetName
         then Just benchmarkBuildInfo
         else Nothing
 
