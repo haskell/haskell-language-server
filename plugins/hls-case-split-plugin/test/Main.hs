@@ -61,6 +61,10 @@ codeActionTests = testGroup
   , goldenWithClass "Some patterns on one line, with braces" "TSomePatternsOnOneLineWithBraces" $
       Prelude.flip inspectCodeAction [title]
 
+  -- Ctor operator
+  , goldenWithClass "Operator should be infixed" "TColon" $
+      Prelude.flip inspectCodeAction [title]
+
   -- Records
   , goldenWithClass "Records' field names are ignored" "TRecordsFieldNamesIgnored" $
       Prelude.flip inspectCodeAction [title]
