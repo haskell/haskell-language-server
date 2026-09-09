@@ -5,6 +5,7 @@
 module Example where
 
 import qualified Control.Concurrent            as C
+import           Control.Monad                 (when)
 import           Control.Monad.IO.Class        (liftIO)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
@@ -72,3 +73,19 @@ ruleSubBranch mv = addRule $ \SubBranchRule _old _mode -> do
 data CountRule = CountRule
     deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult CountRule = Int
+
+data CycleRule = CycleRule Int
+    deriving (Eq, Generic, Hashable, NFData, Show)
+type instance RuleResult CycleRule = Int
+
+-- | A rule where @CycleRule 0@ closes a cycle on itself, after @CycleRule 1@ has
+-- already been listed in the same batch.
+--
+-- 'builder' runs one transaction per key, so 1 is left 'Running' with a thunk its
+-- scope never forced once 0 hits the stack and throws.
+ruleCycleAfterVictim :: Rules ()
+ruleCycleAfterVictim = addRule $ \(CycleRule n) _old _mode -> do
+    when (n == 0) $ do
+        _ :: [Int] <- apply [CycleRule 1, CycleRule 0]
+        pure ()
+    return $ RunResult ChangedRecomputeDiff "" n (return ())

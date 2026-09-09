@@ -84,6 +84,8 @@ isAsyncException e
     | Just (_ :: AsyncCancelled) <- fromException e = True
     | Just (_ :: AsyncException) <- fromException e = True
     | Just (_ :: ExitCode) <- fromException e = True
+    -- See Note [Closing escaped rule computations].
+    | Just (_ :: ScopeClosed) <- fromException e = True
     | otherwise = False
 
 

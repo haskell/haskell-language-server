@@ -15,7 +15,8 @@ import           Development.IDE.Test            (diagnostic,
                                                   expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
-                                                  flushMessages, waitForAction)
+                                                  flushMessages, waitForAction,
+                                                  waitForBuildQueue)
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -54,6 +55,20 @@ tests = testGroup "diagnostics"
               }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
+  , testWithDummyPluginEmpty "rapid edits then save does not strand a stale diagnostic" $ do
+      let v rhs = T.unlines ["module Testing where", "foo :: Int", "foo = " <> rhs]
+          whole rhs = TextDocumentContentChangeEvent . InR . TextDocumentContentChangeWholeDocument $ v rhs
+      doc <- createDoc "Testing.hs" "haskell" (v "()")
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (2, 6), "Couldn't match expected type 'Int' with actual type '()'", Just "GHC-83865")])]
+      changeDoc doc [whole "()"]
+      changeDoc doc [whole "'a'"]
+      changeDoc doc [whole "True"]
+      changeDoc doc [whole "0"]
+      sendNotification SMethod_TextDocumentDidSave (DidSaveTextDocumentParams doc Nothing)
+      waitForBuildQueue
+      liftIO $ sleep 0.2
+      flushMessages
+      expectCurrentDiagnostics doc []
   , testWithDummyPluginEmpty "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- createDoc "Testing.hs" "haskell" content

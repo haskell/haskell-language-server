@@ -256,6 +256,16 @@ instance Exception StackException where
     toException this@(StackException (Stack stack _)) = toException $
         GraphException (show$ last stack) (map show stack) this
 
+-- | A rule computation was asked to start in a scope that had already closed.
+-- Distinct from 'AsyncCancelled' so 'build' can retry a refusal in a fresh
+-- scope instead of unwinding.
+--
+-- See Note [Closing escaped rule computations].
+data ScopeClosed = ScopeClosed
+  deriving stock (Show)
+
+instance Exception ScopeClosed
+
 addStack :: Key -> Stack -> Either StackException Stack
 addStack k (Stack ks is)
     | k `memberKeySet` is = Left $ StackException stack2
