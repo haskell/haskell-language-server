@@ -643,7 +643,7 @@ parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
 
   , Just (locatedCon, args) <- case (paca_ids, infixed) of
                   -- Prefixed, laid out like @Foo _ _@
-                  (_, False) -> Just $ (-- leave no space before the constructor
+                  (_, False) -> Just  (-- leave no space before the constructor
                                         L noSrcSpanA $ rdrConName,
                                         -- leave one space before each argument
                                         PrefixCon $ map (const $ L noAnnSrcSpanDP1 underscore) paca_ids)
