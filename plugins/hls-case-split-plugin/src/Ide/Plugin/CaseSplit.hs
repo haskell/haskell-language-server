@@ -90,8 +90,6 @@ import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE                       (FileDiagnostic (fdStructuredMessage),
                                                         GetParsedModule (GetParsedModule),
-                                                        GhcSessionDeps (GhcSessionDeps),
-                                                        HscEnvEq (hscEnv),
                                                         IdeState (shakeExtras),
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
@@ -104,7 +102,7 @@ import           Development.IDE.Core.PluginUtils      (activeDiagnosticsInRange
 import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, RealDataCon),
                                                         HoleKind (HoleVar),
                                                         HsMatchContext (CaseAlt),
-                                                        HscEnv (hsc_dflags), Id,
+                                                        Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
                                                         getLoc, showSDocUnsafe)
@@ -130,7 +128,6 @@ import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDia
                                                         _SomeStructuredMessage)
 import           GHC                                   (AnnList (AnnList),
                                                         AnnListBrackets (ListBraces),
-                                                        DynFlags (extensions),
                                                         EpAnn (EpAnn),
                                                         EpToken (EpTok),
                                                         HasLoc (getHasLoc),
@@ -139,7 +136,6 @@ import           GHC                                   (AnnList (AnnList),
                                                         ParsedSource,
                                                         realSrcSpan)
 import           GHC.Data.EnumSet                      (member)
-import           GHC.Driver.DynFlags                   (OnOff (On))
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
                                                         GhcPs,
@@ -230,7 +226,7 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
   let diagAndMissingCtors = getInnermost . extractDiagAndMissingCtors $ fileDiags
 
   pmOld <- getParsedModule state nfp
-  arrowSyntax <- getArrowSyntax pmOld state nfp
+  let arrowSyntax = getArrowSyntax pmOld
   let psOld = pm_parsed_source pmOld
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
@@ -275,14 +271,10 @@ getParsedModule state nfp = runActionE "CaseSplit.GetParsedModule"
                                        (useE GetParsedModule nfp)
 
 -- | Retrieve 'IsUnicodeSyntax' from the handler.
-getArrowSyntax :: ParsedModule -> IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) IsUnicodeSyntax
-getArrowSyntax pm state nfp
-  | Ext.UnicodeSyntax `member` getExtensionsSet pm
-  = do (hsc_dflags . hscEnv -> dynFlags) <- runActionE "CaseSplit.GhcSessionDeps" state $ useE GhcSessionDeps nfp
-       pure $ if On Ext.UnicodeSyntax `elem` extensions dynFlags
-         then UnicodeSyntax
-         else NormalSyntax
-  | otherwise = pure NormalSyntax
+getArrowSyntax :: ParsedModule -> IsUnicodeSyntax
+getArrowSyntax pm
+  | Ext.UnicodeSyntax `member` getExtensionsSet pm = UnicodeSyntax
+  | otherwise = NormalSyntax
 
 -- | Obtain a 'WorkspaceEdit' as 'diffText' of 'exactPrint'-ed versions of old
 -- and new 'ParsedSource's.
