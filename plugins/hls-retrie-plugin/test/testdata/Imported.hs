@@ -2,4 +2,4 @@ module Imported where
 
 import Identity
 
-f x = identity x
+f x = e x
