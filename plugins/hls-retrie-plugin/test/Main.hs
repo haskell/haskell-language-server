@@ -67,6 +67,7 @@ inlineThisTests =
       , testResolve "right-associative expression needs parens" "RightAssocOp" 8 4
       , testResolve "where to let" "WhereToLet" 7 6
       , testResolve "where to let arg substitution" "WhereToLetSubst" 6 4
+      , testResolve "qualified" "Qualified" 5 6
       ]
     ]
 
