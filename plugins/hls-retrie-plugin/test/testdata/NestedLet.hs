@@ -1,7 +1,6 @@
 module NestedLet where
 
-
-
-function x =
-    let identity x = x
-    in identity x
+-- inline a let binding
+f x =
+  let e x = x
+  in e x

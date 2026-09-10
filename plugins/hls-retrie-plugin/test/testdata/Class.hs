@@ -1,7 +1,7 @@
 module Class where
 
 class Identity x where
-    identity :: x -> x
-    identity x = x
+  e :: x -> x
+  e x = x
 
-function x = identity x
+f x = e x

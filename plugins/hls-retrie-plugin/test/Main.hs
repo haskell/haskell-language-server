@@ -34,29 +34,32 @@ refactorPlugin :: PluginTestDescriptor LogWrap
 refactorPlugin = mkPluginTestDescriptor (Refactor.iePluginDescriptor  . cmapWithPrio ExactPrintLog) "refactor"
 
 tests :: TestTree
-tests = testGroup "Retrie"
+tests =
+  testGroup "Retrie"
     [ inlineThisTests
     ]
 
+-- These tests follow the convention that an expression @e@ is being inlined
+-- into a function @f@.
 inlineThisTests :: TestTree
-inlineThisTests = testGroup "Inline this"
-    [
-        testGroup "provider" [
-            testProvider "lhs" "Identity" 4 1 ["Unfold function", "Unfold function in current file", "Fold function", "Fold function in current file"],
-            testProvider "identifier" "Identity" 4 16 ["Inline identity"],
-            testProvider "imported identifier" "Imported" 4 12 ["Inline identity"],
-            testProvider "nested where" "NestedWhere" 4 16 ["Inline identity"],
-            testProvider "nested let" "NestedLet" 6 12 ["Inline identity"],
-            testProvider "class member" "Class" 5 16 [],
-            testProvider "operator" "Operator" 4 16 ["Inline */"]
-        ],
-        testGroup "command" [
-            testCommand "top level function" "Identity" 4 16,
-            testCommand "top level function in another file" "Imported" 4 12,
-            testCommand "nested where function" "NestedWhere" 4 16,
-            testCommand "nested let function" "NestedLet" 6 12,
-            testCommand "operator" "Operator" 4 16
-        ]
+inlineThisTests =
+  testGroup "Inline this"
+    [ testGroup "provider"
+      [ testProvider "lhs" "Identity" 7 0 ["Unfold f", "Unfold f in current file", "Fold f", "Fold f in current file"]
+      , testProvider "identifier" "Identity" 7 6 ["Inline e"]
+      , testProvider "imported identifier" "Imported" 4 6 ["Inline e"]
+      , testProvider "nested where" "NestedWhere" 3 6 ["Inline e"]
+      , testProvider "nested let" "NestedLet" 5 5 ["Inline e"]
+      , testProvider "class member" "Class" 6 6 []
+      , testProvider "operator" "Operator" 4 8 ["Inline */"]
+      ]
+    , testGroup "resolve"
+      [ testResolve "top level function" "Identity" 7 6
+      , testResolve "top level function in another file" "Imported" 4 6
+      , testResolve "nested where function" "NestedWhere" 3 6
+      , testResolve "nested let function" "NestedLet" 5 5
+      , testResolve "operator" "Operator" 4 8
+      ]
     ]
 
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
@@ -67,8 +70,8 @@ testProvider title file line row expected = testCase title $ runWithRetrie $ do
     codeActions <- getCodeActions adoc $ Range position position
     liftIO $ map codeActionTitle codeActions @?= map Just expected
 
-testCommand :: TestName -> FilePath -> UInt -> UInt -> TestTree
-testCommand title file row col = goldenWithRetrie title file $ \adoc -> do
+testResolve :: TestName -> FilePath -> UInt -> UInt -> TestTree
+testResolve title file row col = goldenWithRetrie title file $ \adoc -> do
     _ <- waitForTypecheck adoc
     let p = Position row col
     codeActions <- getCodeActions adoc $ Range p p
