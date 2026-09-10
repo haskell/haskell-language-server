@@ -66,7 +66,7 @@ Invalidation operates through two complementary mechanisms:
 
   a) Eager Invalidation ('incDatabase'):
      When starting a build step, 'incDatabase' increments 'databaseStep' by 1.
-     If a subset of modified keys is supplied ('Just kk'), 'transitiveDirtySet'
+     If a subset of modified keys is supplied, 'transitiveDirtySet'
      traverses the reverse dependency graph ('keyReverseDeps') and sets every
      downstream key's status to 'Dirty' via 'updateDirty'.
 
