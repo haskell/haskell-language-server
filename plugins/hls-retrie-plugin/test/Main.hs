@@ -59,6 +59,7 @@ inlineThisTests =
       , testResolve "nested where function" "NestedWhere" 3 6
       , testResolve "nested let function" "NestedLet" 5 5
       , testResolve "operator" "Operator" 4 8
+      , testResolve "uses imported fixities" "OpChain" 8 4
       ]
     ]
 
