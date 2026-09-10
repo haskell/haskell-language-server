@@ -64,6 +64,7 @@ inlineThisTests =
       , testResolve "partially applied function" "Partial" 7 8
       , testResolve "infix with extra arguments" "InfixExtraArg" 8 8
       , testResolve "list use" "ListLiteral" 6 5
+      , testResolve "right-associative expression needs parens" "RightAssocOp" 8 4
       ]
     ]
 
