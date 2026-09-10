@@ -135,6 +135,9 @@ data Status
         runningPrev   :: !(Maybe Result)
         }
 
+-- | Map running states from previous steps to 'Dirty'.
+-- See Note [Invalidation, Step Counter, and Stale Running States]
+-- in Development.IDE.Graph.Internal.Database.
 viewDirty :: Step -> Status -> Status
 viewDirty currentStep (Running s _ _ re) | currentStep /= s = Dirty re
 viewDirty _ other = other

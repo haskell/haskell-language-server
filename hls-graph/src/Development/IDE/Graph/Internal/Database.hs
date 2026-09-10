@@ -55,8 +55,46 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- atomically SMap.new
     pure Database{..}
 
+{- Note [Invalidation, Step Counter, and Stale Running States]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+hls-graph implements an in-memory, lock-less build graph designed for reactive
+builds and rapid cancellation/restart (e.g. when new LSP edits arrive).
+
+Invalidation Architecture:
+-----------------------------
+Invalidation operates through two complementary mechanisms:
+
+  a) Eager Invalidation ('incDatabase'):
+     When starting a build step, 'incDatabase' increments 'databaseStep' by 1.
+     If a subset of modified keys is supplied ('Just kk'), 'transitiveDirtySet'
+     traverses the reverse dependency graph ('keyReverseDeps') and sets every
+     downstream key's status to 'Dirty' via 'updateDirty'.
+
+  b) Lazy Invalidation ('viewDirty' and 'databaseStep'):
+     When a build session is interrupted, in-flight worker threads are aborted.
+     Interrupted keys are simply left in the 'Running' state.
+     When the next session starts, 'incDatabase' incre 'databaseStep'.
+     Any subsequent access to the key via 'builder' goes through 'viewDirty',
+     'viewDirty' automatically treats the stale 'Running' with old step as Dirty.
+
+Invariants:
+--------------
+  * [Running Step Match]:
+    A key is actively running in the current build if and only if its status is
+    'Running' and 'runningStep == databaseStep'. Any 'Running' node with
+    'runningStep /= databaseStep' represents an aborted/stale run and is
+    semantically 'Dirty'.
+  * [Single Active Spawner]:
+    Within any single build step s, at most one thread creates a 'Spawn' for a
+    given key. Any subsequent requests in the same step register a 'Wait'.
+  * [Safe Interruption / Zero-Cost Cancellation]:
+    Cancelling a build session requires no rollback or cleanup in 'databaseValues'.
+    Stale 'Running' states are lazily and safely neutralized by the step increment.
+-}
+
 -- | Increment the step and mark dirty.
 --   Assumes that the database is not running a build
+--   See Note [Invalidation, Step Counter, and Stale Running States]
 incDatabase :: Database -> Maybe [Key] -> IO ()
 -- only some keys are dirty
 incDatabase db (Just kk) = do
@@ -102,6 +140,7 @@ build db stack keys = do
 -- | Build a list of keys and return their results.
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
+--  See Note [Invalidation, Step Counter, and Stale Running States]
 builder
     :: Traversable f => Database -> Stack -> f Key -> AIO (Either (f (Key, Result)) (IO (f (Key, Result))))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
@@ -151,7 +190,8 @@ isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 -- and shortcut the refreshing of the rest of the deps.
 -- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
 --   This assumes that the implementation will be a lookup
--- * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
+-- * Otherwise, new threads would be created to refresh the dirty deps (if any) and
+--   then compute the key itself in current thread
 refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> AIO Result
 refreshDeps visited db stack key result = \case
     -- no more deps to refresh
