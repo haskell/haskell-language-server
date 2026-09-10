@@ -1,5 +1,8 @@
 module Identity where
 
-identity x = x
+-- inline a simple top-level definition
+e :: Int -> Int
+e x = x
 
-function x = identity x
+f :: Int -> Int
+f x = e x

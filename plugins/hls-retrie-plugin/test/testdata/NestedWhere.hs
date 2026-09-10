@@ -1,7 +1,6 @@
 module NestedWhere where
 
-
-
-function x = identity x
+-- inline a where binding
+f x = e x
   where
-    identity x = x
+    e x = x
