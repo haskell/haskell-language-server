@@ -65,6 +65,7 @@ inlineThisTests =
       , testResolve "infix with extra arguments" "InfixExtraArg" 8 8
       , testResolve "list use" "ListLiteral" 6 5
       , testResolve "right-associative expression needs parens" "RightAssocOp" 8 4
+      , testResolve "where to let" "WhereToLet" 7 6
       ]
     ]
 
