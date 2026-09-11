@@ -11,6 +11,7 @@
 -- | Import resolution for retrie rewrites.
 module Ide.Plugin.Retrie.Imports
   ( extractImports
+  , extractInlineImports
   , toImportDecl
   , ImportSpec(..)
   ) where
@@ -22,7 +23,7 @@ import qualified Data.Text                  as T
 import           Development.IDE            hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat (GenLocated (L), GhcRn,
                                              HsBindLR (FunBind),
-                                             ImportDecl (..),
+                                             ImportDecl (..), LHsExpr,
                                              ModSummary (ModSummary, ms_mod),
                                              SourceText (..), fun_id, isQual,
                                              isQual_maybe, moduleNameString,
@@ -88,12 +89,12 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
       , ideclImplicit = ideclImplicit
       }
 
-extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
-extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
-  | Just FunBind {fun_matches}
-  <- find (\case FunBind{fun_id = L _ n} -> T.unpack (printOutputable n) == thing ; _ -> False) topLevelBinds
-  , names <- listify p fun_matches
-  =
+extractInlineImports  :: ModSummary -> GHC.LIdP GhcRn -> GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) -> [ImportSpec]
+extractInlineImports ModSummary{ms_mod} fun_id fun_matches =
+  let
+    p name = nameModule_maybe name /= Just ms_mod
+    names = listify p fun_matches
+  in
     [ AddImport {..}
     | let ideclSource = False,
         name <- names,
@@ -104,7 +105,10 @@ extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
         Just ideclNameString <-
         [moduleNameString . GHC.moduleName <$> nameModule_maybe name]
     ]
-    where
-        p name = nameModule_maybe name /= Just ms_mod
+
+extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
+extractImports ms topLevelBinds (Unfold thing)
+  | Just FunBind{fun_id, fun_matches} <- find (\case FunBind{fun_id = L _ n} -> T.unpack (printOutputable n) == thing ; _ -> False) topLevelBinds
+  = extractInlineImports ms fun_id fun_matches
 -- TODO handle imports for all rewrites
 extractImports _ _ _ = []
