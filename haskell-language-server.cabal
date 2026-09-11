@@ -710,6 +710,8 @@ library hls-retrie-plugin
   if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
     buildable: False
   exposed-modules:  Ide.Plugin.Retrie
+  other-modules:
+    Ide.Plugin.Retrie.Imports
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
     , aeson
