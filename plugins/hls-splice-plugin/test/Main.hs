@@ -61,6 +61,7 @@ tests = testGroup "splice"
       , goldenTest "TDeclInstance" Inplace 5 1
       , goldenTest "TDeclPatSyn" Inplace 6 1
       , goldenTest "TDeclPragma" Inplace 5 1
+      , goldenTest "TDeclUnqualified" Inplace 9 1
       ]
   , goldenTestWithEdit "TTypeKindError" (
         if ghcVersion >= GHC96 then
