@@ -90,11 +90,10 @@ import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE                       (FileDiagnostic (fdStructuredMessage),
                                                         GetParsedModule (GetParsedModule),
-                                                        GhcSessionDeps (GhcSessionDeps),
-                                                        HscEnvEq (hscEnv),
                                                         IdeState (shakeExtras),
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
+                                                        getExtensionsSet,
                                                         runAction,
                                                         spanContainsRange)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
@@ -103,7 +102,7 @@ import           Development.IDE.Core.PluginUtils      (activeDiagnosticsInRange
 import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, RealDataCon),
                                                         HoleKind (HoleVar),
                                                         HsMatchContext (CaseAlt),
-                                                        HscEnv (hsc_dflags), Id,
+                                                        Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
                                                         getLoc, showSDocUnsafe)
@@ -123,21 +122,22 @@ import           Development.IDE.GHC.Compat.Error      (DsMessage (DsNonExhausti
                                                         msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.ExactPrint (d0, d1, exactPrint,
                                                         getEntryDP,
+                                                        noAnnSrcSpanDP0,
                                                         noAnnSrcSpanDP1,
                                                         setEntryDP)
 import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDiagnostic),
                                                         _SomeStructuredMessage)
 import           GHC                                   (AnnList (AnnList),
                                                         AnnListBrackets (ListBraces),
-                                                        DynFlags (extensions),
                                                         EpAnn (EpAnn),
                                                         EpToken (EpTok),
                                                         HasLoc (getHasLoc),
                                                         LMatch,
                                                         ParsedModule (pm_parsed_source),
                                                         ParsedSource,
+                                                        dataConIsInfix,
                                                         realSrcSpan)
-import           GHC.Driver.DynFlags                   (OnOff (On))
+import           GHC.Data.EnumSet                      (member)
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
                                                         GhcPs,
@@ -174,7 +174,7 @@ import           Ide.Types                             (Config, HandlerM,
                                                         defaultPluginDescriptor,
                                                         mkPluginHandler,
                                                         pluginGetClientCapabilities)
-import           Language.Haskell.Syntax               (HsConDetails (PrefixCon, RecCon),
+import           Language.Haskell.Syntax               (HsConDetails (InfixCon, PrefixCon, RecCon),
                                                         HsLocalBindsLR (EmptyLocalBinds),
                                                         LHsExpr,
                                                         MatchGroup (MG, mg_alts),
@@ -227,8 +227,9 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 
   let diagAndMissingCtors = getInnermost . extractDiagAndMissingCtors $ fileDiags
 
-  arrowSyntax <- getArrowSyntax state nfp
-  psOld <- getParsedSource state nfp
+  pmOld <- getParsedModule state nfp
+  let arrowSyntax = getArrowSyntax pmOld
+  let psOld = pm_parsed_source pmOld
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
 
@@ -265,19 +266,17 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config VersionedTextDocumentIdentifier
 getVerTxtDocId state textDoc = liftIO $ runAction "CaseSplit.GetVersionedTextDoc" state $ getVersionedTextDoc textDoc
 
--- | Retrieve 'ParsedSource' from the handler.
-getParsedSource :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedSource
-getParsedSource state nfp = pm_parsed_source <$> runActionE "CaseSplit.GetParsedModule"
-                                                            state
-                                                            (useE GetParsedModule nfp)
+-- | Retrieve 'ParsedModule' from the handler.
+getParsedModule :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedModule
+getParsedModule state nfp = runActionE "CaseSplit.GetParsedModule"
+                                       state
+                                       (useE GetParsedModule nfp)
 
 -- | Retrieve 'IsUnicodeSyntax' from the handler.
-getArrowSyntax :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) IsUnicodeSyntax
-getArrowSyntax state nfp = do
-  (hsc_dflags . hscEnv -> dynFlags) <- runActionE "CaseSplit.GhcSessionDeps" state $ useE GhcSessionDeps nfp
-  pure $ if On Ext.UnicodeSyntax `elem` extensions dynFlags
-    then UnicodeSyntax
-    else NormalSyntax
+getArrowSyntax :: ParsedModule -> IsUnicodeSyntax
+getArrowSyntax pm
+  | Ext.UnicodeSyntax `member` getExtensionsSet pm = UnicodeSyntax
+  | otherwise = NormalSyntax
 
 -- | Obtain a 'WorkspaceEdit' as 'diffText' of 'exactPrint'-ed versions of old
 -- and new 'ParsedSource's.
@@ -407,7 +406,7 @@ data CaseLike = CaseLike { _expr   :: CaseLikeExpr
                          }
 
 -- | Parse an @HsCase _ _ mg@ or @HsLam _ LamCase mg@ out of a @HsExpr GhcPs@
--- into the refined type 'ConLike'.
+-- into the refined type 'CaseLike'.
 parseCaseLikeExpr :: HsExpr GhcPs -> Maybe CaseLike
 
 parseCaseLikeExpr (HsCase ext scrut matchGroup)
@@ -631,26 +630,41 @@ parseSimpleConMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String SimpleCon
 parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
                               , paca_ids
                               }
-  = let dataCon = case con of
-                    RealDataCon dataCon -> getName dataCon
-                    PatSynCon dataCon   -> getName dataCon
+  | let (dataConName, infixed) = case con of
+                    RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
+                    PatSynCon dataCon   -> (getName dataCon, False)
 
-        locatedCon = L noSrcSpanA $ nameRdrName dataCon
+        underscore = WildPat NoExtField
 
-        conPat = if length paca_ids <= maxUnderscores def -- for low number of arguments
+        rdrConName = nameRdrName dataConName
+
+  , Just (locatedCon, args) <- case (paca_ids, infixed) of
+                  -- Prefixed, laid out like @Foo _ _@
+                  (_, False) -> Just  (-- leave no space before the constructor
+                                        L noSrcSpanA $ rdrConName,
+                                        -- leave one space before each argument
+                                        PrefixCon $ map (const $ L noAnnSrcSpanDP1 underscore) paca_ids)
+                  -- Infixed (only allowed if binary), laid out like @_ : _@
+                  ([_, _], True) -> Just (-- leave one space before the constructor
+                                          L noAnnSrcSpanDP1 $ rdrConName,
+                                          -- leave no space before the first argument, but one after the second
+                                          InfixCon (L noAnnSrcSpanDP0 underscore) (L noAnnSrcSpanDP1 underscore))
+                  _ -> Nothing
+
+  , let conPat = if length paca_ids <= maxUnderscores def -- for low number of arguments
                      -- create as many underscores as needed
                    then ConPat { pat_con_ext = (Nothing, Nothing)
                                , pat_con = locatedCon
-                               , pat_args = PrefixCon $ map (const $ L noAnnSrcSpanDP1 $ WildPat NoExtField) paca_ids
+                               , pat_args = args
                                }
                      -- otherwise use braces.
                    else ConPat { pat_con_ext = (Just (EpTok d1), Just (EpTok d0))
                                , pat_con = locatedCon
                                , pat_args = RecCon (HsRecFields NoExtField [] Nothing)
                                }
-    in Right
-     $ SimpleConMatch { _arrow = arrow
-                      , _conPat = conPat }
+  = Right
+  $ SimpleConMatch { _arrow = arrow
+                   , _conPat = conPat }
 
 parseSimpleConMatch _ paca = Left $ showSDocUnsafe $ ppr paca
 
