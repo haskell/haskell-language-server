@@ -104,7 +104,7 @@ diffTextEditTest = testGroup "diffTextEdit"
           $ diffTextEditComplete "foo\nbar\n"
                                  "foo"
                       @?= [textEdit "foo"
-                                    (mkRange 0 0 1 4)]
+                                    (mkRange 0 0 2 0)]
       ]
     ]
     where diffTextEditComplete from to = diffTextEdit from to IncludeDeletions
