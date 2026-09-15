@@ -23,7 +23,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: haskell-actions/setup@v2.11
+    - uses: haskell-actions/setup@v2.12
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
