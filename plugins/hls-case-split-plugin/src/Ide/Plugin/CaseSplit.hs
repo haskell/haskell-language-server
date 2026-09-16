@@ -396,7 +396,7 @@ graftMissingPatterns ps range missingPs arrowSyntax
              | otherwise -> pure node
 
       getSyntax :: LMatch GhcPs (LHsExpr GhcPs) -> IsUnicodeSyntax
-      getSyntax = (\case GRHS (EpAnn _ (GrhsAnn _ (Right (EpUniTok _ b))) _) _ _ -> b
+      getSyntax = (\case GRHS (EpAnn _ (GrhsAnn _ (Right (EpUniTok _ syn))) _) _ _ -> syn
                          _ -> NormalSyntax)
                    . unLoc
                    . NE.head
