@@ -139,7 +139,7 @@ instance Pretty Log where
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
   { description               :: T.Text,
-    rewrites                  :: [RewriteSpec],
+    spec                      :: RewriteSpec,
     originatingFile           :: Uri,
     restrictToOriginatingFile :: Bool
   }
@@ -194,13 +194,13 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
             useWithStaleE GhcSessionDeps
             nfp
     (ms, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
-    let importRewrites = concatMap (extractImports ms binds) rewrites
+    let importRewrites = extractImports ms binds spec
     (errors, edits) <- liftIO $
         callRetrie
             recorder
             state
             (hscEnv session)
-            (map Right rewrites <> map Left importRewrites)
+            (map Right [spec] <> map Left importRewrites)
             nfp
             restrictToOriginatingFile
     unless (null errors) $
@@ -406,11 +406,11 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
     let pprNameText = printOutputable rdrName
         pprName = T.unpack pprNameText
         unfoldRewrite restrictToOriginatingFile =
-            let rewrites = [Unfold (qualify ms_mod pprName)]
+            let spec = Unfold (qualify ms_mod pprName)
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
             in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
-          let rewrites = [Fold (qualify ms_mod pprName)]
+          let spec = Fold (qualify ms_mod pprName)
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
@@ -481,11 +481,11 @@ suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
     let pprNameText = printOutputable (unLocA tcdLName)
         pprName = T.unpack pprNameText
         unfoldRewrite restrictToOriginatingFile =
-            let rewrites = [TypeForward (qualify ms_mod pprName)]
+            let spec = TypeForward (qualify ms_mod pprName)
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
-          let rewrites = [TypeBackward (qualify ms_mod pprName)]
+          let spec = TypeBackward (qualify ms_mod pprName)
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
@@ -511,7 +511,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
       ]
   where
     forwardRewrite ruleName restrictToOriginatingFile =
-        let rewrites = [RuleForward (qualify ms_mod ruleName)]
+        let spec = RuleForward (qualify ms_mod ruleName)
             description = "Apply rule " <> T.pack ruleName <> " forward" <>
                             describeRestriction restrictToOriginatingFile
 
@@ -520,7 +520,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
             RunRetrieParams {..}
             )
     backwardsRewrite ruleName restrictToOriginatingFile =
-          let rewrites = [RuleBackward (qualify ms_mod ruleName)]
+          let spec = RuleBackward (qualify ms_mod ruleName)
               description = "Apply rule " <> T.pack ruleName <> " backwards" <>
                               describeRestriction restrictToOriginatingFile
            in ( description,
