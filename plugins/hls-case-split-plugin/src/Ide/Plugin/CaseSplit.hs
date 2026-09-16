@@ -646,13 +646,13 @@ parseSimpleConMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String SimpleCon
 parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
                               , paca_ids
                               }
-  | let (dataConName, infixed) = case con of
+  | let (conName, infixed) = case con of
                     RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
-                    PatSynCon dataCon   -> (getName dataCon, False)
+                    PatSynCon patSyn    -> (getName patSyn, False)
 
         underscore = WildPat NoExtField
 
-        rdrConName = nameRdrName dataConName
+        rdrConName = nameRdrName conName
 
   , Just (locatedCon, args) <- case (paca_ids, infixed) of
                   -- Prefixed, laid out like @Foo _ _@
