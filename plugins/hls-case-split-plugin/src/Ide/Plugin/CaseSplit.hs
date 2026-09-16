@@ -78,7 +78,7 @@ import           Data.Data                             (Data)
 import           Data.Function                         (on, (&))
 import           Data.Generics.Schemes                 (everywhereM)
 import           Data.List.Extra                       (chunksOf, dropEnd,
-                                                        takeEnd)
+                                                        takeEnd, partition)
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         nonEmpty)
 import qualified Data.List.NonEmpty                    as NE
@@ -105,7 +105,7 @@ import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, Real
                                                         Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
-                                                        getLoc, showSDocUnsafe)
+                                                        getLoc, showSDocUnsafe, unLoc)
 import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         EpAnnHsCase (EpAnnHsCase),
                                                         GrhsAnn (..),
@@ -144,7 +144,7 @@ import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         HsRecFields (HsRecFields),
                                                         XCase, XLam, deltaPos,
                                                         getDeltaLine,
-                                                        unnamedHoleRdrName)
+                                                        unnamedHoleRdrName, GRHSs (grhssGRHSs))
 import           GHC.HsToCore.Pmc.Solver.Types         (Nabla (nabla_tm_st),
                                                         PmAltCon (..),
                                                         PmAltConApp (..),
@@ -373,10 +373,17 @@ graftMissingPatterns ps range missingPs arrowSyntax
              , Just True <- _span `spanContainsRange` range
                -> do -- take note we've found the node,
                      put True
-                     -- extract existing matches
+                     -- extract existing matches and most frequent syntax
                      let existingMatches = _matchGroup _expr
+
+                         dominantSyntax NormalSyntax = NormalSyntax
+                         dominantSyntax UnicodeSyntax = let (u, n) = map getSyntax (unLoc $ mg_alts existingMatches)
+                                                                   & partition (== UnicodeSyntax)
+                                    in if length u < length n
+                                              then NormalSyntax
+                                              else UnicodeSyntax
                      -- make a match out of each missing pattern,
-                     case traverse (makeMatch arrowSyntax) missingPs of
+                     case traverse (makeMatch $ dominantSyntax arrowSyntax) missingPs of
                         -- If this sort of pattern is not supported, we abort,
                         Left unsupportedPat  -> throwError unsupportedPat
                         -- otherwise we continue
@@ -387,6 +394,15 @@ graftMissingPatterns ps range missingPs arrowSyntax
                                              & pure
              -- Anything else, leave the node unchanged.
              | otherwise -> pure node
+
+      getSyntax :: LMatch GhcPs (LHsExpr GhcPs) -> IsUnicodeSyntax
+      getSyntax = (\case GRHS (EpAnn _ (GrhsAnn _ (Right (EpUniTok _ b))) _) _ _ -> b
+                         _ -> NormalSyntax)
+                   . unLoc
+                   . NE.head
+                   . grhssGRHSs
+                   . m_grhss
+                   . unLoc
 
 -- | While @HsExpr GhcPs@ can contain any expression, the following refined
 -- type can only contain a @case@ or a @\\case@ expression.
