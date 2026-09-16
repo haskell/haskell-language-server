@@ -79,7 +79,7 @@ inlineThisTests =
       , testResolve "multi parameter dispatch" "MultiClauseTuple" 7 6
       , testResolve "multi clause partial" "MultiClausePartial" 8 8
       ]
-    , expectFail $ testGroup "imports"
+    , testGroup "imports"
       [ testResolve "appends an import" "CrossFileUse" 6 4
       , testResolve "append import at layout column" "IndentImportUse" 6 6
       , testResolve "import unqualified to match template" "QualifiedScopeUse" 6 4
