@@ -31,7 +31,8 @@ import           Data.Aeson                            (FromJSON (..),
 import           Data.Bifunctor                        (second)
 import qualified Data.ByteString                       as BS
 import           Data.Data
-import           Data.Either                           (partitionEithers)
+import           Data.Either                           (fromRight,
+                                                        partitionEithers)
 import           Data.Hashable                         (unhashed)
 import qualified Data.HashSet                          as Set
 import           Data.IORef.Extra                      (atomicModifyIORef'_,
@@ -70,8 +71,7 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         TyClGroup (..), fun_id,
                                                         locA, mi_fixities,
                                                         ms_hspp_opts,
-                                                        nameOccName, noLocA,
-                                                        occNameFS,
+                                                        nameOccName, occNameFS,
                                                         pattern RealSrcSpan,
                                                         pm_parsed_source,
                                                         rds_rules, srcSpanFile,
@@ -100,8 +100,7 @@ import           Retrie                                (Annotated (astA),
                                                         Fixity (Fixity),
                                                         FixityDirection (InfixL),
                                                         Options, Options_ (..),
-                                                        Verbosity (Loud),
-                                                        addImports, apply,
+                                                        Verbosity (Loud), apply,
                                                         applyWithUpdate)
 import           Retrie.Context
 import           Retrie.CPP                            (CPP (NoCPP), parseCPP)
@@ -193,16 +192,16 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         runActionE "Retrie.GhcSessionDeps" state $
             useWithStaleE GhcSessionDeps
             nfp
-    (ms, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
-    let importRewrites = extractImports ms binds spec
+    (_, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
     (errors, edits) <- liftIO $
         callRetrie
             recorder
             state
             (hscEnv session)
-            (map Right [spec] <> map Left importRewrites)
+            spec
             nfp
             restrictToOriginatingFile
+            binds
     unless (null errors) $
         lift $ pluginSendNotification SMethod_WindowShowMessage $
                 ShowMessageParams MessageType_Warning $
@@ -231,12 +230,14 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
-    (fun_id, fun_matches) <-
+    checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
+    (_, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
+    imports <- either (throwError . PluginInternalError . T.pack) pure $
+      extractInlineImports check checktgt fun_matches
     let
-        imports = extractInlineImports (tmrModSummary check) fun_id fun_matches
-        annotatedImports = unsafeMkA (map (noLocA . toImportDecl) imports) 0
+        annotatedImports = renderImports imports
     inlineRewrite <- liftIO $
       constructInlineFromIdentifer annotatedImports (unsafeMkA astSrc 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
@@ -549,16 +550,23 @@ instance Show CallRetrieError where
 
 instance Exception CallRetrieError
 
+-- TODO(simon):
+-- * Load TypeCheck for each impacted file
+-- * We need accurate typecheck results for name resolution etc
+-- * extractImports needs to know the GlobalRdrEnv to reject adding clashing imports
+-- * it also looks up the definition binder to figure out what names need importing
+
 callRetrie ::
   Recorder (WithPriority Log) ->
   IdeState ->
   HscEnv ->
-  [Either ImportSpec RewriteSpec] ->
+  RewriteSpec ->
   NormalizedFilePath ->
   Bool ->
+  [HsBindLR GhcRn GhcRn] ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
+callRetrie recorder state session spec origin restrictToOriginatingFile binds = do
+  knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   let
       -- TODO cover all workspaceFolders
       target = "."
@@ -572,24 +580,29 @@ callRetrie recorder state session rewrites origin restrictToOriginatingFile = do
                 else Set.toList knownFiles
         }
 
-      (theImports, theRewrites) = partitionEithers rewrites
+      -- (theImports, theRewrites) = partitionEithers rewrites
 
-      annotatedImports =
-        unsafeMkA (map (noLocA . toImportDecl) theImports) 0
+      -- annotatedImports =
+      --   unsafeMkA (map (noLocA . toImportDecl) theImports) 0
 
+  tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   (originFixities, originParsedModule) <- reuseParsedModule state origin
-  retrie <-
-    (\specs -> apply specs >> addImports annotatedImports)
-      <$> parseSpecs state origin originParsedModule originFixities theRewrites
+  -- TODO(simon): It would be better to compute imports per-clause.
+  rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
+  let retrie = apply rewrites
 
   targets <- getTargetFiles retrieOptions (getGroundTerms retrie)
 
   results <- forM targets $ \t -> runExceptT $ do
     (fixityEnv, cpp, pm, contents) <- ExceptT $ try $
       getCPPmodule recorder state session t
-    (_user, _ast, change@(Change _replacements _imports)) <-
+    let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
+    tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
+    -- FIXME(simon): raise the error properly
+    let imps = fromRight mempty $ extractImports tcd tct binds spec
+    (_user, _ast, Change replacements _) <-
       lift $ runRetrie fixityEnv retrie cpp
-    return $ asTextEdits (toNormalizedFilePath' t) pm contents change
+    return $ asTextEdits nt pm contents $ Change replacements [imps]
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
@@ -722,7 +735,7 @@ importTextEdits target ps contents imp
   , Just (range, indent) <- newImportInsertRange ps contents
   = let print = [(T.pack . exactPrint) i | i <- concatMap astA imp]
         sep   = "\n" <> T.replicate indent " "
-        text  = T.intercalate sep print
+        text  = T.concat [ p <> sep | p <- print ]
         edit  = TextEdit range text
         uri   = filePathToUri $ fromNormalizedFilePath target
     in [(uri, edit)]

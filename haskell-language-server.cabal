@@ -729,6 +729,7 @@ library hls-retrie-plugin
     , hashable
     , hls-plugin-api        == 2.15.0.0
     , haskell-language-server:hls-refactor-plugin
+    , haskell-language-server:hls-exactprint-utils
     , lens
     , lsp
     , lsp-types
@@ -736,6 +737,7 @@ library hls-retrie-plugin
     , retrie                >=2.0.0
     , safe-exceptions
     , stm
+    , syb
     , text
     , text-rope
     , transformers
