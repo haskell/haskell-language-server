@@ -80,6 +80,7 @@ import           GHC.Parser.Annotation                     (AnnList (..),
 import           GHC.Types.Avail                           (AvailInfo (AvailTC))
 import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo),
                                                             ConLikeInfo (ConIsPatSyn))
+import           GHC.Types.Name                            (nameModule_maybe)
 import           GHC.Types.Name.Reader                     (is_decl)
 import           Retrie.Rewrites
 
@@ -249,10 +250,13 @@ data ImportForm
 
 extractImports :: TcModuleResult -> TcModuleResult -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> Either String AnnotatedImports
 extractImports tmrDef tmrTarget topLevelBinds (Unfold thing)
-  | Just FunBind{fun_matches} <- find (\case FunBind{fun_id = L _ n} -> T.unpack (printOutputable n) == thing ; _ -> False) topLevelBinds
+  | Just FunBind{fun_matches} <- find (\case FunBind{fun_id = L _ n} -> qualifiedName n == thing ; _ -> False) topLevelBinds
   = renderImports <$> extractInlineImports tmrDef tmrTarget fun_matches
 -- TODO handle imports for all rewrites
 extractImports _ _ _ _ = Right mempty
+
+qualifiedName :: Name -> String
+qualifiedName n = T.unpack $ maybe "" ((<> ".") . printOutputable) (nameModule_maybe n) <> printOutputable n
 
 --------------------------------------------------------------------------------
 -- Import rendering
