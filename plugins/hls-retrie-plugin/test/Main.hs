@@ -8,6 +8,7 @@ module Main (main) where
 import qualified Data.Map                          as M
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
+import qualified Data.Text.IO                      as T
 import qualified Development.IDE.GHC.ExactPrint    as ExactPrint
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 import           Ide.Logger
@@ -38,6 +39,7 @@ tests :: TestTree
 tests =
   testGroup "Retrie"
     [ inlineThisTests
+    , unfoldTests
     ]
 
 -- These tests follow the convention that an expression @e@ is being inlined
@@ -89,6 +91,31 @@ inlineThisTests =
       ]
     ]
 
+unfoldTests :: TestTree
+unfoldTests =
+  testGroup "Unfold"
+    [ testUnfold "top level function" "Identity" 4 0
+
+      -- The action is run in the defining module, but the changes all happen
+      -- in the target module.
+    , testCase "rewrites the defining module too" $ runWithRetrie $ do
+        defDoc <- openDoc "CrossFileDef.hs" "haskell"
+        useDoc <- openDoc "CrossFileUse.hs" "haskell"
+        _ <- waitForTypecheck useDoc
+        let p = Position 5 0
+        actions <- getCodeActions defDoc $ Range p p
+        ca <- liftIO $ case [ca | InR ca@CodeAction{_title = "Unfold e"} <- actions] of
+            [ca] -> pure ca
+            cas  -> assertFailure $ "One Unfold e action expected, got " <> show (length cas)
+        resolveAndExecuteCodeAction ca
+        useContents <- documentContents useDoc
+        defContents <- documentContents defDoc
+        useExpected <- liftIO $ T.readFile (testDataDir </> "CrossFileUse.expected.hs")
+        defExpected <- liftIO $ T.readFile (testDataDir </> "CrossFileDef.hs")
+        liftIO $ useContents @?= useExpected
+        liftIO $ defContents @?= defExpected
+    ]
+
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
 testProvider title file line row expected = testCase title $ runWithRetrie $ do
     adoc <- openDoc (file <.> "hs") "haskell"
@@ -110,7 +137,8 @@ testResolve keep title file row col = goldenWithRetrie title file $ \adoc -> do
     codeActions <- getCodeActions adoc $ Range p p
     case filter keep codeActions of
         [InR ca] -> resolveAndExecuteCodeAction ca
-        cas -> liftIO . assertFailure $ "One code action expected, got " <> show (length cas)
+        cas -> liftIO . assertFailure $
+          "One code action expected, got " <> show (map codeActionTitle cas)
 
 titleStartsWith :: Text -> Command |? CodeAction -> Bool
 titleStartsWith prefix = maybe False (prefix `T.isPrefixOf`) . codeActionTitle

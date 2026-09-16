@@ -40,7 +40,6 @@ import           Data.IORef.Extra                      (atomicModifyIORef'_,
 import           Data.List.Extra                       (nubOrdOn)
 import qualified Data.Map                              as Map
 import           Data.Monoid                           (First (First), getFirst)
-import           Data.String                           (IsString)
 import qualified Data.Text                             as T
 import qualified Data.Text.Encoding                    as T
 import qualified Data.Text.Utf16.Rope.Mixed            as Rope
@@ -137,9 +136,9 @@ instance Pretty Log where
 
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
-  { description               :: T.Text,
-    spec                      :: RewriteSpec,
-    originatingFile           :: Uri
+  { description     :: T.Text,
+    spec            :: RewriteSpec,
+    originatingFile :: Uri
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
