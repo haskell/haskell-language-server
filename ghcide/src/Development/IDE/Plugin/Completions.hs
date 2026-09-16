@@ -35,7 +35,7 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports, envVisibleModuleNames),
+import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports),
                                                            hscEnv)
 import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
@@ -105,7 +105,7 @@ produceCompletions recorder = do
               (global, inScope) <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> msrImports) `concurrently` tcRnImportDecls env msrImports
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
-                      visibleMods <- liftIO $ fmap (fromMaybe []) $ envVisibleModuleNames sess
+                      let visibleMods = listVisibleModuleNames $ hscEnv sess
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
                       let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
