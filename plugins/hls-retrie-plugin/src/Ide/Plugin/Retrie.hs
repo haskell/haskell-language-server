@@ -139,8 +139,7 @@ instance Pretty Log where
 data RunRetrieParams = RunRetrieParams
   { description               :: T.Text,
     spec                      :: RewriteSpec,
-    originatingFile           :: Uri,
-    restrictToOriginatingFile :: Bool
+    originatingFile           :: Uri
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
@@ -200,7 +199,6 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
             (hscEnv session)
             spec
             nfp
-            restrictToOriginatingFile
             binds
     unless (null errors) $
         lift $ pluginSendNotification SMethod_WindowShowMessage $
@@ -406,15 +404,15 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
   | pos `isInsideSrcSpan` l' =
     let pprNameText = printOutputable rdrName
         pprName = T.unpack pprNameText
-        unfoldRewrite restrictToOriginatingFile =
+        unfoldRewrite =
             let spec = Unfold (qualify ms_mod pprName)
-                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+                description = "Unfold " <> pprNameText
             in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
-        foldRewrite restrictToOriginatingFile =
+        foldRewrite =
           let spec = Fold (qualify ms_mod pprName)
-              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+              description = "Fold " <> pprNameText
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
-     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
+     in [unfoldRewrite, foldRewrite]
 suggestBindRewrites _ _ _ _ = []
 
   -- find all the identifiers in the AST for which have source definitions
@@ -468,11 +466,6 @@ suggestBindInlines _uri binds range hie lookupMod = do
                     return $ maybe mempty (Set.fromList . map (nameOccName name, siteLoc,)) mbSrcLocation
             _ -> pure mempty
 
-
-describeRestriction :: IsString p => Bool -> p
-describeRestriction restrictToOriginatingFile =
-        if restrictToOriginatingFile then " in current file" else ""
-
 suggestTypeRewrites ::
   Uri ->
   GHC.Module ->
@@ -481,15 +474,15 @@ suggestTypeRewrites ::
 suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
     let pprNameText = printOutputable (unLocA tcdLName)
         pprName = T.unpack pprNameText
-        unfoldRewrite restrictToOriginatingFile =
+        unfoldRewrite =
             let spec = TypeForward (qualify ms_mod pprName)
-                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+                description = "Unfold " <> pprNameText
            in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
-        foldRewrite restrictToOriginatingFile =
+        foldRewrite =
           let spec = TypeBackward (qualify ms_mod pprName)
-              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+              description = "Fold " <> pprNameText
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
-     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
+     in [unfoldRewrite, foldRewrite]
 suggestTypeRewrites _ _ _ = []
 
 suggestRuleRewrites ::
@@ -500,10 +493,8 @@ suggestRuleRewrites ::
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
-        [ [ forwardRewrite   ruleName True
-          , forwardRewrite   ruleName False
-          , backwardsRewrite ruleName True
-          , backwardsRewrite ruleName False
+        [ [ forwardRewrite   ruleName
+          , backwardsRewrite ruleName
           ]
         | L (locA -> l) r  <- rds_rules,
           pos `isInsideSrcSpan` l,
@@ -511,19 +502,17 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           let ruleName = unpackFS rn
       ]
   where
-    forwardRewrite ruleName restrictToOriginatingFile =
+    forwardRewrite ruleName =
         let spec = RuleForward (qualify ms_mod ruleName)
-            description = "Apply rule " <> T.pack ruleName <> " forward" <>
-                            describeRestriction restrictToOriginatingFile
+            description = "Apply rule " <> T.pack ruleName <> " forward"
 
         in ( description,
             CodeActionKind_Refactor,
             RunRetrieParams {..}
             )
-    backwardsRewrite ruleName restrictToOriginatingFile =
+    backwardsRewrite ruleName =
           let spec = RuleBackward (qualify ms_mod ruleName)
-              description = "Apply rule " <> T.pack ruleName <> " backwards" <>
-                              describeRestriction restrictToOriginatingFile
+              description = "Apply rule " <> T.pack ruleName <> " backwards"
            in ( description,
                 CodeActionKind_Refactor,
                 RunRetrieParams {..}
@@ -562,10 +551,9 @@ callRetrie ::
   HscEnv ->
   RewriteSpec ->
   NormalizedFilePath ->
-  Bool ->
   [HsBindLR GhcRn GhcRn] ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder state session spec origin restrictToOriginatingFile binds = do
+callRetrie recorder state session spec origin binds = do
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   let
       -- TODO cover all workspaceFolders
@@ -575,9 +563,7 @@ callRetrie recorder state session spec origin restrictToOriginatingFile binds = 
       retrieOptions = (defaultOptions target)
         {Retrie.verbosity = Loud
         ,Retrie.targetFiles = map fromNormalizedFilePath $
-            if restrictToOriginatingFile
-                then [origin]
-                else Set.toList knownFiles
+            Set.toList knownFiles
         }
 
       -- (theImports, theRewrites) = partitionEithers rewrites
@@ -600,9 +586,10 @@ callRetrie recorder state session spec origin restrictToOriginatingFile binds = 
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     -- FIXME(simon): raise the error properly
     let imps = fromRight mempty $ extractImports tcd tct binds spec
-    (_user, _ast, Change replacements _) <-
-      lift $ runRetrie fixityEnv retrie cpp
-    return $ asTextEdits nt pm contents $ Change replacements [imps]
+    (_user, _ast, change) <- lift $ runRetrie fixityEnv retrie cpp
+    return $ asTextEdits nt pm contents $ case change of
+      NoChange              -> NoChange
+      Change replacements _ -> Change replacements [imps]
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit

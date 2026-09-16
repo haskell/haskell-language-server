@@ -46,15 +46,15 @@ inlineThisTests :: TestTree
 inlineThisTests =
   testGroup "Inline this"
     [ testGroup "provider"
-      [ testProvider "lhs" "Identity" 7 0 ["Unfold f", "Unfold f in current file", "Fold f", "Fold f in current file"]
+      [ testProvider "lhs" "Identity" 7 0 ["Unfold f", "Fold f"]
       , testProvider "identifier" "Identity" 7 6 ["Inline e"]
       , testProvider "imported identifier" "Imported" 4 6 ["Inline e"]
       , testProvider "nested where" "NestedWhere" 3 6 ["Inline e"]
       , testProvider "nested let" "NestedLet" 5 5 ["Inline e"]
       , testProvider "class member" "Class" 6 6 []
       , testProvider "operator" "Operator" 4 8 ["Inline */"]
-      , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward in current file", "Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards in current file", "Apply rule maybe/nothing backwards"]
-      , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Unfold UserId in current file", "Fold UserId", "Fold UserId in current file"]
+      , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards"]
+      , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Fold UserId"]
       ]
     , testGroup "resolve"
       [ testInline "top level function" "Identity" 7 6
