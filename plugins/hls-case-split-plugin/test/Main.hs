@@ -163,6 +163,12 @@ codeActionTests = testGroup
       (Range (Position 12 17) (Position 13 0))
       []
 
+  -- Qualify name when needed
+  , goldenWithClass "Import is `qualified as`" "TQualifiedAs" $
+      Prelude.flip inspectCodeAction [title]
+  , goldenWithClass "Import is `qualified`" "TQualified" $
+      Prelude.flip inspectCodeAction [title]
+
   -- Support UnicodeSyntax
   , goldenWithClass "More -> than →" "TMoreUnicodeThanNot" $
       Prelude.flip inspectCodeAction [title]
