@@ -377,11 +377,14 @@ graftMissingPatterns ps range missingPs arrowSyntax
                      let existingMatches = _matchGroup _expr
 
                          dominantSyntax NormalSyntax = NormalSyntax
-                         dominantSyntax UnicodeSyntax = let (u, n) = map getSyntax (unLoc $ mg_alts existingMatches)
-                                                                   & partition (== UnicodeSyntax)
-                                    in if length u < length n
-                                              then NormalSyntax
-                                              else UnicodeSyntax
+                         dominantSyntax UnicodeSyntax
+                           = let preferUnicode :: Int = foldl' (\(!u) syn -> u & case syn of UnicodeSyntax -> (+1)
+                                                                                             NormalSyntax -> subtract 1)
+                                                               0
+                                                               (getSyntax <$> unLoc (mg_alts existingMatches))
+                             in if preferUnicode < 0
+                               then NormalSyntax
+                               else UnicodeSyntax
                      -- make a match out of each missing pattern,
                      case traverse (makeMatch $ dominantSyntax arrowSyntax) missingPs of
                         -- If this sort of pattern is not supported, we abort,
