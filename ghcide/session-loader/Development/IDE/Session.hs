@@ -955,12 +955,14 @@ packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
   newTargetDfs <- liftIO $ evalGhcEnv hscEnv $ setOptions haddockparse cfp opts (hsc_dflags hscEnv) rootDir
   let deps = componentDependencies opts ++ maybeToList hieYaml
   dep_info <- liftIO $ getDependencyInfo (fmap (toAbsolute rootDir) deps)
+  cacheDirOpts <- liftIO $ cacheDirOptions (cmapWithPrio LogSessionGhc recorder)
+                             (componentRoot opts) (componentOptions opts)
   -- Now lookup to see whether we are combining with an existing HscEnv
   -- or making a new one. The lookup returns the HscEnv and a list of
   -- information about other components loaded into the HscEnv
   -- (unitId, DynFlag, Targets)
   liftIO $ modifyVar (hscEnvs sessionState) $
-    addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs dep_info newTargetDfs (hieYaml, cfp, opts)
+    addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs cacheDirOpts dep_info newTargetDfs (hieYaml, cfp, opts)
 
 {- Note [Modules the build tool has not been told about]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
