@@ -78,7 +78,7 @@ import           Data.Data                             (Data)
 import           Data.Function                         (on, (&))
 import           Data.Generics.Schemes                 (everywhereM)
 import           Data.List.Extra                       (chunksOf, dropEnd,
-                                                        takeEnd, partition)
+                                                        takeEnd)
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         nonEmpty)
 import qualified Data.List.NonEmpty                    as NE
@@ -105,7 +105,8 @@ import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, Real
                                                         Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
-                                                        getLoc, showSDocUnsafe, unLoc)
+                                                        getLoc, showSDocUnsafe,
+                                                        unLoc)
 import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         EpAnnHsCase (EpAnnHsCase),
                                                         GrhsAnn (..),
@@ -140,11 +141,12 @@ import           GHC                                   (AnnList (AnnList),
 import           GHC.Data.EnumSet                      (member)
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
+                                                        GRHSs (grhssGRHSs),
                                                         GhcPs,
                                                         HsRecFields (HsRecFields),
                                                         XCase, XLam, deltaPos,
                                                         getDeltaLine,
-                                                        unnamedHoleRdrName, GRHSs (grhssGRHSs))
+                                                        unnamedHoleRdrName)
 import           GHC.HsToCore.Pmc.Solver.Types         (Nabla (nabla_tm_st),
                                                         PmAltCon (..),
                                                         PmAltConApp (..),
