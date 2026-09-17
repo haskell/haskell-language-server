@@ -285,7 +285,7 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 -- the qualifier should be.
 getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
 getPprCtx state nfp = do
-  (typechecked, hscEnvEq) <- runIdeActionE "ExplicitFields.InlayHintPosRec" (shakeExtras state) $ do
+  (typechecked, hscEnvEq) <- runIdeActionE "CaseSplit.GetPprContext" (shakeExtras state) $ do
     (typechecked, _) <- useWithStaleFastE TypeCheck nfp
     (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
     return (typechecked, hscEnvEq)
