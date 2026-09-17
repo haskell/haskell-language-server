@@ -163,6 +163,12 @@ codeActionTests = testGroup
       []
 
   -- Support UnicodeSyntax
+  , goldenWithClass "More -> than →" "TMoreUnicodeThanNot" $
+      Prelude.flip inspectCodeAction [title]
+  , goldenWithClass "More → than ->" "TLessUnicodeThanNot" $
+      Prelude.flip inspectCodeAction [title]
+  , goldenWithClass "As many → as ->" "TAsManyUnicodeAsNot" $
+      Prelude.flip inspectCodeAction [title]
   , testGroup "In-file (No)UnicodeSyntax has priority over in-cabal (No)UnicodeSyntax"
       $ let cabalFile = [
               "cabal-version:      3.4",
