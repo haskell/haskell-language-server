@@ -284,7 +284,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hashBytes = hashOptions this_opts
+                       let hashBytes = hashOptions Nothing this_opts
                            hash =  B.unpack $ B16.encode hashBytes
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in (setHomeUnitId_ hashed_uid dflags', Just hashBytes)
@@ -318,14 +318,14 @@ normaliseImportsPaths dflags = dflags { importPaths = fmap normalise (importPath
 addComponentInfo ::
   MonadUnliftIO m =>
   Recorder (WithPriority Log) ->
-  (CacheKey -> IO CacheDirs) ->
-  B.ByteString ->
+  (String -> Maybe B.ByteString -> [String] -> IO CacheDirs) ->
+  [String] ->
   DependencyInfo ->
   NonEmpty HomeUnitConfig->
   (Maybe FilePath, NormalizedFilePath, ComponentOptions) ->
   Map.Map (Maybe FilePath) [RawComponentInfo] ->
   m (Map.Map (Maybe FilePath) [RawComponentInfo], ([ComponentInfo], [ComponentInfo]))
-addComponentInfo recorder getCacheDirs optsHash dep_info newDynFlags (hieYaml, cfp, opts) m = do
+addComponentInfo recorder getCacheDirs cacheDirOpts dep_info newDynFlags (hieYaml, cfp, opts) m = do
   -- Just deps if there's already an HscEnv
   -- Nothing is it's the first time we are making an HscEnv
   let oldDeps = Map.lookup hieYaml m
@@ -337,10 +337,10 @@ addComponentInfo recorder getCacheDirs optsHash dep_info newDynFlags (hieYaml, c
       all_deps = new_deps `NE.appendList` fromMaybe [] oldDeps
       -- Get all the unit-ids for things in this component
 
-  -- See Note [Avoiding bad interface files]
   all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
-    cacheDirs <- liftIO $ getCacheDirs $
-      componentCacheKey (show rawComponentUnitId) rawComponentHash optsHash
+    let prefix = show rawComponentUnitId
+    -- See Note [Avoiding bad interface files]
+    cacheDirs <- liftIO $ getCacheDirs prefix rawComponentHash cacheDirOpts
     processed_df <- setCacheDirs recorder cacheDirs rawComponentDynFlags
     -- The final component information, mostly the same but the DynFlags don't
     -- contain any packages which are also loaded
@@ -456,16 +456,18 @@ sort the units.
 -}
 
 
--- | The hash of a component's options that's used as the cache key, see
--- 'componentCacheKey'.
-cacheKeyOptions :: Recorder (WithPriority Log) -> FilePath -> [String] -> IO B.ByteString
-cacheKeyOptions recorder compRoot opts = do
+-- | The options a component's cache folder is keyed on, with response files
+-- expanded and units sorted. See Note [Avoiding bad interface files].
+cacheDirOptions :: Recorder (WithPriority Log) -> FilePath -> [String] -> IO [String]
+cacheDirOptions recorder compRoot opts = do
   ((global, _errs, _warns), unitArgs) <- processCmdLineP unit_flags [] (map noLoc opts)
   units <- mapM (readResponseFileArg recorder compRoot) unitArgs
-  evaluate $ hashOptions $ map unLoc global ++ concatMap ("-unit" :) (sort units)
+  evaluate $ force $ map unLoc global ++ concatMap ("-unit" :) (sort units)
 
-hashOptions :: [String] -> B.ByteString
-hashOptions = H.finalize . H.updates H.init . map (encodeUtf8 . T.pack)
+-- | Hash GHC options, continuing from an earlier hash if one is given.
+hashOptions :: Maybe B.ByteString -> [String] -> B.ByteString
+hashOptions mCtx = H.finalize . H.updates ctx . map (encodeUtf8 . T.pack)
+  where ctx = maybe H.init (H.updates H.init . pure) mCtx
 
 readResponseFileArg :: Recorder (WithPriority Log) -> FilePath -> String -> IO [String]
 readResponseFileArg recorder compRoot arg
@@ -490,45 +492,36 @@ setCacheDirs recorder CacheDirs{..} dflags = do
           & maybe id setHieDir hieCacheDir
           & maybe id setODir oCacheDir
 
-newtype CacheKey = CacheKey FilePath
-
 -- | Append the hash to the unit id to create unique cache folders.
 --
 -- This function generates a single, unified hash.
 -- If an optional base hash (@mFirstHash@) is provided—which
 -- is common for a single target with `-this-unit-id` as "main"-
 -- we set the prefix to "main", extract the context generated
--- from the @mFirstHash@, and update the @optsHash@ into the same hash.
+-- from the @mFirstHash@, and update the @opts@ into the same hash.
 --
 -- This guarantees a unique cache folder for different GHC
 -- options(avoiding incompatible interface files) while
 -- keeping the path short and clean.
-componentCacheKey :: String -> Maybe B.ByteString -> B.ByteString -> CacheKey
-componentCacheKey prefix mFirstHash optsHash =
-    CacheKey (prefix' ++ "-" ++ digest)
-    where
-        -- Create a unique folder per set of different GHC options.
-        prefix' = if isJust mFirstHash then "main" else prefix
-        basectx = case mFirstHash of
-          Just h  -> H.updates H.init [h]
-          Nothing -> H.init
-        digest = B.unpack $ B16.encode $ H.finalize $ H.updates basectx [optsHash]
-
-getCacheDirsDefault :: CacheKey -> IO CacheDirs
-getCacheDirsDefault key = do
+getCacheDirsDefault :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
+getCacheDirsDefault prefix mFirstHash opts = do
     base <- getXdgDirectory XdgCache cacheDir
-    pure $ cacheDirsUnder base key
+    pure $ cacheDirsUnder base prefix mFirstHash opts
 
 -- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
 -- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
-getCacheDirsIn :: FilePath -> CacheKey -> CacheDirs
-getCacheDirsIn base = cacheDirsUnder (base </> cacheDir)
+getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
+getCacheDirsIn base prefix mFirstHash opts =
+    cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
 
 -- | The per-component cache folder under @base@. See 'getCacheDirsDefault'.
-cacheDirsUnder :: FilePath -> CacheKey -> CacheDirs
-cacheDirsUnder base (CacheKey key) = CacheDirs dir dir dir
+cacheDirsUnder :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
+cacheDirsUnder base prefix mFirstHash opts = CacheDirs dir dir dir
     where
-        dir = Just (base </> key)
+        dir = Just (base </> prefix' ++ "-" ++ opts_hash)
+        -- Create a unique folder per set of different GHC options.
+        prefix' = if isJust mFirstHash then "main" else prefix
+        opts_hash = B.unpack $ B16.encode $ hashOptions mFirstHash opts
 
 setNameCache :: NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }

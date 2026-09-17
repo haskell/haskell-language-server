@@ -1,7 +1,6 @@
 module SessionCacheDirTests (tests) where
 
 import           Control.Monad
-import           Data.ByteString             (ByteString)
 import           Development.IDE.Session.Ghc
 import           GHC.ResponseFile
 import           System.Directory
@@ -27,17 +26,20 @@ multiReplOptions dir units = do
     writeFile (dir </> name) (escapeArgs opts)
     pure ["-unit", "@" ++ (dir </> name)]
 
-cacheKey :: [String] -> IO ByteString
-cacheKey = cacheKeyOptions mempty "/"
+-- | The interface cache folder a session with these options would land in.
+cacheKey :: [String] -> IO (Maybe FilePath)
+cacheKey opts =
+  hiCacheDir . getCacheDirsIn "/cache" "unit-a" Nothing
+    <$> cacheDirOptions mempty "/" opts
 
 -- | Compare the keys of two potential sessions containing differing units.
-twoSessions :: TestName -> (ByteString -> ByteString -> Assertion) -> [Unit] -> [Unit] -> TestTree
+twoSessions :: TestName -> (Maybe FilePath -> Maybe FilePath -> Assertion) -> [Unit] -> [Unit] -> TestTree
 twoSessions name compare' first second = testCase name $ withTempDir $ \tmp -> do
   a <- cacheKey =<< multiReplOptions (tmp </> "out-1") first
   b <- cacheKey =<< multiReplOptions (tmp </> "out-2") second
   compare' a b
 
-keepsKey, movesKey :: ByteString -> ByteString -> Assertion
+keepsKey, movesKey :: Maybe FilePath -> Maybe FilePath -> Assertion
 keepsKey = assertEqual "cache key moved"
 movesKey a b = assertBool "cache key kept" (a /= b)
 

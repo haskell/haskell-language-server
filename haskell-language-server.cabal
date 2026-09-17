@@ -2155,7 +2155,6 @@ test-suite ghcide-tests
 
   build-depends:
     , aeson
-    , bytestring
     , containers
     , data-default
     , directory
