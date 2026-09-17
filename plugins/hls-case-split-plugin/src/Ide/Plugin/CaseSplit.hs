@@ -65,7 +65,7 @@ module Ide.Plugin.CaseSplit
   ) where
 
 import           Control.Applicative                   (ZipList (ZipList, getZipList))
-import           Control.Arrow                         ((&&&), (>>>))
+import           Control.Arrow                         (first, (&&&), (>>>))
 import           Control.Lens                          ((^.), (^?))
 import           Control.Monad                         ((>=>))
 import           Control.Monad.Except                  (runExceptT, throwError)
@@ -94,19 +94,27 @@ import           Development.IDE                       (FileDiagnostic (fdStruct
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
                                                         getExtensionsSet,
+                                                        printOutputableQualified,
                                                         runAction,
                                                         spanContainsRange)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils      (activeDiagnosticsInRange,
-                                                        runActionE, useE)
+                                                        runActionE,
+                                                        runIdeActionE, useE,
+                                                        useWithStaleFastE)
+import           Development.IDE.Core.RuleTypes        (GhcSession (GhcSession),
+                                                        TcModuleResult (tmrTypechecked),
+                                                        TypeCheck (TypeCheck))
 import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, RealDataCon),
                                                         HoleKind (HoleVar),
                                                         HsMatchContext (CaseAlt),
                                                         Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
-                                                        getLoc, showSDocUnsafe,
-                                                        unLoc)
+                                                        PrintUnqualified,
+                                                        getLoc,
+                                                        mkPrintUnqualifiedDefault,
+                                                        showSDocUnsafe, unLoc)
 import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         EpAnnHsCase (EpAnnHsCase),
                                                         GrhsAnn (..),
@@ -114,6 +122,7 @@ import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         HsLamVariant (LamCase),
                                                         HsMatchContext (LamAlt),
                                                         LocatedAn,
+                                                        TcGblEnv (..),
                                                         lann_trailing,
                                                         srcSpanStartCol,
                                                         srcSpanStartLine)
@@ -126,8 +135,10 @@ import           Development.IDE.GHC.Compat.ExactPrint (d0, d1, exactPrint,
                                                         noAnnSrcSpanDP0,
                                                         noAnnSrcSpanDP1,
                                                         setEntryDP)
+import           Development.IDE.GHC.Compat.Util       (member, mkFastString)
 import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDiagnostic),
                                                         _SomeStructuredMessage)
+import           Development.IDE.Types.HscEnvEq        (HscEnvEq (hscEnv))
 import           GHC                                   (AnnList (AnnList),
                                                         AnnListBrackets (ListBraces),
                                                         EpAnn (EpAnn),
@@ -138,7 +149,6 @@ import           GHC                                   (AnnList (AnnList),
                                                         ParsedSource,
                                                         dataConIsInfix,
                                                         realSrcSpan)
-import           GHC.Data.EnumSet                      (member)
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
                                                         GRHSs (grhssGRHSs),
@@ -158,7 +168,9 @@ import           GHC.Parser.Annotation                 (EpUniToken (EpUniTok),
                                                         addTrailingAnnToA,
                                                         emptyComments,
                                                         noSrcSpanA)
-import           GHC.Types.Name.Reader                 (nameRdrName)
+import           GHC.Types.Name                        (HasOccName (occName),
+                                                        Name)
+import           GHC.Types.Name.Reader                 (RdrName (Exact, Qual))
 import           GHC.Types.SrcLoc                      (GenLocated (L),
                                                         SrcSpan (RealSrcSpan),
                                                         combineSrcSpans)
@@ -180,6 +192,7 @@ import           Language.Haskell.Syntax               (HsConDetails (InfixCon, 
                                                         HsLocalBindsLR (EmptyLocalBinds),
                                                         LHsExpr,
                                                         MatchGroup (MG, mg_alts),
+                                                        ModuleName (ModuleName),
                                                         NoExtField (NoExtField),
                                                         Pat (..))
 import           Language.Haskell.Syntax.Expr          (GRHS (GRHS),
@@ -231,11 +244,13 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 
   pmOld <- getParsedModule state nfp
   let arrowSyntax = getArrowSyntax pmOld
-  let psOld = pm_parsed_source pmOld
+      psOld = pm_parsed_source pmOld
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
 
-  codeAction <- case traverse (makeCodeAction caps verTxtDocId psOld arrowSyntax) diagAndMissingCtors of
+  pprCtx <- getPprCtx state nfp
+
+  codeAction <- case traverse (makeCodeAction caps verTxtDocId pprCtx psOld arrowSyntax) diagAndMissingCtors of
                      Left unsupportedPat -> do logWith recorder Warning $ LogPatternNotSupportedYet unsupportedPat
                                                pure Nothing
                      Right cAct -> pure cAct
@@ -245,12 +260,13 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
   where
     makeCodeAction :: ClientCapabilities
                    -> VersionedTextDocumentIdentifier
+                   -> PrintUnqualified
                    -> ParsedSource
                    -> IsUnicodeSyntax
                    -> (Diagnostic, MissingPatterns)
                    -> Either String CodeAction
-    makeCodeAction caps verTxtDocId psOld arrowSyntax (diag, pmAltsConApps)
-        = do psNew <- graftMissingPatterns psOld _range pmAltsConApps arrowSyntax
+    makeCodeAction caps verTxtDocId pprCtx psOld arrowSyntax (diag, pmAltsConApps)
+        = do psNew <- graftMissingPatterns pprCtx psOld _range pmAltsConApps arrowSyntax
              pure $ make diag $ makeEditText caps verTxtDocId psOld psNew
       where
         make :: Diagnostic -> WorkspaceEdit -> CodeAction
@@ -263,6 +279,18 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
                        , _edit        = Just edit
                        , _command     = Nothing
                        , _data_       = Nothing }
+
+-- | Retrieve the pretty printing context, which is used to determine whether
+-- the constructors of the patterns to be inserted need be qualified, and what
+-- the qualifier should be.
+getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
+getPprCtx state nfp = do
+  (typechecked, hscEnvEq) <- runIdeActionE "ExplicitFields.InlayHintPosRec" (shakeExtras state) $ do
+    (typechecked, _) <- useWithStaleFastE TypeCheck nfp
+    (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
+    return (typechecked, hscEnvEq)
+  let reader = tcg_rdr_env (tmrTypechecked typechecked)
+  pure $ mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
 
 -- | Retrieve 'VersionedTextDocumentIdentifier' from the handler.
 getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config VersionedTextDocumentIdentifier
@@ -356,8 +384,8 @@ nablasToPmAlts identifier nablas = fmap concat $ traverse go nablas
 --
 -- Implementation detail: since we want to update exactly one node of the AST
 -- we run the computation in a 'State Bool' monad to bail out after one update.
-graftMissingPatterns :: ParsedSource -> Range -> MissingPatterns -> IsUnicodeSyntax -> Either String ParsedSource
-graftMissingPatterns ps range missingPs arrowSyntax
+graftMissingPatterns :: PrintUnqualified -> ParsedSource -> Range -> MissingPatterns -> IsUnicodeSyntax -> Either String ParsedSource
+graftMissingPatterns pprCtx ps range missingPs arrowSyntax
   = runExceptT (everywhereM go ps) `evalState` False
     where
       go :: forall a. Data a => a -> ExceptT String (State Bool) a
@@ -388,7 +416,7 @@ graftMissingPatterns ps range missingPs arrowSyntax
                                then NormalSyntax
                                else UnicodeSyntax
                      -- make a match out of each missing pattern,
-                     case traverse (makeMatch $ dominantSyntax arrowSyntax) missingPs of
+                     case traverse (makeMatch pprCtx $ dominantSyntax arrowSyntax) missingPs of
                         -- If this sort of pattern is not supported, we abort,
                         Left unsupportedPat  -> throwError unsupportedPat
                         -- otherwise we continue
@@ -636,7 +664,7 @@ prettyChunksOf size allMatches = do
 -- | Given a 'IsUnicodeSyntax', describing whether to use @->@ or @→@, and a
 -- 'PmAltConApp', this function produces an 'LMatch' (to be inserted in the
 -- list of existing 'LMatch'es contained by a 'MatchGroup'), returning it into
--- a 'Maybe' to account for failure.
+-- an 'Either' to account for failure.
 --
 -- The 'LMatch' is constructed in its entirety, by passing "default" values wherever
 -- possible, except, obviously, for two:
@@ -644,20 +672,18 @@ prettyChunksOf size allMatches = do
 --  - the constructor name,
 --  - the arguments to the constructor, all rendered as individual underscores
 --    when there's less than @maxUnderscores def@, or as a single @{}@ otherwise.
-makeMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String (LMatch GhcPs (LHsExpr GhcPs))
-makeMatch arrow pmAltConApp = makeLMatch <$> parseSimpleConMatch arrow pmAltConApp
+makeMatch :: PrintUnqualified -> IsUnicodeSyntax -> PmAltConApp -> Either String (LMatch GhcPs (LHsExpr GhcPs))
+makeMatch pprCtx arrow pmAltConApp = makeLMatch <$> parseSimpleConMatch pprCtx arrow pmAltConApp
 
-parseSimpleConMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String SimpleConMatch
-parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
-                              , paca_ids
-                              }
-  | let (conName, infixed) = case con of
+parseSimpleConMatch :: PrintUnqualified -> IsUnicodeSyntax -> PmAltConApp -> Either String SimpleConMatch
+parseSimpleConMatch pprCtx arrow PACA{ paca_con = PmAltConLike con
+                                     , paca_ids
+                                     }
+  | let (rdrConName, infixed) = first (qualifyIfNeeded pprCtx) $ case con of
                     RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
                     PatSynCon patSyn    -> (getName patSyn, False)
 
         underscore = WildPat NoExtField
-
-        rdrConName = nameRdrName conName
 
   , Just (locatedCon, args) <- case (paca_ids, infixed) of
                   -- Prefixed, laid out like @Foo _ _@
@@ -687,7 +713,14 @@ parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
   $ SimpleConMatch { _arrow = arrow
                    , _conPat = conPat }
 
-parseSimpleConMatch _ paca = Left $ showSDocUnsafe $ ppr paca
+parseSimpleConMatch _ _ paca = Left $ showSDocUnsafe $ ppr paca
+
+-- | Given a 'PrintUnqualified' context and a 'Name', return the 'Qual'ified
+-- name or the 'Exact' name as needed.
+qualifyIfNeeded :: PrintUnqualified -> Name -> RdrName
+qualifyIfNeeded pprCtx name = case init $ T.split (== '.') $ printOutputableQualified pprCtx name of
+  [] -> Exact name
+  (T.intercalate "." -> moduleName) -> Qual (ModuleName $ mkFastString $ T.unpack moduleName) (occName name)
 
 -- | Wrapper to the all the non-default info needed to construct an 'LMatch':
 --
