@@ -15,6 +15,7 @@ import qualified Data.List.NonEmpty                 as NE
 import qualified Data.Map.Strict                    as Map
 import           Data.Maybe
 import qualified Data.Text                          as T
+import           Data.Text.Encoding                 (encodeUtf8)
 import           Development.IDE.Core.Shake         hiding (Log, knownTargets,
                                                      withHieDb)
 import qualified Development.IDE.GHC.Compat         as Compat
@@ -40,10 +41,11 @@ import           Ide.Logger                         (Pretty (pretty),
 import           System.Directory
 import           System.FilePath
 import           System.Info
+import           System.IO.Error                    (tryIOError)
 
 
 import           Control.DeepSeq
-import           Control.Exception                  (evaluate)
+import           Control.Exception                  (IOException, evaluate)
 import           Control.Monad.IO.Unlift            (MonadUnliftIO)
 import qualified Data.Set                           as OS
 import qualified Development.IDE.GHC.Compat.Util    as Compat
@@ -68,6 +70,7 @@ data Log
   | LogMakingNewHscEnv ![UnitId]
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogDLLLoadError !String
+  | LogResponseFileUnreadable !FilePath !IOException
 deriving instance Show Log
 
 instance Pretty Log where
@@ -80,6 +83,9 @@ instance Pretty Log where
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogDLLLoadError errorString ->
       "Error dynamically loading libm.so.6:" <+> pretty errorString
+    LogResponseFileUnreadable path err ->
+      "Could not read response file" <+> pretty path <> ", so the interface"
+        <+> "file cache will not be reused between sessions:" <+> viaShow err
 -- | Configuration info for a particular home unit.
 data HomeUnitConfig = HomeUnitConfig
   {
@@ -278,7 +284,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hashBytes =H.finalize $ H.updates H.init (map B.pack this_opts)
+                       let hashBytes = hashOptions this_opts
                            hash =  B.unpack $ B16.encode hashBytes
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in (setHomeUnitId_ hashed_uid dflags', Just hashBytes)
@@ -312,13 +318,14 @@ normaliseImportsPaths dflags = dflags { importPaths = fmap normalise (importPath
 addComponentInfo ::
   MonadUnliftIO m =>
   Recorder (WithPriority Log) ->
-  (String -> Maybe B.ByteString -> [String] -> IO CacheDirs) ->
+  (CacheKey -> IO CacheDirs) ->
+  B.ByteString ->
   DependencyInfo ->
   NonEmpty HomeUnitConfig->
   (Maybe FilePath, NormalizedFilePath, ComponentOptions) ->
   Map.Map (Maybe FilePath) [RawComponentInfo] ->
   m (Map.Map (Maybe FilePath) [RawComponentInfo], ([ComponentInfo], [ComponentInfo]))
-addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts) m = do
+addComponentInfo recorder getCacheDirs optsHash dep_info newDynFlags (hieYaml, cfp, opts) m = do
   -- Just deps if there's already an HscEnv
   -- Nothing is it's the first time we are making an HscEnv
   let oldDeps = Map.lookup hieYaml m
@@ -330,11 +337,10 @@ addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts)
       all_deps = new_deps `NE.appendList` fromMaybe [] oldDeps
       -- Get all the unit-ids for things in this component
 
+  -- See Note [Avoiding bad interface files]
   all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
-    let prefix = show rawComponentUnitId
-    -- See Note [Avoiding bad interface files]
-    let cacheDirOpts = componentOptions opts
-    cacheDirs <- liftIO $ getCacheDirs prefix rawComponentHash cacheDirOpts
+    cacheDirs <- liftIO $ getCacheDirs $
+      componentCacheKey (show rawComponentUnitId) rawComponentHash optsHash
     processed_df <- setCacheDirs recorder cacheDirs rawComponentDynFlags
     -- The final component information, mostly the same but the DynFlags don't
     -- contain any packages which are also loaded
@@ -436,8 +442,42 @@ Since this causes a lot of recompilation, we only update the cache-directory,
 if the dependencies of a component have really changed.
 E.g. when you load two executables, they can not depend on each other. They
 should be filtered out, such that we dont have to re-compile everything.
+
+Similarly, the project's cache directory *should* be stable if nothing changed.
+There are two behaviors that make it difficult to determine a stable cache key
+from cabal's multi-repl component calls.
+
+  1. It writes each unit's options to a response file in different directories
+     every time, so every run passes a new `-unit @path` argument.
+  2. It does not deterministically order the units.
+
+We solve (1) by using the response file contents as the hash input. For (2) we
+sort the units.
 -}
 
+
+-- | The hash of a component's options that's used as the cache key, see
+-- 'componentCacheKey'.
+cacheKeyOptions :: Recorder (WithPriority Log) -> FilePath -> [String] -> IO B.ByteString
+cacheKeyOptions recorder compRoot opts = do
+  ((global, _errs, _warns), unitArgs) <- processCmdLineP unit_flags [] (map noLoc opts)
+  units <- mapM (readResponseFileArg recorder compRoot) unitArgs
+  evaluate $ hashOptions $ map unLoc global ++ concatMap ("-unit" :) (sort units)
+
+hashOptions :: [String] -> B.ByteString
+hashOptions = H.finalize . H.updates H.init . map (encodeUtf8 . T.pack)
+
+readResponseFileArg :: Recorder (WithPriority Log) -> FilePath -> String -> IO [String]
+readResponseFileArg recorder compRoot arg
+  | ('@' : path) <- arg = do
+      contents <- tryIOError $ readFileUtf8 (toAbsolute compRoot path)
+      case contents of
+        Right t ->
+          concatMapM (readResponseFileArg recorder compRoot) $ unescapeArgs $ T.unpack t
+        Left e -> do
+          logWith recorder Info $ LogResponseFileUnreadable path e
+          pure [arg]
+  | otherwise = pure [arg]
 
 -- | Set the cache-directory based on the ComponentOptions and a list of
 -- internal packages.
@@ -450,39 +490,45 @@ setCacheDirs recorder CacheDirs{..} dflags = do
           & maybe id setHieDir hieCacheDir
           & maybe id setODir oCacheDir
 
+newtype CacheKey = CacheKey FilePath
+
 -- | Append the hash to the unit id to create unique cache folders.
 --
 -- This function generates a single, unified hash.
 -- If an optional base hash (@mFirstHash@) is provided—which
 -- is common for a single target with `-this-unit-id` as "main"-
 -- we set the prefix to "main", extract the context generated
--- from the @mFirstHash@, and update the @opts@ into the same hash.
+-- from the @mFirstHash@, and update the @optsHash@ into the same hash.
 --
 -- This guarantees a unique cache folder for different GHC
 -- options(avoiding incompatible interface files) while
 -- keeping the path short and clean.
-getCacheDirsDefault :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
-getCacheDirsDefault prefix mFirstHash opts = do
-    base <- getXdgDirectory XdgCache cacheDir
-    pure $ cacheDirsUnder base prefix mFirstHash opts
-
--- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
--- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
-getCacheDirsIn :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
-getCacheDirsIn base prefix mFirstHash opts =
-    cacheDirsUnder (base </> cacheDir) prefix mFirstHash opts
-
--- | The per-component cache folder under @base@. See 'getCacheDirsDefault'.
-cacheDirsUnder :: FilePath -> String -> Maybe B.ByteString -> [String] -> CacheDirs
-cacheDirsUnder base prefix mFirstHash opts = CacheDirs dir dir dir
+componentCacheKey :: String -> Maybe B.ByteString -> B.ByteString -> CacheKey
+componentCacheKey prefix mFirstHash optsHash =
+    CacheKey (prefix' ++ "-" ++ digest)
     where
-        dir = Just (base </> prefix' ++ "-" ++ opts_hash)
         -- Create a unique folder per set of different GHC options.
         prefix' = if isJust mFirstHash then "main" else prefix
         basectx = case mFirstHash of
           Just h  -> H.updates H.init [h]
           Nothing -> H.init
-        opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates basectx (map B.pack opts)
+        digest = B.unpack $ B16.encode $ H.finalize $ H.updates basectx [optsHash]
+
+getCacheDirsDefault :: CacheKey -> IO CacheDirs
+getCacheDirsDefault key = do
+    base <- getXdgDirectory XdgCache cacheDir
+    pure $ cacheDirsUnder base key
+
+-- | Like 'getCacheDirsDefault', but roots the cache under @base@ instead of
+-- 'XdgCache', so callers can isolate a cache without touching @XDG_CACHE_HOME@.
+getCacheDirsIn :: FilePath -> CacheKey -> CacheDirs
+getCacheDirsIn base = cacheDirsUnder (base </> cacheDir)
+
+-- | The per-component cache folder under @base@. See 'getCacheDirsDefault'.
+cacheDirsUnder :: FilePath -> CacheKey -> CacheDirs
+cacheDirsUnder base (CacheKey key) = CacheDirs dir dir dir
+    where
+        dir = Just (base </> key)
 
 setNameCache :: NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }

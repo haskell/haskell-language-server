@@ -221,10 +221,10 @@ data SessionLoadingOptions = SessionLoadingOptions
   -- If a 'hie.yaml' is given, use it to load the cradle.
   -- Otherwise, use the provided project root directory to determine the cradle type.
   , loadCradle             :: Recorder (WithPriority Log) -> Maybe FilePath -> FilePath -> IO (HieBios.Cradle Void)
-  -- | Given the project name and a set of command line flags,
+  -- | Given the key of a component's cache folder,
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
-  , getCacheDirs           :: String -> Maybe B.ByteString -> [String] -> IO CacheDirs
+  , getCacheDirs           :: CacheKey -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
   }
@@ -955,12 +955,14 @@ packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
   newTargetDfs <- liftIO $ evalGhcEnv hscEnv $ setOptions haddockparse cfp opts (hsc_dflags hscEnv) rootDir
   let deps = componentDependencies opts ++ maybeToList hieYaml
   dep_info <- liftIO $ getDependencyInfo (fmap (toAbsolute rootDir) deps)
+  optsHash <- liftIO $ cacheKeyOptions (cmapWithPrio LogSessionGhc recorder)
+                         (componentRoot opts) (componentOptions opts)
   -- Now lookup to see whether we are combining with an existing HscEnv
   -- or making a new one. The lookup returns the HscEnv and a list of
   -- information about other components loaded into the HscEnv
   -- (unitId, DynFlag, Targets)
   liftIO $ modifyVar (hscEnvs sessionState) $
-    addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs dep_info newTargetDfs (hieYaml, cfp, opts)
+    addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs optsHash dep_info newTargetDfs (hieYaml, cfp, opts)
 
 {- Note [Modules the build tool has not been told about]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -883,8 +883,7 @@ runSessionWithTestConfig TestConfig{..} session =
                 -- directory instead of the shared 'XDG_CACHE_HOME'.
                 , argsGetHieDbLoc = getHieDbLocIn cacheDir
                 , argsSessionLoadingOptions = argsSessionLoadingOptions
-                  { getCacheDirs = \prefix mFirstHash opts ->
-                      pure $ getCacheDirsIn cacheDir  prefix mFirstHash opts
+                  { getCacheDirs = pure . getCacheDirsIn cacheDir
                   }
                 }
 
