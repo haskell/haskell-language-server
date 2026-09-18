@@ -84,7 +84,9 @@ import           Development.IDE.Spans.AtPoint         (LookupModule,
                                                         nameToLocation)
 import           Development.IDE.Types.Shake           (WithHieDb)
 import qualified GHC                                   as GHCGHC
+import qualified GHC.Data.EnumSet                      as EnumSet
 import           GHC.Generics                          (Generic)
+import qualified GHC.LanguageExtensions.Type           as LangExt (Extension (..))
 import           Ide.Plugin.Error                      (PluginError (..),
                                                         getNormalizedFilePathE)
 import           Ide.Plugin.Resolve                    (mkCodeActionWithResolveAndCommand)
@@ -790,8 +792,12 @@ getCPPmodule recorder state session t = do
       case mbContentsVFS of
         Just contents -> return $ Rope.toText contents
         Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
-    ps <- useOrFail state "GetAnnotatedParsedSource" NoParse GetAnnotatedParsedSource nt
-    if any (T.isPrefixOf "#if" . T.toLower) (T.lines contents)
+    -- ps <- useOrFail state "GetAnnotatedParsedSource" NoParse GetAnnotatedParsedSource nt
+    pm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule nt
+    let
+      ps = GHC.pm_parsed_source pm
+      extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
+    if LangExt.Cpp `EnumSet.member` extensions
       then do
         fixitiesRef <- newIORef mempty
         let parseModule x = do

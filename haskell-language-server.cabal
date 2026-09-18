@@ -719,6 +719,7 @@ library hls-retrie-plugin
     , containers
     , extra
     , ghc
+    , ghc-boot-th
     , ghcide                == 2.15.0.0
     , hashable
     , hls-plugin-api        == 2.15.0.0
