@@ -40,6 +40,7 @@ tests =
   testGroup "Retrie"
     [ inlineThisTests
     , unfoldTests
+    , foldTests
     ]
 
 -- These tests follow the convention that an expression @e@ is being inlined
@@ -116,6 +117,12 @@ unfoldTests =
         liftIO $ defContents @?= defExpected
     ]
 
+foldTests :: TestTree
+foldTests =
+  testGroup "Fold"
+    [ testFold "top level function" "FoldExpression" 2 0
+    ]
+
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
 testProvider title file line row expected = testCase title $ runWithRetrie $ do
     adoc <- openDoc (file <.> "hs") "haskell"
@@ -123,6 +130,9 @@ testProvider title file line row expected = testCase title $ runWithRetrie $ do
     let position = Position line row
     codeActions <- getCodeActions adoc $ Range position position
     liftIO $ map codeActionTitle codeActions @?= map Just expected
+
+testFold :: TestName -> FilePath -> UInt -> UInt -> TestTree
+testFold = testResolve $ titleStartsWith "Fold"
 
 testUnfold :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testUnfold = testResolve $ titleStartsWith "Unfold"
