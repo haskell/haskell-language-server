@@ -96,6 +96,7 @@ unfoldTests :: TestTree
 unfoldTests =
   testGroup "Unfold"
     [ testUnfold "top level function" "Identity" 4 0
+    , testUnfold "cpp branches" "CPP" 5 0
 
       -- The action is run in the defining module, but the changes all happen
       -- in the target module.
