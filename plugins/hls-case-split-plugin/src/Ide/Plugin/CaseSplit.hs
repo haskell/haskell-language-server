@@ -99,9 +99,7 @@ import           Development.IDE                       (FileDiagnostic (fdStruct
                                                         spanContainsRange)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
 import           Development.IDE.Core.PluginUtils      (activeDiagnosticsInRange,
-                                                        runActionE,
-                                                        runIdeActionE, useE,
-                                                        useWithStaleFastE)
+                                                        runActionE, useE)
 import           Development.IDE.Core.RuleTypes        (GhcSession (GhcSession),
                                                         TcModuleResult (tmrTypechecked),
                                                         TypeCheck (TypeCheck))
@@ -170,7 +168,8 @@ import           GHC.Parser.Annotation                 (EpUniToken (EpUniTok),
                                                         noSrcSpanA)
 import           GHC.Types.Name                        (HasOccName (occName),
                                                         Name)
-import           GHC.Types.Name.Reader                 (RdrName (Exact, Qual))
+import           GHC.Types.Name.Reader                 (RdrName, mkRdrQual,
+                                                        nameRdrName)
 import           GHC.Types.SrcLoc                      (GenLocated (L),
                                                         SrcSpan (RealSrcSpan),
                                                         combineSrcSpans)
@@ -285,9 +284,9 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 -- the qualifier should be.
 getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
 getPprCtx state nfp = do
-  (typechecked, hscEnvEq) <- runIdeActionE "CaseSplit.GetPprContext" (shakeExtras state) $ do
-    (typechecked, _) <- useWithStaleFastE TypeCheck nfp
-    (hscEnvEq, _) <- useWithStaleFastE GhcSession nfp
+  (typechecked, hscEnvEq) <- runActionE "CaseSplit.GetPprContext" state $ do
+    typechecked <- useE TypeCheck nfp
+    hscEnvEq <- useE GhcSession nfp
     return (typechecked, hscEnvEq)
   let reader = tcg_rdr_env (tmrTypechecked typechecked)
   pure $ mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
@@ -715,12 +714,18 @@ parseSimpleConMatch pprCtx arrow PACA{ paca_con = PmAltConLike con
 
 parseSimpleConMatch _ _ paca = Left $ showSDocUnsafe $ ppr paca
 
--- | Given a 'PrintUnqualified' context and a 'Name', return the 'Qual'ified
--- name or the 'Exact' name as needed.
+-- | Given a 'PrintUnqualified' context and a 'Name', return the corresponding
+-- 'RdrName', but qualified if needed.
 qualifyIfNeeded :: PrintUnqualified -> Name -> RdrName
-qualifyIfNeeded pprCtx name = case init $ T.split (== '.') $ printOutputableQualified pprCtx name of
-  [] -> Exact name
-  (T.intercalate "." -> moduleName) -> Qual (ModuleName $ mkFastString $ T.unpack moduleName) (occName name)
+qualifyIfNeeded pprCtx name
+  = let moduleName = printOutputableQualified pprCtx name
+                   & T.split (== '.')
+                   & init
+                   & T.intercalate "."
+    in case moduleName of
+        "" -> nameRdrName name -- XXX Or mkRdrUnqual? Or, since I know the name, I should use getRdrName? Or what?
+        _ -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
+                       (occName name)
 
 -- | Wrapper to the all the non-default info needed to construct an 'LMatch':
 --
