@@ -53,6 +53,7 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             gre_imp, gre_lcl,
                                                             gre_name, gre_par,
                                                             isBuiltInSyntax,
+                                                            isExact,
                                                             isInternalName,
                                                             lookupGRE_Name,
                                                             mkRdrUnqual,
@@ -137,7 +138,9 @@ extractInlineImports def tgt matches = sequence $ map importName names
       -- built-in syntax ([], (:), tuples) is not importable, so ignore it
       isBuiltInSyntax name ||
       -- already in scope in the target module
-      inScope targetEnv rdr name
+      inScope targetEnv rdr name ||
+      -- renamer synthesized names such as 'GHC.Internal.Base.>>'
+      isExact rdr
 
     importName (name, rdr)
       -- TODO(simon): Record dots
