@@ -170,7 +170,7 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , goldenWithClass "As many → as ->" "TAsManyUnicodeAsNot" $
       Prelude.flip inspectCodeAction [title]
-  , testGroup "In-file (No)UnicodeSyntax has priority over in-cabal (No)UnicodeSyntax"
+  , testGroup "In-cabal (No)UnicodeSyntax(?) × in-file (No)UnicodeSyntax(?)"
       $ let cabalFile = [
               "cabal-version:      3.4",
               "name:               foo",
@@ -216,8 +216,14 @@ codeActionTests = testGroup
                     , "→" , "->", "→"
                     ]
 
+            toYesNo :: Maybe Text -> Text
+            toYesNo Nothing = "-"
+            toYesNo (Just s)
+              | s == "UnicodeSyntax" = "Y"
+              | otherwise = "N"
+
             in zipWith3 applyPlugin
-                        [ "In cabal file: " <> (pack $ show inCabal) <> ", in source file: " <> (pack $ show inPragma)
+                        [ toYesNo inCabal <> " × " <> toYesNo inPragma
                           | inCabal <- alts
                           , inPragma <- alts ]
                         [ (cabalFile <> cabalOpt, pragma <> haskellFile)
