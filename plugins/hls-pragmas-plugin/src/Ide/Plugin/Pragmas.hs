@@ -10,6 +10,7 @@
 module Ide.Plugin.Pragmas
   ( suggestPragmaDescriptor
   , completionDescriptor
+  , hoverDescriptor
   , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
@@ -25,6 +26,7 @@ import           Data.List.Extra                          (nubOrdOn)
 import qualified Data.Map                                 as M
 import           Data.Maybe                               (mapMaybe)
 import qualified Data.Text                                as T
+import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE                          hiding (line)
 import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
@@ -60,12 +62,69 @@ completionDescriptor plId = (defaultPluginDescriptor plId "Provides completion o
   , pluginPriority = ghcideCompletionsPluginPriority + 1
   }
 
+hoverDescriptor :: PluginId -> PluginDescriptor IdeState
+hoverDescriptor plId = (defaultPluginDescriptor plId "Provides documentation for LANGUAGE pragmas")
+  { Ide.Types.pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentHover pragmaHover
+  }
+
 suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
 suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to disable warnings")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
     -- #3636 Suggestions to disable warnings should appear last.
   , pluginPriority = 0
   }
+
+pragmaHover :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentHover
+pragmaHover state _ params = do
+  let uri = params ^. L.textDocument . L.uri
+      position = params ^. L.position
+  contents <- liftIO $ runAction "Pragmas.GetUriContents" state $ getUriContents $ toNormalizedUri uri
+  pure $ case contents >>= pragmaAtPosition position . Rope.toText of
+    Just extension -> LSP.InL $ LSP.Hover (LSP.InL $ pragmaDocumentation extension) Nothing
+    Nothing -> LSP.InR LSP.Null
+
+pragmaAtPosition :: LSP.Position -> T.Text -> Maybe T.Text
+pragmaAtPosition (LSP.Position line column) contents = do
+  lineText <- atMay (T.splitOn "\n" contents) (fromIntegral line)
+  let column' = fromIntegral column
+  (_, _, extension) <- case filter (\(start, end, _) -> start <= column' && column' < end)
+      (languageExtensions lineText) of
+    range : _ -> Just range
+    []        -> Nothing
+  pure extension
+
+languageExtensions :: T.Text -> [(Int, Int, T.Text)]
+languageExtensions lineText = concatMap extensionsInPragma (T.breakOnAll "{-# LANGUAGE " lineText)
+  where
+    prefix = "{-# LANGUAGE "
+
+    extensionsInPragma (before, after) =
+      let body = T.takeWhile (/= '#') $ T.drop (T.length prefix) after
+          base = T.length before + T.length prefix
+      in extensionRanges base body
+
+    extensionRanges _ body | T.null body = []
+    extensionRanges base body =
+      let (extensionText, rest) = T.breakOn "," body
+          extension = T.strip extensionText
+          start = base + T.length body - T.length (extensionText <> rest) + leadingSpaces extensionText
+          end = start + T.length extension
+      in if T.null extension
+           then extensionRanges (base + T.length extensionText + separatorLength rest) (T.drop (separatorLength rest) rest)
+           else (start, end, extension) :
+                if T.null rest
+                  then []
+                  else extensionRanges (base + T.length extensionText + separatorLength rest) (T.drop (separatorLength rest) rest)
+
+    separatorLength rest = if T.null rest then 0 else 1
+    leadingSpaces = T.length . T.takeWhile (== ' ')
+
+atMay :: [a] -> Int -> Maybe a
+atMay xs index
+  | index < 0 = Nothing
+  | otherwise = case drop index xs of
+      value : _ -> Just value
+      []        -> Nothing
 
 -- ---------------------------------------------------------------------
 -- | Title and pragma
@@ -353,8 +412,172 @@ mkPragmaCompl insertText label detail =
 mkLanguagePragmaCompl :: T.Text -> LSP.CompletionItem
 mkLanguagePragmaCompl label =
   LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
+    (Just $ LSP.InR $ pragmaDocumentation label) Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+
+pragmaDocumentation :: T.Text -> LSP.MarkupContent
+pragmaDocumentation label = LSP.MarkupContent LSP.MarkupKind_Markdown $ T.unlines $
+  [ "**" <> label <> "**"
+  , ""
+  , description
+  ]
+  <> [ "Since GHC " <> since | not $ T.null since ]
+  <> [ "Included in " <> included | not $ T.null included ]
+  <> [ ""
+     , "[Read the GHC User's Guide](" <> url <> ")."
+     ]
+  where
+    extension = maybe label id (T.stripPrefix "No" label)
+    (url, baseDescription, since, included) = extensionDocumentation extension
+    description = case T.stripPrefix "No" label of
+      Just _  -> "Disable the `" <> extension <> "` language extension.\n\n" <> baseDescription
+      Nothing -> baseDescription
+
+extensionDocumentation :: T.Text -> (T.Text, T.Text, T.Text, T.Text)
+extensionDocumentation extension =
+  M.findWithDefault ("table.html", "", "", "") extension extensionDocs
+
+-- | Metadata mirrored from the GHC User's Guide extension table.
+extensionDocs :: M.Map T.Text (T.Text, T.Text, T.Text, T.Text)
+extensionDocs = M.fromList
+  [ ("AllowAmbiguousTypes", ("ambiguous_types.html#extension-AllowAmbiguousTypes", "Allow the user to write ambiguous types, and the type inference engine to infer them.", "7.8.1", ""))
+  , ("ApplicativeDo", ("applicative_do.html#extension-ApplicativeDo", "Allow do-notation statements to be desugared via `Applicative`.", "8.0.1", ""))
+  , ("Arrows", ("arrows.html#extension-Arrows", "Allow arrow notation (e.g. `proc`)", "6.8.1", ""))
+  , ("BangPatterns", ("strict.html#extension-BangPatterns", "Allow bang pattern syntax.", "6.8.1", "GHC2024, GHC2021"))
+  , ("BinaryLiterals", ("binary_literals.html#extension-BinaryLiterals", "Allow binary literal syntax.", "7.10.1", "GHC2024, GHC2021"))
+  , ("BlockArguments", ("block_arguments.html#extension-BlockArguments", "Allow `do` blocks and other constructs as function arguments.", "8.6.1", ""))
+  , ("CApiFFI", ("ffi.html#extension-CApiFFI", "Allow `foreign import`s to be declared with the `capi` calling convention.", "7.6.1", ""))
+  , ("ConstrainedClassMethods", ("constrained_class_methods.html#extension-ConstrainedClassMethods", "Allow class methods to have non-empty contexts.", "6.8.1", "GHC2024, GHC2021"))
+  , ("ConstraintKinds", ("constraint_kind.html#extension-ConstraintKinds", "Allow constraints to be used as types of kind `Constraint`.", "7.4.1", "GHC2024, GHC2021"))
+  , ("CPP", ("../phases.html#extension-CPP", "Resolve C preprocessor directives.", "6.8.1", ""))
+  , ("CUSKs", ("poly_kinds.html#extension-CUSKs", "Detect complete user-supplied kind signatures.", "8.10.1", ""))
+  , ("DataKinds", ("data_kinds.html#extension-DataKinds", "Allow use of data constructors in types.", "7.4.1", "GHC2024"))
+  , ("DatatypeContexts", ("datatype_contexts.html#extension-DatatypeContexts", "Allow contexts on `data` types.", "7.0.1", ""))
+  , ("DeepSubsumption", ("rank_polymorphism.html#extension-DeepSubsumption", "Use GHC's deep subsumption checking.", "9.2.4", ""))
+  , ("DefaultSignatures", ("default_signatures.html#extension-DefaultSignatures", "Allow default signatures for typeclass methods.", "7.2.1", ""))
+  , ("DeriveAnyClass", ("derive_any_class.html#extension-DeriveAnyClass", "Allow `deriving` syntax to be used for any class.", "7.10.1", ""))
+  , ("DeriveDataTypeable", ("deriving_extra.html#extension-DeriveDataTypeable", "Allow deriving for the `Data` class.", "6.8.1", "GHC2024, GHC2021"))
+  , ("DeriveFoldable", ("deriving_extra.html#extension-DeriveFoldable", "Allow deriving for the `Foldable` class.", "7.10.1", "GHC2024, GHC2021"))
+  , ("DeriveFunctor", ("deriving_extra.html#extension-DeriveFunctor", "Allow deriving for the `Functor` class.", "7.10.1", "GHC2024, GHC2021"))
+  , ("DeriveGeneric", ("generics.html#extension-DeriveGeneric", "Allow deriving of `Generic` instances.", "7.2.1", "GHC2024, GHC2021"))
+  , ("DeriveLift", ("deriving_extra.html#extension-DeriveLift", "Allow deriving for the `Lift` class", "8.0.1", "GHC2024, GHC2021"))
+  , ("DeriveTraversable", ("deriving_extra.html#extension-DeriveTraversable", "Allow deriving for the `Traversable` class.", "7.10.1", ""))
+  , ("DerivingStrategies", ("deriving_strategies.html#extension-DerivingStrategies", "Allow use of instance deriving strategies.", "8.2.1", "GHC2024"))
+  , ("DerivingVia", ("deriving_via.html#extension-DerivingVia", "Allow deriving instances `via` types of the same runtime representation.", "8.6.1", ""))
+  , ("DisambiguateRecordFields", ("disambiguate_record_fields.html#extension-DisambiguateRecordFields", "Automatically disambiguate some record field references.", "6.8.1", "GHC2024"))
+  , ("DoAndIfThenElse", ("doandifthenelse.html#extension-DoAndIfThenElse", "Allow semicolons in `if` expressions.", "7.0.1", "GHC2024, GHC2021"))
+  , ("DuplicateRecordFields", ("duplicate_record_fields.html#extension-DuplicateRecordFields", "Allow definition of record types with identically-named fields.", "8.0.1", ""))
+  , ("EmptyCase", ("empty_case.html#extension-EmptyCase", "Allow `case` expressions with no alternatives.", "7.8.1", "GHC2024, GHC2021"))
+  , ("EmptyDataDecls", ("nullary_types.html#extension-EmptyDataDecls", "Allow definition of empty `data` types.", "6.8.1", "GHC2024, GHC2021"))
+  , ("EmptyDataDeriving", ("empty_data_deriving.html#extension-EmptyDataDeriving", "Allow deriving instances of standard type classes for empty data types.", "8.4.1", "GHC2024, GHC2021"))
+  , ("ExistentialQuantification", ("existential_quantification.html#extension-ExistentialQuantification", "Allow existentially quantified type variables in types.", "6.8.1", "GHC2024, GHC2021"))
+  , ("ExplicitForAll", ("explicit_forall.html#extension-ExplicitForAll", "Allow explicit universal quantification.", "6.12.1", "GHC2024, GHC2021"))
+  , ("ExplicitLevelImports", ("template_haskell.html#extension-ExplicitLevelImports", "Allow explicit level imports in Template Haskell.", "9.14.1", ""))
+  , ("ExplicitNamespaces", ("explicit_namespaces.html#extension-ExplicitNamespaces", "Allow use of the `type` and `data` keywords to specify the namespace of entries in import/export lists and in other contexts.", "7.6.1", "GHC2024"))
+  , ("ExtendedDefaultRules", ("../ghci.html#extension-ExtendedDefaultRules", "Use GHCi's extended default rules in a normal module.", "6.8.1", ""))
+  , ("ExtendedLiterals", ("extended_literals.html#extension-ExtendedLiterals", "Allow numeric literal postfix syntax for unboxed integers.", "9.8.1", ""))
+  , ("FieldSelectors", ("field_selectors.html#extension-FieldSelectors", "Make record field selector functions visible in expressions.", "9.2.1", "GHC2024, GHC2021"))
+  , ("FlexibleContexts", ("flexible_contexts.html#extension-FlexibleContexts", "Remove some restrictions on class contexts", "6.8.1", "GHC2024, GHC2021"))
+  , ("FlexibleInstances", ("instances.html#extension-FlexibleInstances", "Allow instance heads to mention arbitrary nested types.", "6.8.1", "GHC2024, GHC2021"))
+  , ("ForeignFunctionInterface", ("ffi.html#extension-ForeignFunctionInterface", "Allow foreign function interface syntax.", "6.8.1", "GHC2024, GHC2021"))
+  , ("FunctionalDependencies", ("functional_dependencies.html#extension-FunctionalDependencies", "Allow functional dependencies to be given on typeclass declarations.", "6.8.1", ""))
+  , ("GADTs", ("gadt.html#extension-GADTs", "Allow definition of generalised algebraic data types.", "6.8.1", "GHC2024"))
+  , ("GADTSyntax", ("gadt_syntax.html#extension-GADTSyntax", "Allow generalised algebraic data type syntax.", "7.2.1", "GHC2024, GHC2021"))
+  , ("GeneralisedNewtypeDeriving", ("newtype_deriving.html#extension-GeneralisedNewtypeDeriving", "Allow instances to be derived via `newtype` deriving.", "6.8.1. British spelling since 8.6.1.", "GHC2024, GHC2021"))
+  , ("GHC2021", ("control.html#extension-GHC2021", "Use GHC’s set of default language extensions from 2021", "9.2.1", ""))
+  , ("GHC2024", ("control.html#extension-GHC2024", "Use GHC’s set of default language extensions from 2024", "9.10.1", ""))
+  , ("GHCForeignImportPrim", ("ffi.html#extension-GHCForeignImportPrim", "Allow `prim` calling convention. Intended for internal use only.", "6.12.1", ""))
+  , ("Haskell2010", ("control.html#extension-Haskell2010", "Use the Haskell 2010 language edition.", "", ""))
+  , ("Haskell98", ("control.html#extension-Haskell98", "Use the Haskell 98 language edition.", "", ""))
+  , ("HexFloatLiterals", ("hex_float_literals.html#extension-HexFloatLiterals", "Allow hexadecimal floating-point literal syntax.", "8.4.1", "GHC2024, GHC2021"))
+  , ("ImplicitParams", ("implicit_parameters.html#extension-ImplicitParams", "Allow implicit parameter constraints.", "6.8.1", ""))
+  , ("ImplicitPrelude", ("rebindable_syntax.html#extension-ImplicitPrelude", "Implicitly import `Prelude`.", "6.8.1", ""))
+  , ("ImplicitStagePersistence", ("template_haskell.html#extension-ImplicitStagePersistence", "Allow identifiers to be used at different levels from where they are defined.", "9.14.1", ""))
+  , ("ImportQualifiedPost", ("import_qualified_post.html#extension-ImportQualifiedPost", "Allows the syntax `import M qualified`", "8.10.1", "GHC2024, GHC2021"))
+  , ("ImpredicativeTypes", ("impredicative_types.html#extension-ImpredicativeTypes", "Allow impredicative types.", "9.2.1 (unreliable in 6.10 - 9.0)", ""))
+  , ("IncoherentInstances", ("instances.html#extension-IncoherentInstances", "Allow definitions of instances that may result in incoherence.", "6.8.1", ""))
+  , ("InstanceSigs", ("instances.html#extension-InstanceSigs", "Allow type signatures to be written for instance methods.", "7.6.1", "GHC2024, GHC2021"))
+  , ("InterruptibleFFI", ("ffi.html#extension-InterruptibleFFI", "Allow `interruptible` FFI imports.", "7.2.1", ""))
+  , ("KindSignatures", ("kind_signatures.html#extension-KindSignatures", "Allow kind signatures to be given for types.", "6.8.1", "GHC2024, GHC2021"))
+  , ("LambdaCase", ("lambda_case.html#extension-LambdaCase", "Allow `\\case` expressions.", "7.6.1", "GHC2024"))
+  , ("LexicalNegation", ("lexical_negation.html#extension-LexicalNegation", "Use whitespace to determine whether the minus sign stands for negation or subtraction.", "9.0.1", ""))
+  , ("LiberalTypeSynonyms", ("liberal_type_synonyms.html#extension-LiberalTypeSynonyms", "Relax many of Haskell 98's rules on type synonym definitions.", "6.8.1", ""))
+  , ("LinearTypes", ("linear_types.html#extension-LinearTypes", "Allow writing of linear arrow types. Implies `MonoLocalBinds`.", "9.0.1", ""))
+  , ("ListTuplePuns", ("data_kinds.html#extension-ListTuplePuns", "Enable punning for list, tuple and sum types.", "9.10.1", ""))
+  , ("MagicHash", ("magic_hash.html#extension-MagicHash", "Allow `#` as a postfix modifier on identifiers.", "6.8.1", ""))
+  , ("MonadComprehensions", ("monad_comprehensions.html#extension-MonadComprehensions", "Allow list comprehension syntax to be used at monads other than `List`.", "7.2.1", ""))
+  , ("MonoLocalBinds", ("let_generalisation.html#extension-MonoLocalBinds", "Do not generalise types of local bindings.", "6.12.1", "GHC2024"))
+  , ("MonomorphismRestriction", ("monomorphism.html#extension-MonomorphismRestriction", "Apply the Haskell 2010 monomorphism restriction.", "6.8.1", ""))
+  , ("MultilineStrings", ("multiline_strings.html#extension-MultilineStrings", "Enable multiline string literals.", "9.12.1", ""))
+  , ("MultiParamTypeClasses", ("multi_param_type_classes.html#extension-MultiParamTypeClasses", "Enable multi-parameter type classes.", "6.8.1", "GHC2024, GHC2021"))
+  , ("MultiWayIf", ("multiway_if.html#extension-MultiWayIf", "Allow multi-way `if`-expressions.", "7.6.1", ""))
+  , ("NamedDefaults", ("named_defaults.html#extension-NamedDefaults", "Enable `default` declarations with explicitly named class, extending Type class defaulting.", "9.12.1", ""))
+  , ("NamedFieldPuns", ("record_puns.html#extension-NamedFieldPuns", "Allow record field punning syntax.", "6.10.1", "GHC2024, GHC2021"))
+  , ("NamedWildCards", ("partial_type_signatures.html#extension-NamedWildCards", "Allow named wildcards in types.", "7.10.1", "GHC2024, GHC2021"))
+  , ("NegativeLiterals", ("negative_literals.html#extension-NegativeLiterals", "Allow negative numeric literal syntax.", "7.8.1", ""))
+  , ("NondecreasingIndentation", ("../bugs.html#extension-NondecreasingIndentation", "Allow nested contexts to be at the same indentation level as its enclosing context.", "7.2.1", ""))
+  , ("NPlusKPatterns", ("nk_patterns.html#extension-NPlusKPatterns", "Allow use of `n+k` patterns.", "6.12.1", ""))
+  , ("NullaryTypeClasses", ("nullary_type_classes.html#extension-NullaryTypeClasses", "Deprecated, does nothing. nullary type classes are now enabled using `MultiParamTypeClasses`.", "7.8.1", ""))
+  , ("NumDecimals", ("num_decimals.html#extension-NumDecimals", "Allow use of scientific notation syntax for integer literals.", "7.8.1", ""))
+  , ("NumericUnderscores", ("numeric_underscores.html#extension-NumericUnderscores", "Allow underscores in numeric literals.", "8.6.1", "GHC2024, GHC2021"))
+  , ("OrPatterns", ("or_patterns.html#extension-OrPatterns", "Enable or-patterns.", "9.12.1", ""))
+  , ("OverlappingInstances", ("instances.html#extension-OverlappingInstances", "Allow definition of overlapping instances.", "6.8.1", ""))
+  , ("OverloadedLabels", ("overloaded_labels.html#extension-OverloadedLabels", "Allow overloaded label syntax.", "8.0.1", ""))
+  , ("OverloadedLists", ("overloaded_lists.html#extension-OverloadedLists", "Desugar list syntax via the `IsList` class.", "7.8.1", ""))
+  , ("OverloadedRecordDot", ("overloaded_record_dot.html#extension-OverloadedRecordDot", "Allow `.` to be used for record field access.", "9.2.0", ""))
+  , ("OverloadedRecordUpdate", ("overloaded_record_update.html#extension-OverloadedRecordUpdate", "Allow `.` syntax in record updates", "9.2.0", ""))
+  , ("OverloadedStrings", ("overloaded_strings.html#extension-OverloadedStrings", "Desugar string literals via `IsString` class.", "6.8.1", ""))
+  , ("PackageImports", ("package_qualified_imports.html#extension-PackageImports", "Allow package-qualified `import` syntax.", "6.10.1", ""))
+  , ("ParallelListComp", ("parallel_list_comprehensions.html#extension-ParallelListComp", "Allow parallel list comprehension syntax.", "6.8.1", ""))
+  , ("PartialTypeSignatures", ("partial_type_signatures.html#extension-PartialTypeSignatures", "Allow type signatures to contain wildcards.", "7.10.1", ""))
+  , ("PatternGuards", ("pattern_guards.html#extension-PatternGuards", "Allow pattern guards syntax.", "6.8.1", ""))
+  , ("PatternSynonyms", ("pattern_synonyms.html#extension-PatternSynonyms", "Allow definition of pattern synonyms.", "7.8.1", ""))
+  , ("PolyKinds", ("poly_kinds.html#extension-PolyKinds", "Allow kind polymorphism.", "7.4.1", "GHC2024, GHC2021"))
+  , ("PostfixOperators", ("rebindable_syntax.html#extension-PostfixOperators", "Allow the use of postfix operators.", "7.10.1", "GHC2024, GHC2021"))
+  , ("QualifiedDo", ("qualified_do.html#extension-QualifiedDo", "Allow qualified `do`-notation desugaring.", "9.0.1", ""))
+  , ("QualifiedStrings", ("qualified_strings.html#extension-QualifiedStrings", "Enable qualified string literals.", "9.16.1", ""))
+  , ("QuantifiedConstraints", ("quantified_constraints.html#extension-QuantifiedConstraints", "Allow `forall` quantifiers in constraints.", "8.6.1", ""))
+  , ("QuasiQuotes", ("template_haskell.html#extension-QuasiQuotes", "Allow quasiquotation syntax.", "6.10.1", ""))
+  , ("Rank2Types", ("rank_polymorphism.html#extension-Rank2Types", "Enable rank-2 types.", "6.8.1", ""))
+  , ("RankNTypes", ("rank_polymorphism.html#extension-RankNTypes", "Allow types of rank greater than one.", "6.8.1", "GHC2024, GHC2021"))
+  , ("RebindableSyntax", ("rebindable_syntax.html#extension-RebindableSyntax", "Allow rebinding of builtin syntax.", "7.0.1", ""))
+  , ("RecordWildCards", ("record_wildcards.html#extension-RecordWildCards", "Allow use of record wildcard syntax.", "6.8.1", ""))
+  , ("RecursiveDo", ("recursive_do.html#extension-RecursiveDo", "Allow recursive do (e.g. `mdo`) notation.", "6.8.1", ""))
+  , ("RelaxedPolyRec", ("relaxed_poly_rec.html#extension-RelaxedPolyRec", "Generalised typing of mutually recursive bindings.", "6.8.1", "GHC2024, GHC2021"))
+  , ("RequiredTypeArguments", ("required_type_arguments.html#extension-RequiredTypeArguments", "Allow use of required type argument syntax in terms.", "9.10.1", ""))
+  , ("RoleAnnotations", ("roles.html#extension-RoleAnnotations", "Allow role annotation syntax.", "7.8.1", "GHC2024"))
+  , ("Safe", ("safe_haskell.html#extension-Safe", "Enable the Safe Haskell Safe mode.", "7.2.1", ""))
+  , ("ScopedTypeVariables", ("scoped_type_variables.html#extension-ScopedTypeVariables", "Lexically scoped explicitly-introduced type variables.", "6.8.1", "GHC2024, GHC2021"))
+  , ("StandaloneDeriving", ("standalone_deriving.html#extension-StandaloneDeriving", "Allow standalone instance deriving declarations.", "6.8.1", "GHC2024, GHC2021"))
+  , ("StandaloneKindSignatures", ("poly_kinds.html#extension-StandaloneKindSignatures", "Allow standalone kind signature declarations.", "8.10.1", "GHC2024, GHC2021"))
+  , ("StarIsType", ("poly_kinds.html#extension-StarIsType", "Treat `*` as `Data.Kind.Type`.", "8.6.1", "GHC2024, GHC2021"))
+  , ("StaticPointers", ("static_pointers.html#extension-StaticPointers", "Allow `static` syntax.", "7.10.1", ""))
+  , ("Strict", ("strict.html#extension-Strict", "Make bindings in the current module strict by default.", "8.0.1", ""))
+  , ("StrictData", ("strict.html#extension-StrictData", "Treat datatype fields as strict by default.", "8.0.1", ""))
+  , ("TemplateHaskell", ("template_haskell.html#extension-TemplateHaskell", "Allow Template Haskell's splice and quotation syntax.", "6.0. Typed splices introduced in GHC 7.8.1.", ""))
+  , ("TemplateHaskellQuotes", ("template_haskell.html#extension-TemplateHaskellQuotes", "Allow Template Haskell's quotation syntax.", "8.0.1", ""))
+  , ("TraditionalRecordSyntax", ("traditional_record_syntax.html#extension-TraditionalRecordSyntax", "Allow traditional record syntax (e.g. `C {f = x}`).", "7.4.1", ""))
+  , ("TransformListComp", ("generalised_list_comprehensions.html#extension-TransformListComp", "Allow generalised list comprehension syntax.", "6.10.1", ""))
+  , ("Trustworthy", ("safe_haskell.html#extension-Trustworthy", "Enable the Safe Haskell Trustworthy mode.", "7.2.1", ""))
+  , ("TupleSections", ("tuple_sections.html#extension-TupleSections", "Allow use of tuple section synxtax.", "6.12", "GHC2024, GHC2021"))
+  , ("TypeAbstractions", ("type_abstractions.html#extension-TypeAbstractions", "Allow type abstraction syntax in patterns and type variable binders.", "9.8.1", ""))
+  , ("TypeApplications", ("type_applications.html#extension-TypeApplications", "Allow type application syntax in terms and types.", "8.0.1", "GHC2024, GHC2021"))
+  , ("TypeData", ("type_data.html#extension-TypeData", "Allow `type data` declarations.", "9.6.1", ""))
+  , ("TypeFamilies", ("type_families.html#extension-TypeFamilies", "Allow definition of type families.", "6.8.1", ""))
+  , ("TypeFamilyDependencies", ("type_families.html#extension-TypeFamilyDependencies", "Allow injectivity annotations on type families.", "8.0.1", ""))
+  , ("TypeInType", ("poly_kinds.html#extension-TypeInType", "Deprecated. Enable kind polymorphism and datatype promotion.", "8.0.1", ""))
+  , ("TypeOperators", ("type_operators.html#extension-TypeOperators", "Allow type constructors to be given operator names.", "6.8.1", "GHC2024, GHC2021"))
+  , ("TypeSynonymInstances", ("instances.html#extension-TypeSynonymInstances", "Allow type synonyms to be mentioned in instance heads.", "6.8.1", "GHC2024, GHC2021"))
+  , ("UnboxedSums", ("primitives.html#extension-UnboxedSums", "Allow the use of unboxed sum syntax.", "8.2.1", ""))
+  , ("UnboxedTuples", ("primitives.html#extension-UnboxedTuples", "Allow the use of unboxed tuple syntax.", "6.8.1", ""))
+  , ("UndecidableInstances", ("instances.html#extension-UndecidableInstances", "Allow definition of instances which may make solving undecidable.", "6.8.1", ""))
+  , ("UndecidableSuperClasses", ("undecidable_super_classes.html#extension-UndecidableSuperClasses", "Allow all superclass constraints, including those that may result in non-termination of the typechecker.", "8.0.1", ""))
+  , ("UnicodeSyntax", ("unicode_syntax.html#extension-UnicodeSyntax", "Enable unicode syntax.", "6.8.1", ""))
+  , ("UnliftedDatatypes", ("primitives.html#extension-UnliftedDatatypes", "Allow the definition of unlifted data types.", "9.2.1", ""))
+  , ("UnliftedFFITypes", ("ffi.html#extension-UnliftedFFITypes", "Allow the types of foreign imports to contain certain unlifted types.", "6.8.1", ""))
+  , ("UnliftedNewtypes", ("primitives.html#extension-UnliftedNewtypes", "Allow definition of unlifted newtypes.", "8.10.1", ""))
+  , ("Unsafe", ("safe_haskell.html#extension-Unsafe", "Enable Safe Haskell Unsafe mode.", "7.4.1", ""))
+  , ("ViewPatterns", ("view_patterns.html#extension-ViewPatterns", "Allow view pattern syntax.", "6.10.1", ""))]
 
 mkGhcOptionCompl :: Range -> T.Text -> LSP.CompletionItem
 mkGhcOptionCompl editRange completedFlag =
