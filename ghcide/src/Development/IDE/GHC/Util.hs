@@ -87,10 +87,9 @@ modifyDynFlags f = do
 -- | Given a 'Unit' try and find the associated 'PackageConfig' in the environment.
 lookupPackageConfig :: Unit -> HscEnv -> Maybe GHC.UnitInfo
 lookupPackageConfig unit env =
-    Compat.lookupUnit' False unitState prClsre unit
+    Compat.lookupUnit' False unitState unit
     where
         unitState = Compat.getUnitInfoMap env
-        prClsre = preloadClosureUs env
 
 
 -- | Convert from the @text@ package to the @GHC@ 'StringBuffer'.
