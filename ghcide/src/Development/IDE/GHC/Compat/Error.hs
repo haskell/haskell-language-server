@@ -26,6 +26,7 @@ module Development.IDE.GHC.Compat.Error (
   _TcRnMessageWithCtx,
   _GhcPsMessage,
   _GhcDsMessage,
+  _DsMessage,
   _GhcDriverMessage,
   _ReportHoleError,
   _TcRnIllegalWildcardInType,
@@ -79,6 +80,11 @@ _GhcDsMessage :: Prism' GhcMessage DsMessage
 _GhcDsMessage = prism' GhcDsMessage (\case
   GhcDsMessage dsMsg -> Just dsMsg
   _ -> Nothing)
+
+_DsMessage :: Fold GhcMessage DsMessage
+_DsMessage = prism' GhcDsMessage $ \case
+  GhcDsMessage dsmsg -> Just dsmsg
+  _ -> Nothing
 
 _GhcDriverMessage :: Prism' GhcMessage DriverMessage
 _GhcDriverMessage = prism' GhcDriverMessage (\case

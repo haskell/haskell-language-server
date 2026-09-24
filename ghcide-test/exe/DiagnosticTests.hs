@@ -231,7 +231,7 @@ tests = testGroup "diagnostics"
       diags <- waitForDiagnosticsSource "not found"
       liftIO $ assertBool ("expected ModuleA to be unresolvable, got: " <> show diags)
         (any (T.isInfixOf "ModuleA" . (^. L.message)) diags)
-  , testWithDummyPlugin "import path order determines module file"
+  , testWithDummyPlugin' "import path order determines module file"
         (mkIdeTestFs
           [ -- GHC searches import paths in order: with -isrcA -isrcB, a module
             -- present in both directories must resolve to the file in srcA.
@@ -257,13 +257,13 @@ tests = testGroup "diagnostics"
               ]
             ]
           ]
-        ) $ do
+        ) $ \sessionDir -> do
       tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
       liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
-      assertDefsFile ("srcA" </> "C.hs") locs
+      assertDefsFile (sessionDir </> "srcA" </> "C.hs") locs
   , testWithDummyPlugin' "unlistable directory hides only itself"
         (mkIdeTestFs
           [ directCradle ["-isrc", "B"]

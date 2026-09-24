@@ -213,7 +213,7 @@ tests =
         changeDoc doc []
         _ <- waitForTypecheck doc
         Right keys <- getLastBuildKeys
-        let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
+        let ifaceKeys = filter (\k -> any (`T.isPrefixOf` k) ["GetModIface", "GetModArtefacts"]) keys
         liftIO $ ifaceKeys @?= []
     , goldenWithEval "Works with OPTIONS_GHC -O1" "TGHCOptionO1" "hs"
   ]

@@ -48,18 +48,20 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-alternate-number-format-plugin` | 2    |                          |
 | `hls-cabal-fmt-plugin`               | 2    |                          |
 | `hls-cabal-gild-plugin`              | 2    |                          |
+| `hls-case-split-plugin`              | 2    | <9.14.1                  |
 | `hls-class-plugin`                   | 2    |                          |
 | `hls-change-type-signature-plugin`   | 2    |                          |
 | `hls-eval-plugin`                    | 2    |                          |
 | `hls-signature-help-plugin`          | 2    |                          |
 | `hls-explicit-fixity-plugin`         | 2    |                          |
 | `hls-explicit-record-fields-plugin`  | 2    |                          |
-| `hls-fourmolu-plugin`                | 2    | 9.14.1                   |
+| `hls-export-plugin`                  | 2    |                          |
+| `hls-fourmolu-plugin`                | 2    |                          |
 | `hls-gadt-plugin`                    | 2    |                          |
 | `hls-hlint-plugin`                   | 2    | 9.10 [1], 9.14.1         |
 | `hls-notes-plugin`                   | 2    |                          |
 | `hls-qualify-imported-names-plugin`  | 2    |                          |
-| `hls-ormolu-plugin`                  | 2    | 9.14.1                   |
+| `hls-ormolu-plugin`                  | 2    |                          |
 | `hls-rename-plugin`                  | 2    |                          |
 | `hls-stylish-haskell-plugin`         | 2    | 9.14.1                   |
 | `hls-overloaded-record-dot-plugin`   | 2    |                          |

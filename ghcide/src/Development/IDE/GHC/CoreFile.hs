@@ -8,6 +8,7 @@ module Development.IDE.GHC.CoreFile
   , codeGutsToCoreFile
   , typecheckCoreFile
   , readBinCoreFile
+  , readBinCoreFileHash
   , writeBinCoreFile
   , getImplicitBinds
   ) where
@@ -54,8 +55,12 @@ readBinCoreFile
 readBinCoreFile name_cache fat_hi_path = do
     bh <- readBinMem fat_hi_path
     file <- getWithUserData name_cache bh
-    !fp <- Util.getFileHash fat_hi_path
+    !fp <- readBinCoreFileHash fat_hi_path
     return (file, fp)
+
+-- The fingerprint of a core file.
+readBinCoreFileHash :: FilePath -> IO Fingerprint
+readBinCoreFileHash = Util.getFileHash
 
 -- | Write a core file
 writeBinCoreFile :: DynFlags -> FilePath -> CoreFile -> IO Fingerprint

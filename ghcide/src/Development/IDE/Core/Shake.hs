@@ -1226,7 +1226,11 @@ data RuleBody k v
     }
   | RuleWithOldValue (k -> NormalizedFilePath -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 
--- | Define a new Rule with early cutoff
+-- | Define a rule that can rerun without dirtying its dependents.
+--
+-- A rerun normally prompts every dependent to rerun. Early cutoff content
+-- addresses the result, so hls-graph reruns dependents only when the returned
+-- fingerprint has changed.
 defineEarlyCutoff
     :: IdeRule k v
     => Recorder (WithPriority Log)

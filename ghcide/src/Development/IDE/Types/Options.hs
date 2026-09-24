@@ -170,6 +170,9 @@ defaultSkipProgress key = case () of
     -- don't do progress for GetModificationTime as there are lot of redundant nodes
     -- (for the interface files)
     _ | Just GetModificationTime_{} <- cast key -> True
+    -- don't do progress for these, counted via GetModArtefacts instead
+    _ | Just GetModIface <- cast key            -> True
+    _ | Just GetCoreFileHash <- cast key        -> True
     _                                           -> False
 
 

@@ -11,11 +11,12 @@ The Haskell tooling dream is near, we need your help!
 ## Building
 
 Clone the repository:
+
 ```shell
-$ git clone https://github.com/haskell/haskell-language-server
+git clone https://github.com/haskell/haskell-language-server
 ```
 
-#### Note for contributors using WSL (Windows Subsystem for Linux)
+**Note** for contributors using WSL (Windows Subsystem for Linux)
 
 When building HLS in WSL, clone and build the repository from the Linux filesystem (e.g. `~/dev`), not from Windows-mounted paths like `/mnt/c`, as this can cause permission or build issues.
 
@@ -39,14 +40,15 @@ $ cabal build
 ```
 
 If you encounter memory-related build failures, try reducing peak memory usage by running:
-```
+
+```shell
 cabal build -j1
 ```
 
 ### Building with Stack
 
 ```shell
-$ stack build
+stack build
 ```
 
 ### Building with Nix
@@ -54,10 +56,10 @@ $ stack build
 The instructions below show how to set up a Cachix binary cache and open a Nix shell for local development.
 
 ```shell
-$ cachix use haskell-language-server
-$ nix-shell
-$ cabal update
-$ cabal build
+cachix use haskell-language-server
+nix-shell
+cabal update
+cabal build
 ```
 
 #### Flakes support
@@ -65,10 +67,10 @@ $ cabal build
 If you are using Nix 2.4 style commands (enabled by `experimental-features = nix-command`),
 you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
 
-* `nix develop` - default GHC version,
-* `nix develop .#shell-ghc90` - GHC 9.0.1 (substitute GHC version as appropriate).
+- `nix develop` - default GHC version,
+- `nix develop .#shell-ghc90` - GHC 9.0.1 (substitute GHC version as appropriate).
 
-If you are looking for a Nix expression to create `haskell-language-server` binaries, see https://github.com/haskell/haskell-language-server/issues/122
+If you are looking for a Nix expression to create `haskell-language-server` binaries, see <https://github.com/haskell/haskell-language-server/issues/122>
 
 ## Testing
 
@@ -83,19 +85,19 @@ Other project packages, like the core library or plugins, can have their own tes
 Running all the tests
 
 ```bash
-$ cabal test
+cabal test
 ```
 
 Running just the functional tests
 
 ```bash
-$ cabal test func-test
+cabal test func-test
 ```
 
 Running just the wrapper tests
 
 ```bash
-$ cabal test wrapper-test
+cabal test wrapper-test
 ```
 
 Running just the tests for a specific plugin
@@ -113,14 +115,14 @@ Tasty supports providing
 line arguments, to select the specific tests to run.
 
 ```bash
-$ cabal test func-test --test-option "-p hlint"
+cabal test func-test --test-option "-p hlint"
 ```
 
 The above recompiles everything every time you use a different test option though.
 An alternative, which only recompiles when tests (or dependencies) change is to pass the `TASTY_PATTERN` environment variable:
 
 ```bash
-$ TASTY_PATTERN='hlint' cabal test func-test
+TASTY_PATTERN='hlint' cabal test func-test
 ```
 
 ## Using HLS on HLS code
@@ -136,6 +138,7 @@ cradle:
 ```
 
 ## Manually testing your hacked HLS
+
 If you want to test HLS while hacking on it (you can even test it on HLS codebase itself, see previous section), you need to:
 
 1. (Once) Find the path to the hacked HLS you build
@@ -144,10 +147,13 @@ If you want to test HLS while hacking on it (you can even test it on HLS codebas
 4. (Every time you change the HLS code) Restart the LSP workspace
 
 ### Find the path to your HLS build
+
 Note that unless you change the GHC version or the HLS version between builds, the path should remain the same, this is why you need to set it only once.
 
 #### Using Cabal
+
 Run:
+
 ```shell
 $ cabal build exe:haskell-language-server && cabal list-bin exe:haskell-language-server
 [..]
@@ -155,7 +161,9 @@ $ cabal build exe:haskell-language-server && cabal list-bin exe:haskell-language
 ```
 
 #### Using Stack
+
 Run:
+
 ```shell
 $ echo $(pwd)/$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server
 [..]
@@ -165,33 +173,41 @@ $ echo $(pwd)/$(stack path --dist-dir)/build/haskell-language-server/haskell-lan
 ### Configuring your editor to use your HLS build
 
 #### Configuring VS Code
+
 When using VS Code you can set up each project to use a specific HLS executable:
 
 - If it doesn't already exist in your project directory, create a directory called `.vscode`.
 - In the `.vscode` directory create a file called `settings.json` with the below contents.
-```json
-{
-    "haskell.serverExecutablePath": "/path/to/your/hacked/haskell-language-server"
-}
-```
+
+  ```json
+  {
+      "haskell.serverExecutablePath": "/path/to/your/hacked/haskell-language-server"
+  }
+  ```
 
 #### Configuring Emacs
+
 There are several ways to configure the HLS server path, each of which depends on your choice of language server provider (e.g., emacs-lsp or eglot). If using emacs-lsp, you need to configure the variable `lsp-haskell-server-path`:
+
 - `M-x customize-group<RET>lsp-haskell<RET>Lsp Haskell Server Path`
 - Evaluate `(setq lsp-haskell-server-path "/path/to/your/hacked/haskell-language-server")`
 - Create a file `.dir-locals.el` with the following content:
-```lisp
-((haskell-mode . ((lsp-haskell-server-path . "/path/to/your/hacked/haskell-language-server"))))
-```
+
+  ```lisp
+  ((haskell-mode . ((lsp-haskell-server-path . "/path/to/your/hacked/haskell-language-server"))))
+  ```
 
 If using eglot, you need to configure the variable `eglot-server-programs`, which is an alist associating major-modes to executables:
+
 - Evaluate `(setf (alist-get 'haskell-mode eglot-server-programs) ("/path/to/your/hacked/haskell-language-server" "--lsp"))`
 - Create a file `.dir-locals.el` with the following content:
-```lisp
-((haskell-mode . ((eglot-server-programs . (('haskell-mode . ("/path/to/your/hacked/haskell-language-server" "--lsp")))))))
-```
+
+  ```lisp
+  ((haskell-mode . ((eglot-server-programs . (('haskell-mode . ("/path/to/your/hacked/haskell-language-server" "--lsp")))))))
+  ```
 
 ### Rebuild HLS
+
 - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - With Cabal: `cabal build exe:haskell-language-server`
 
@@ -254,7 +270,7 @@ You need to install some Python prerequisites. You can either `pip install -r do
 
 Then to build and preview the documentation:
 
-```
+```sh
 cd docs
 make html
 firefox _build/html/index.html

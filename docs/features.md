@@ -133,6 +133,15 @@ Completions for language pragmas.
 
 Language extension completion items include documentation.
 
+### `case`/`\case` pattern completion
+
+Provided by: `hls-case-split-plugin`
+
+Completion of the patterns of a `case`/`\case` expression.
+
+Note: The number of patterns that are inserted is limited to the value of
+`-fmax-uncovered-patterns` plus 1.
+
 ## Formatting
 
 Format your code with various Haskell code formatters.

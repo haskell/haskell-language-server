@@ -120,7 +120,7 @@ suggestionsTests =
             { testConfigCaps = noLiteralCaps
             , testDirLocation = Left testDir
             , testPluginDescriptor = hlintPlugin
-            , testShiftRoot = True} $ const $ do
+            , testCwdHandling = HarnessCwdShift} $ const $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- hlintCaptureKick
@@ -350,7 +350,7 @@ runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir = failIfSessionTimeout .
     runSessionWithTestConfig def
       { testConfigCaps = codeActionNoResolveCaps
-      , testShiftRoot = True
+      , testCwdHandling = HarnessCwdShift
       , testDirLocation = Left (testDir </> subdir)
       , testPluginDescriptor = hlintPlugin
       }
@@ -466,7 +466,7 @@ setupGoldenHlintTest :: TestName -> FilePath -> ClientCapabilities -> (TextDocum
 setupGoldenHlintTest testName path config =
     goldenWithTestConfig def
     { testConfigCaps = config
-    , testShiftRoot = True
+    , testCwdHandling = HarnessCwdShift
     , testPluginDescriptor = hlintPlugin
     , testDirLocation = Right tree
     } testName tree path "expected" "hs"
