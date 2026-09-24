@@ -180,11 +180,11 @@ N + M + 1 :: Nat
 "Other"
 ```
 
-IO expressions can also be evaluated but their output to stdout/stderr is NOT captured:
+IO expressions can also be evaluated and their output to `stdout`/`stderr` is captured:
 
 ```
 >>> print "foo"
-()
+"foo"
 ```
 
 ### Properties

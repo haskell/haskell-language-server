@@ -37,20 +37,19 @@ tests =
                   []
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsLspCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
-              doc <- openDoc "TIO.hs" "haskell"
+              doc <- openDoc "TIOStdout.hs" "haskell"
               lspId <- sendRequest SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
 
               (codeLensResponse, createdProgressTokens, activeProgressTokens) <- expectProgressMessagesTill
                 (responseForId SMethod_TextDocumentCodeLens lspId)
-                ["Setting up testdata (for TIO.hs)"]
+                ["Setting up testdata (for TIOStdout.hs)"]
                 ["Processing", "Indexing"]
                 []
                 []
 
-              -- this is a test so exceptions result in fails
               let response = getMessageResult codeLensResponse
               case response of
-                  InL [evalLens] -> do
+                  InL [evalLens, _evalLens] -> do
                       let command = evalLens ^?! L.command . _Just
 
                       _ <- sendRequest SMethod_WorkspaceExecuteCommand $
@@ -90,6 +89,7 @@ data ProgressMessage
   | ProgressBegin ProgressToken WorkDoneProgressBegin
   | ProgressReport ProgressToken WorkDoneProgressReport
   | ProgressEnd ProgressToken WorkDoneProgressEnd
+  deriving (Show)
 
 data InterestingMessage a
   = InterestingMessage a
