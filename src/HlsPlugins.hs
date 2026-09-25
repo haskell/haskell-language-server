@@ -159,6 +159,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_pragmas
       Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :
       Pragmas.completionDescriptor  "pragmas-completion" :
+      Pragmas.hoverDescriptor  "pragmas-hover" :
       Pragmas.suggestDisableWarningDescriptor  "pragmas-disable" :
 #endif
 #if hls_fourmolu
