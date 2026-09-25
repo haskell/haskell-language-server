@@ -129,7 +129,6 @@ test-suite tests
     -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
 
   build-depends:
-    , async
     , base
     , extra
     , hls-graph

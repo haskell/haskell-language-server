@@ -8,25 +8,11 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Development.IDE.Graph.Internal.Database
-  ( compute
-  , newDatabase
-  , incDatabase
-  , build
-  , getDirtySet
-  , getKeysAndVisitAge
-    -- * Exposed for testing
-  , Scope
-  , newScope
-  , scopeSize
-  , spawnInScope
-  , cleanupAsync
-  ) where
+module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
 import           Prelude                              hiding (unzip)
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
@@ -139,27 +125,19 @@ build
     => Database -> Stack -> f key -> IO (f Key, f value)
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
-    -- See Note [Closing escaped rule computations].
-    built <- attempt `catch` \ScopeClosed -> attempt
+    built <- runAIO $ builder db stack (fmap newKey keys)
     let (ids, vs) = unzip built
     pure (ids, fmap (asV . resultValue) vs)
     where
-        attempt = runAIO $ do
-            built <- builder db stack (fmap newKey keys)
-            case built of
-              Left clean  -> return clean
-              Right dirty -> liftIO dirty
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
 
 -- | Build a list of keys and return their results.
---  If none of the keys are dirty, we can return the results immediately.
---  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 --  See Note [Invalidation, Step Counter, and Stale Running States]
 builder
-    :: Traversable f => Database -> Stack -> f Key -> AIO (Either (f (Key, Result)) (IO (f (Key, Result))))
+    :: Traversable f => Database -> Stack -> f Key -> AIO (f (Key, Result))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
-builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
+builder db@Database{..} stack keys = do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
@@ -177,21 +155,16 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                     modifyTVar' toForce (Wait force :)
                     pure val
                 Dirty s -> do
-                    let act = run (refresh db stack id s)
-                        (force, val) = splitIO (dirtyOnScopeClosed db current id act)
+                    -- See Note [Rule computations own their scope].
+                    let (force, val) = splitIO (runAIO (refresh db stack id s))
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
                     modifyTVar' toForce (Spawn force:)
                     pure val
 
             pure (id, val)
 
-    toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ waitConcurrently_ toForceList
-    case toForceList of
-        [] -> return $ Left results
-        _ -> return $ Right $ do
-                waitAll
-                pure results
+    waitConcurrently_ =<< liftIO (readTVarIO toForce)
+    pure results
 
 
 -- | isDirty
@@ -214,17 +187,11 @@ refreshDeps visited db stack key result = \case
     (dep:deps) -> do
         let newVisited = dep <> visited
         res <- builder db stack (toListKeySet (dep `differenceKeySet` visited))
-        case res of
-            Left res ->  if isDirty result res
-                -- restart the computation if any of the deps are dirty
-                then liftIO $ compute db stack key RunDependenciesChanged (Just result)
-                -- else kick the rest of the deps
-                else refreshDeps newVisited db stack key result deps
-            Right iores -> do
-                res <- liftIO iores
-                if isDirty result res
-                    then liftIO $ compute db stack key RunDependenciesChanged (Just result)
-                    else refreshDeps newVisited db stack key result deps
+        if isDirty result res
+            -- restart the computation if any of the deps are dirty
+            then liftIO $ compute db stack key RunDependenciesChanged (Just result)
+            -- else kick the rest of the deps
+            else refreshDeps newVisited db stack key result deps
 
 -- | Refresh a key in the existing force runner, which already owns its lifetime.
 refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
@@ -281,18 +248,6 @@ updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()
 updateStatus res = Focus.alter
     (Just . maybe (KeyDetails res mempty)
     (\it -> it{keyStatus = res}))
-
-dirtyOnScopeClosed :: Database -> Step -> Key -> IO a -> IO a
-dirtyOnScopeClosed db step key act =
-  act `catch` \e@ScopeClosed -> do
-    -- A restart can increase the step before this transaction commits. So the
-    -- handler only demotes the 'Running' entry of this step.
-    let demote = Focus.adjust $ \it -> case keyStatus it of
-          Running s _ _ prev | s == step -> it {keyStatus = Dirty prev}
-          _                              -> it
-    atomicallyNamed "builder dirty on scope closed" $
-      SMap.focus demote key (databaseValues db)
-    throwIO e
 
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
 getDirtySet :: Database -> IO [(Key, Int)]
@@ -367,110 +322,78 @@ transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
 -- Asynchronous computations with cancellation
 
 -- | A simple monad to implement cancellation on top of 'Async',
--- generalizing 'withAsync' to monadic scopes.
-newtype AIO a = AIO { unAIO :: ReaderT Scope IO a }
+--   generalizing 'withAsync' to monadic scopes.
+newtype AIO a = AIO (ReaderT (IORef [Async ()]) IO a)
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
--- | A scope consisting of threads, or 'Nothing' once it has closed.
--- See Note [Closing escaped rule computations].
-newtype Scope = Scope
-    { scopeAsyncs :: MVar (Maybe [Async ()])
-    }
-
-newScope :: IO Scope
-newScope = Scope <$> newMVar (Just [])
-
-scopeSize :: Scope -> IO (Maybe Int)
-scopeSize = fmap (fmap length) . readMVar . scopeAsyncs
-
--- | Run the monadic computation, cancelling whatever it leaves spawned at exit.
+-- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
-    scope <- newScope
-    -- A normal return already waited on what it spawned, so anything left
-    -- escaped. See Note [Closing escaped rule computations].
-    runReaderT act scope `finally` cleanupAsync scope
+    asyncs <- newIORef []
+    runReaderT act asyncs `onException` cleanupAsync asyncs
 
-{- Note [Closing escaped rule computations]
+{- Note [Rule computations own their scope]
 
-A 'Running' status memoizes a 'splitIO' thunk that is bound to the AIO scope
-that created it. If a thread forces that thunk after its scope ended, the thunk
-spawns an async with no parent to cancel it. On a restart, that async escapes
-the step bump and leaks.
+A scope is the list of threads prompted by the computation of a key. If
+computing a key throws, 'runAIO' cancels those threads. As we store key statuses
+in the database, these scopes must not escape. If they do, we might race between
+edits and store outdated values.
 
   See https://github.com/haskell/haskell-language-server/issues/4985.
 
-Example trace of a thunk that escapes its scope, all at one step S:
-  1. A build opens scope-1 and installs 'Running S' for the key.
-  2. That build throws before it forces the thunk. As a result, scope-1 spawned
-     nothing for the key, and its teardown finds nothing to cancel. The
-     'Running S' entry survives.
-  3. A second build at step S opens scope-2, sees that entry, waits on the
-     thunk, and forces it on the thread of scope-2.
+A 'Running' rule status captures this state. Its value is a memoized 'splitIO'
+thunk. Any thread that waits on the key can force the thunk later in the same
+step. This example could leak threads. Both builds run at step S:
+  1. A build inserts 'Running S' for some key. Then the build throws before it
+     forces the thunk, closing its scope. The entry stays in the database.
+  2. A second build at step S forces the thunk. If the thunk kept the scope of
+     the first build, the thunk would start its dependencies in that closed
+     scope.
 
-'scopeAsyncs' serializes spawning against teardown:
-  * If the spawn gets the lock first, the scope registers the async and
-    teardown cancels it.
-  * If teardown gets the lock first, nothing starts and the thread raises
-    'ScopeClosed'.
-
-After a refusal, the build unwinds and retries:
-  * 'dirtyOnScopeClosed' demotes the key to 'Dirty' before it rethrows.
-  * 'build' retries once, so the demoted key recomputes in a live scope.
-  * 'isAsyncException' classifies 'ScopeClosed' as async, so nothing
-    swallows it.
+The solution is to keep scopes on the demand-side instead of capture-side. When
+a thread forces a thunk, the thunk opens its own scope with 'runAIO'.
 -}
 
--- | Spawn one async into the scope, or refuse if the scope has closed.
--- See Note [Closing escaped rule computations].
-spawnInScope :: Scope -> IO a -> IO (IO a)
-spawnInScope Scope {scopeAsyncs} io =
-  mask_ $ modifyMVar scopeAsyncs $ \case
-    Nothing -> pure (Nothing, throwIO ScopeClosed)
-    Just as -> do
-      a <- asyncWithUnmask $ \unmask -> unmask io
-      pure (Just (void a : as), wait a)
-
-newtype RunInIO = RunInIO (forall a. AIO a -> IO a)
-
-withRunInIO :: (RunInIO -> AIO b) -> AIO b
-withRunInIO k = do
-    st <- AIO ask
-    k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
-
-closeScope :: Scope -> IO [Async ()]
-closeScope Scope {scopeAsyncs} =
-  mask_ $ modifyMVar scopeAsyncs $ \m -> pure (Nothing, fromMaybe [] m)
-
-cleanupAsync :: Scope -> IO ()
+cleanupAsync :: IORef [Async a] -> IO ()
 -- mask to make sure we interrupt all the asyncs
-cleanupAsync scope = uninterruptibleMask $ \unmask -> do
-  asyncs <- closeScope scope
-  unless (null asyncs) $ do
-    let warnIfTakingTooLong = unmask $ forever $ do
-          sleep 10
-          traceM "cleanupAsync: waiting for asyncs to finish"
-    withAsync warnIfTakingTooLong $ \_ ->
-      mapConcurrently_ cancel asyncs
+cleanupAsync ref = uninterruptibleMask $ \unmask -> do
+    asyncs <- atomicModifyIORef' ref ([],)
+    -- interrupt all the asyncs without waiting
+    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
+    -- Wait until all the asyncs are done
+    -- But if it takes more than 10 seconds, log to stderr
+    unless (null asyncs) $ do
+        let warnIfTakingTooLong = unmask $ forever $ do
+                sleep 10
+                traceM "cleanupAsync: waiting for asyncs to finish"
+        withAsync warnIfTakingTooLong $ \_ ->
+            mapM_ waitCatch asyncs
 
 data Wait
-    = Wait !(IO ())
-    | Spawn !(IO ())
+    = Wait {justWait :: !(IO ())}
+    | Spawn {justWait :: !(IO ())}
 
-partitionWaits :: [Wait] -> ([IO ()], [IO ()])
-partitionWaits = partitionEithers . map toEither
-  where
-    toEither (Wait io)  = Left io
-    toEither (Spawn io) = Right io
+fmapWait :: (IO () -> IO ()) -> Wait -> Wait
+fmapWait f (Wait io)  = Wait (f io)
+fmapWait f (Spawn io) = Spawn (f io)
+
+waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
+waitOrSpawn (Wait io)  = pure $ Left io
+waitOrSpawn (Spawn io) = Right <$> async io
 
 waitConcurrently_ :: [Wait] -> AIO ()
 waitConcurrently_ [] = pure ()
-waitConcurrently_ waits = do
-    scope <- AIO ask
-    let (syncs, spawns) = partitionWaits waits
-    waitAll <- liftIO $ case spawns of
-        []  -> pure $ pure ()
-        [s] -> spawnInScope scope s
-        ss  -> spawnInScope scope (mapConcurrently_ id ss)
+waitConcurrently_ [one] = liftIO $ justWait one
+waitConcurrently_ many = do
+    ref <- AIO ask
+    -- spawn the async computations.
+    -- mask to make sure we keep track of all the asyncs.
+    (asyncs, syncs) <- liftIO $ uninterruptibleMask $ \unmask -> do
+        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
+        let (syncs, asyncs) = partitionEithers waits
+        liftIO $ atomicModifyIORef'_ ref (asyncs ++)
+        return (asyncs, syncs)
+    -- work on the sync computations
     liftIO $ sequence_ syncs
-    liftIO waitAll
+    -- wait for the async computations before returning
+    liftIO $ traverse_ wait asyncs
