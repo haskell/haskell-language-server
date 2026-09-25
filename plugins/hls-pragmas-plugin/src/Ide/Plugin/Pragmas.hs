@@ -424,7 +424,7 @@ pragmaDocumentation label = LSP.MarkupContent LSP.MarkupKind_Markdown $ T.unline
   <> [ "Since GHC " <> since | not $ T.null since ]
   <> [ "Included in " <> included | not $ T.null included ]
   <> [ ""
-     , "[Read the GHC User's Guide](" <> url <> ")."
+     , "[Read the GHC User's Guide](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/" <> url <> ")."
      ]
   where
     extension = maybe label id (T.stripPrefix "No" label)
