@@ -5,24 +5,21 @@ module ActionSpec where
 
 import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
-import           Control.Concurrent.Async                (AsyncCancelled (..))
 import           Control.Concurrent.STM
+import           Control.Exception                       (bracket_)
+import           Control.Monad                           (void)
 import           Control.Monad.IO.Class                  (MonadIO (..))
-import           Data.IORef                              (newIORef, readIORef,
-                                                          writeIORef)
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
                                                           shakeRunDatabase,
                                                           shakeRunDatabaseForKeys)
-import           Development.IDE.Graph.Internal.Database (build, cleanupAsync,
-                                                          incDatabase, newScope,
-                                                          scopeSize,
-                                                          spawnInScope)
+import           Development.IDE.Graph.Internal.Database (build, incDatabase)
 import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
 import           Example
 import qualified StmContainers.Map                       as STM
+import           System.Timeout                          (timeout)
 import           Test.Hspec
 
 
@@ -136,33 +133,20 @@ spec = do
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
 
-  describe "Closing escaped rule computations" $ do
-    it "runs a spawned body and cancels it at teardown" $ do
-      scope <- newScope
-      started <- C.newEmptyMVar
-      waitForIt <- spawnInScope scope $ do
-        C.putMVar started ()
-        C.threadDelay maxBound
-      scopeSize scope `shouldReturn` Just 1
-      -- The signal only arrives if the body really started running.
-      C.takeMVar started
-      cleanupAsync scope
-      scopeSize scope `shouldReturn` Nothing
-      waitForIt `shouldThrow` \(_ :: AsyncCancelled) -> True
-    it "spawns nothing into a closed scope" $ do
-      scope <- newScope
-      cleanupAsync scope
-      ran <- newIORef False
-      waitForIt <- spawnInScope scope $ writeIORef ran True
-      scopeSize scope `shouldReturn` Nothing
-      waitForIt `shouldThrow` \ScopeClosed -> True
-      readIORef ran `shouldReturn` False
-    it "recomputes a key whose scope died before forcing it" $ do
-      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions ruleCycleAfterVictim
-      -- The cycle tears down the inner scope while 'CycleRule 1' sits 'Running'
-      -- with a thunk that scope never forced.
+  describe "Rule computations own their scope" $ do
+    it "cancels the deps of a stale key with the build that forces it" $ do
+      running <- newTVarIO (0 :: Int)
+      let leaf = bracket_ (atomically $ modifyTVar' running succ)
+                          (atomically $ modifyTVar' running pred)
+                          (C.threadDelay maxBound)
+          waitRunning n = timeout 2_000_000 $ atomically $ readTVar running >>= check . (== n)
+      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions (ruleCycleAfterVictim leaf)
+      -- A previous result makes the stale thunk refresh its deps, and two dirty
+      -- deps make that refresh spawn a thread.
+      _ <- build theDb emptyStack [CycleRule 1]
+      incDatabase theDb (Just (map (newKey . CycleRule) [2, 3]))
       build theDb emptyStack [CycleRule 0] `shouldThrow` \StackException{} -> True
-      -- The step stays the same, so this build sees the stale entry and waits
-      -- on it.
-      res <- build theDb emptyStack [CycleRule 1]
-      snd res `shouldBe` [1 :: Int]
+      builder <- C.forkIO $ void $ build theDb emptyStack [CycleRule 1]
+      waitRunning 2 `shouldReturn` Just ()
+      C.killThread builder
+      waitRunning 0 `shouldReturn` Just ()
