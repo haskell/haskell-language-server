@@ -419,23 +419,93 @@ pragmaDocumentation :: T.Text -> LSP.MarkupContent
 pragmaDocumentation label = LSP.MarkupContent LSP.MarkupKind_Markdown $ T.unlines $
   [ "**" <> label <> "**"
   , ""
-  , description
+  , "| Field | Value |"
+  , "| --- | --- |"
+  , "| Description | " <> description <> " |"
   ]
-  <> [ "Since GHC " <> since | not $ T.null since ]
-  <> [ "Included in " <> included | not $ T.null included ]
-  <> [ ""
-     , "[Read the GHC User's Guide](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/" <> url <> ")."
-     ]
+  <> [ "| Since | Since GHC " <> since <> " |" | not $ T.null since ]
+  <> [ "| Status | " <> status <> " |" | not $ T.null status ]
+  <> [ "| Implies | " <> T.intercalate ", " (map impliedLink implications) <> " |" | not isNegated && not (null implications) ]
+  <> [ "| Guide | [Read the GHC User's Guide](" <> guideUrl url <> ") |" ]
   where
-    extension = maybe label id (T.stripPrefix "No" label)
+    extension = case T.stripPrefix "No" label of
+      Just base | M.member base extensionDocs -> base
+      _ -> label
+    isNegated = extension /= label
     (url, baseDescription, since, included) = extensionDocumentation extension
-    description = case T.stripPrefix "No" label of
-      Just _  -> "Disable the `" <> extension <> "` language extension.\n\n" <> baseDescription
-      Nothing -> baseDescription
+    description = if isNegated then "Disable the `" <> extension <> "` language extension. " <> baseDescription else baseDescription
+    status = M.findWithDefault (if T.null included then "" else "Included in " <> included) extension extensionStatuses
+    implications = M.findWithDefault [] extension extensionImplications
+    impliedLink implied = "[" <> implied <> "](" <> guideUrl impliedUrl <> ")"
+      where (impliedUrl, _, _, _) = extensionDocumentation implied
+
+guideUrl :: T.Text -> T.Text
+guideUrl url = "https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/" <> url
 
 extensionDocumentation :: T.Text -> (T.Text, T.Text, T.Text, T.Text)
 extensionDocumentation extension =
   M.findWithDefault ("table.html", "", "", "") extension extensionDocs
+
+-- | Statuses not represented by the edition list in 'extensionDocs'.
+extensionStatuses :: M.Map T.Text T.Text
+extensionStatuses = M.fromList
+  [ ("CUSKs", "Included in Haskell98, Haskell2010")
+  , ("DatatypeContexts", "Deprecated, Included in Haskell98, Haskell2010")
+  , ("DoAndIfThenElse", "Included in GHC2024, GHC2021, Haskell2010")
+  , ("EmptyDataDecls", "Included in GHC2024, GHC2021 and Haskell2010")
+  , ("EmptyDataDeriving", "Included in GHC2024, GHC2021, Haskell2010")
+  , ("FieldSelectors", "Included in GHC2024, GHC2021, Haskell2010, Haskell98")
+  , ("ForeignFunctionInterface", "Included in GHC2024, GHC2021, Haskell2010")
+  , ("GHCForeignImportPrim", "InternalUseOnly")
+  , ("IncoherentInstances", "Deprecated")
+  , ("LinearTypes", "Experimental")
+  , ("MonomorphismRestriction", "Enabled by default.")
+  , ("NPlusKPatterns", "Included in Haskell98")
+  , ("NondecreasingIndentation", "Included in Haskell98")
+  , ("NullaryTypeClasses", "Deprecated")
+  , ("OverlappingInstances", "Deprecated")
+  , ("PatternGuards", "Disabled in Haskell98, enabled in Haskell2010 and later.")
+  , ("Rank2Types", "Deprecated")
+  , ("RequiredTypeArguments", "Experimental")
+  , ("StarIsType", "Included in GHC2024, GHC2021, Haskell2010, Haskell98")
+  , ("TraditionalRecordSyntax", "Enabled by default.")
+  , ("TypeAbstractions", "Experimental")
+  , ("TypeInType", "Deprecated")
+  ]
+
+-- | Direct implications listed on the corresponding GHC User's Guide pages.
+extensionImplications :: M.Map T.Text [T.Text]
+extensionImplications = M.fromList
+  [ ("DeriveTraversable", ["DeriveFoldable", "DeriveFunctor"])
+  , ("DerivingVia", ["DerivingStrategies"])
+  , ("DuplicateRecordFields", ["DisambiguateRecordFields"])
+  , ("ExistentialQuantification", ["ExplicitForAll"])
+  , ("ExplicitLevelImports", ["ImplicitStagePersistence"])
+  , ("FlexibleInstances", ["TypeSynonymInstances"])
+  , ("FunctionalDependencies", ["MultiParamTypeClasses"])
+  , ("GADTs", ["MonoLocalBinds", "GADTSyntax"])
+  , ("ImpredicativeTypes", ["RankNTypes"])
+  , ("IncoherentInstances", ["OverlappingInstances"])
+  , ("LiberalTypeSynonyms", ["ExplicitForAll"])
+  , ("LinearTypes", ["MonoLocalBinds"])
+  , ("MonadComprehensions", ["ParallelListComp"])
+  , ("MultiParamTypeClasses", ["ConstrainedClassMethods"])
+  , ("PolyKinds", ["KindSignatures"])
+  , ("QuantifiedConstraints", ["ExplicitForAll"])
+  , ("RankNTypes", ["ExplicitForAll"])
+  , ("RebindableSyntax", ["ImplicitPrelude"])
+  , ("RecordWildCards", ["DisambiguateRecordFields"])
+  , ("ScopedTypeVariables", ["ExplicitForAll"])
+  , ("StandaloneKindSignatures", ["CUSKs"])
+  , ("Strict", ["StrictData"])
+  , ("TemplateHaskell", ["TemplateHaskellQuotes"])
+  , ("TypeFamilies", ["MonoLocalBinds", "KindSignatures", "ExplicitNamespaces"])
+  , ("TypeFamilyDependencies", ["TypeFamilies"])
+  , ("TypeInType", ["PolyKinds", "DataKinds", "KindSignatures"])
+  , ("TypeOperators", ["ExplicitNamespaces"])
+  , ("UnboxedTuples", ["UnboxedSums"])
+  , ("UnliftedDatatypes", ["DataKinds", "StandaloneKindSignatures"])
+  ]
 
 -- | Metadata mirrored from the GHC User's Guide extension table.
 extensionDocs :: M.Map T.Text (T.Text, T.Text, T.Text, T.Text)
@@ -502,7 +572,7 @@ extensionDocs = M.fromList
   , ("LambdaCase", ("lambda_case.html#extension-LambdaCase", "Allow `\\case` expressions.", "7.6.1", "GHC2024"))
   , ("LexicalNegation", ("lexical_negation.html#extension-LexicalNegation", "Use whitespace to determine whether the minus sign stands for negation or subtraction.", "9.0.1", ""))
   , ("LiberalTypeSynonyms", ("liberal_type_synonyms.html#extension-LiberalTypeSynonyms", "Relax many of Haskell 98's rules on type synonym definitions.", "6.8.1", ""))
-  , ("LinearTypes", ("linear_types.html#extension-LinearTypes", "Allow writing of linear arrow types. Implies `MonoLocalBinds`.", "9.0.1", ""))
+  , ("LinearTypes", ("linear_types.html#extension-LinearTypes", "Allow writing of linear arrow types.", "9.0.1", ""))
   , ("ListTuplePuns", ("data_kinds.html#extension-ListTuplePuns", "Enable punning for list, tuple and sum types.", "9.10.1", ""))
   , ("MagicHash", ("magic_hash.html#extension-MagicHash", "Allow `#` as a postfix modifier on identifiers.", "6.8.1", ""))
   , ("MonadComprehensions", ("monad_comprehensions.html#extension-MonadComprehensions", "Allow list comprehension syntax to be used at monads other than `List`.", "7.2.1", ""))

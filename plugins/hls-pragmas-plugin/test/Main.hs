@@ -36,6 +36,7 @@ tests =
   , completionTests
   , completionDocumentationTest
   , hoverDocumentationTest
+  , hoverStatusAndImplicationsTest
   , hoverSelectsExtensionTest
   , hoverIgnoresNonPragmaTest
   , completionSnippetTests
@@ -158,6 +159,7 @@ completionDocumentationTest = testCase "documents language extension completions
       assertBool "documentation describes the extension" ("Desugar string literals via `IsString` class." `T.isInfixOf` contents)
       assertBool "documentation links to the extension page" ("overloaded_strings.html#extension-OverloadedStrings" `T.isInfixOf` contents)
       assertBool "documentation includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
+      assertBool "documentation uses a table" ("| Field | Value |" `T.isInfixOf` contents)
     _ -> assertFailure "Expected Markdown documentation for OverloadedStrings"
 
   bangDoc <- openDoc "TargetedLinks.hs" "haskell"
@@ -169,6 +171,7 @@ completionDocumentationTest = testCase "documents language extension completions
       assertBool "documentation links to the shared strictness page" ("strict.html#extension-BangPatterns" `T.isInfixOf` contents)
       assertBool "documentation includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
       assertBool "documentation includes language editions" ("Included in GHC2024, GHC2021" `T.isInfixOf` contents)
+      assertBool "documentation labels the status" ("| Status | Included in GHC2024, GHC2021 |" `T.isInfixOf` contents)
     _ -> assertFailure "Expected Markdown documentation for BangPatterns"
 
 hoverDocumentationTest :: TestTree
@@ -182,7 +185,29 @@ hoverDocumentationTest = testCase "documents language extensions on hover" $ run
       assertBool "hover describes the extension" ("Desugar string literals via `IsString` class." `T.isInfixOf` contents)
       assertBool "hover links to the extension page" ("overloaded_strings.html#extension-OverloadedStrings" `T.isInfixOf` contents)
       assertBool "hover includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
+      assertBool "hover uses a table" ("| Field | Value |" `T.isInfixOf` contents)
     _ -> assertFailure "Expected Markdown documentation for OverloadedStrings"
+
+hoverStatusAndImplicationsTest :: TestTree
+hoverStatusAndImplicationsTest = testCase "documents extension status and linked implications" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
+  doc <- openDoc "Hover.hs" "haskell"
+  _ <- waitForDiagnostics
+  hover <- getHover doc (Position 1 20)
+  liftIO $ case hover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) -> do
+      assertBool "hover shows deprecated status" ("| Status | Deprecated |" `T.isInfixOf` contents)
+      assertBool "hover links implied extensions" ("[OverlappingInstances](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/instances.html#extension-OverlappingInstances)" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for IncoherentInstances"
+  negatedHover <- getHover doc (Position 2 20)
+  liftIO $ case negatedHover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) ->
+      assertBool "negated extensions do not imply enabled extensions" (not $ "| Implies |" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for NoIncoherentInstances"
+  nondecreasingHover <- getHover doc (Position 3 20)
+  liftIO $ case nondecreasingHover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) ->
+      assertBool "extensions beginning with No are not treated as negated" (not $ "Disable the" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for NondecreasingIndentation"
 
 hoverSelectsExtensionTest :: TestTree
 hoverSelectsExtensionTest = testCase "selects the language extension under the cursor" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
