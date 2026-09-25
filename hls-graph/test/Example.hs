@@ -5,7 +5,9 @@
 module Example where
 
 import qualified Control.Concurrent            as C
+import           Control.Monad                 (when)
 import           Control.Monad.IO.Class        (liftIO)
+import           Data.Maybe                    (isJust)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Rule
@@ -72,3 +74,21 @@ ruleSubBranch mv = addRule $ \SubBranchRule _old _mode -> do
 data CountRule = CountRule
     deriving (Eq, Generic, Hashable, NFData, Show)
 type instance RuleResult CountRule = Int
+
+data CycleRule = CycleRule Int
+    deriving (Eq, Generic, Hashable, NFData, Show)
+type instance RuleResult CycleRule = Int
+
+-- | @CycleRule 0@ applies @CycleRule 1@ and then itself, which closes a cycle.
+-- Keep that order, so that 1 is 'Running' with an unforced thunk when 0 throws.
+-- The other keys are leaves that run @leaf@ when they recompute.
+ruleCycleAfterVictim :: IO () -> Rules ()
+ruleCycleAfterVictim leaf = addRule $ \(CycleRule n) old _mode -> do
+    when (n == 0) $ do
+        _ :: [Int] <- apply [CycleRule 1, CycleRule 0]
+        pure ()
+    when (n == 1) $ do
+        _ :: [Int] <- apply [CycleRule 2, CycleRule 3]
+        pure ()
+    when (n > 1 && isJust old) $ liftIO leaf
+    return $ RunResult ChangedRecomputeDiff "" n (return ())
