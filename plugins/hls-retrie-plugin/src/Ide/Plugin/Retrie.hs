@@ -238,7 +238,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     let
         annotatedImports = renderImports imports
     inlineRewrite <- liftIO $
-      constructInlineFromIdentifer annotatedImports (unsafeMkA astSrc 0) fromRange
+      constructInlineFromIdentifer annotatedImports (unsafeMkA (makeDeltaAst astSrc) 0) fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
