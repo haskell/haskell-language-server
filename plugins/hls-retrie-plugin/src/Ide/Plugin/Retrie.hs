@@ -35,8 +35,6 @@ import           Data.Either                           (fromRight,
                                                         partitionEithers)
 import           Data.Hashable                         (unhashed)
 import qualified Data.HashSet                          as Set
-import           Data.IORef.Extra                      (atomicModifyIORef'_,
-                                                        newIORef, readIORef)
 import           Data.List.Extra                       (nubOrdOn)
 import qualified Data.Map                              as Map
 import           Data.Monoid                           (First (First), getFirst)
@@ -60,7 +58,7 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         HsValBindsLR (..),
                                                         HscEnv, ImportDecl (..),
                                                         LHsExpr, LRuleDecls,
-                                                        Match, ModIface,
+                                                        Match,
                                                         ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                         Outputable,
                                                         ParsedModule,
@@ -68,8 +66,7 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         RuleDecls (HsRules),
                                                         TyClDecl (SynDecl),
                                                         TyClGroup (..), fun_id,
-                                                        locA, mi_fixities,
-                                                        ms_hspp_opts,
+                                                        locA, ms_hspp_opts,
                                                         nameOccName, occNameFS,
                                                         pattern RealSrcSpan,
                                                         pm_parsed_source,
@@ -230,6 +227,8 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
+    sourceFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfpSource)
+    targetFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfp)
     (_, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
@@ -237,14 +236,15 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
       extractInlineImports check checktgt fun_matches
     let
         annotatedImports = renderImports imports
+    fixedSrc <- liftIO $ transformA (unsafeMkA (makeDeltaAst astSrc) 0) (fix sourceFixities)
     inlineRewrite <- liftIO $
-      constructInlineFromIdentifer annotatedImports (unsafeMkA (makeDeltaAst astSrc) 0) fromRange
+      constructInlineFromIdentifer annotatedImports fixedSrc fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
-    (fixityEnv, cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) $ fromNormalizedFilePath nfp
+    (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
     result <- liftIO $ try @_ @SomeException $
-        runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
+        runRetrie (sourceFixities <> targetFixities) (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
         Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
         Right (_,_,NoChange) -> throwError $ PluginInternalError "Retrie - inline produced no changes"
@@ -573,7 +573,9 @@ callRetrie recorder state session spec origin binds = do
       --   unsafeMkA (map (noLocA . toImportDecl) theImports) 0
 
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
-  (originFixities, originParsedModule) <- reuseParsedModule state origin
+  originFixities <- fixityEnvForFile state origin
+  originPm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule origin
+  originParsedModule <- transformA (fixAnns originPm) (fix originFixities)
   -- TODO(simon): It would be better to compute imports per-clause.
   rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
   let retrie = apply rewrites
@@ -581,13 +583,14 @@ callRetrie recorder state session spec origin binds = do
   targets <- getTargetFiles retrieOptions (getGroundTerms retrie)
 
   results <- forM targets $ \t -> runExceptT $ do
-    (fixityEnv, cpp, pm, contents) <- ExceptT $ try $
-      getCPPmodule recorder state session t
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
+    targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
+    (cpp, pm, contents) <- ExceptT $ try $
+      getCPPmodule recorder state session targetFixities t
     -- FIXME(simon): raise the error properly
     let imps = fromRight mempty $ extractImports tcd tct binds spec
-    (_user, _ast, change) <- lift $ runRetrie fixityEnv retrie cpp
+    (_user, _ast, change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
     return $ asTextEdits nt pm contents $ case change of
       NoChange              -> NoChange
       Change replacements _ -> Change replacements [imps]
@@ -610,25 +613,19 @@ useOrFail ::
 useOrFail state lbl mkException rule f =
   useRule lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
 
-fixityEnvFromModIface :: ModIface -> FixityEnv
-fixityEnvFromModIface modIface =
+fixityEnvFor :: FixityMap -> FixityEnv
+fixityEnvFor (FixityMap fixities) =
+  -- retrie keys fixities by the operator's unqualified name
   mkFixityEnv
     [ (fs, (fs, fixity))
-      | (n, fixity) <- mi_fixities modIface,
-        let fs = occNameFS n
+    | (n, fixity) <- Map.toList fixities
+    , let fs = occNameFS (nameOccName n)
     ]
 
-fixFixities :: Data ast =>
-  IdeState
-  -> NormalizedFilePath
-  -> Annotated ast
-  -> IO (FixityEnv, Annotated ast)
-fixFixities state f pm = do
-      ModIfaceResult{hirModIface} <-
-        useOrFail state "GetModIface" NoTypeCheck GetModIface f
-      let fixities = fixityEnvFromModIface hirModIface
-      res <- transformA pm (fix fixities)
-      return (fixities, res)
+fixityEnvForFile :: IdeState -> NormalizedFilePath -> IO FixityEnv
+fixityEnvForFile state f =
+  useRuleBlocking "Retrie.GetFixity" state GetFixity f
+    >>= maybe (throwIO $ NoTypeCheck f) (return . fixityEnvFor)
 
 fixAnns :: ParsedModule -> Annotated GHC.ParsedSource
 fixAnns GHC.ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
@@ -732,7 +729,7 @@ importTextEdits _ _ _ _ = []
 -------------------------------------------------------------------------------
 -- Rule wrappers
 
-_useRuleBlocking,
+useRuleBlocking,
   _useRuleStale,
   useRule ::
     (IdeRule k v) =>
@@ -741,7 +738,7 @@ _useRuleBlocking,
     k ->
     NormalizedFilePath ->
     IO (Maybe (RuleResult k))
-_useRuleBlocking label state rule f = runAction label state (use rule f)
+useRuleBlocking label state rule f = runAction label state (use rule f)
 _useRuleStale label state rule f =
   fmap fst
     <$> runIdeAction label (shakeExtras state) (useWithStaleFast rule f)
@@ -762,17 +759,12 @@ deriving instance FromJSON RewriteSpec
 
 deriving instance ToJSON RewriteSpec
 
-reuseParsedModule :: IdeState -> NormalizedFilePath -> IO (FixityEnv, Annotated GHCGHC.ParsedSource)
-reuseParsedModule state f = do
-        pm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule f
-        (fixities, pm') <- fixFixities state f (fixAnns pm)
-        return (fixities, pm')
-
-getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FilePath -> IO (FixityEnv, CPP AnnotatedModule, GHCGHC.ParsedSource, T.Text)
-getCPPmodule recorder state session t = do
+-- | Parsed source of a file, reassociated with the given fixities.
+getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FixityEnv -> FilePath -> IO (CPP AnnotatedModule, GHCGHC.ParsedSource, T.Text)
+getCPPmodule recorder state session fixities t = do
     -- TODO: is it safe to drop this makeAbsolute?
     let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
-    let getParsedModule f contents = do
+    let parseWith contents = do
           modSummary <- msrModSummary <$>
             useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
           let ms' =
@@ -783,8 +775,7 @@ getCPPmodule recorder state session t = do
           logWith recorder Info $ LogParsingModule t
           parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
               `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
-          (fixities, parsed) <- fixFixities state f (fixAnns parsed)
-          return (fixities, parsed)
+          transformA (fixAnns parsed) (fix fixities)
 
     contents <- do
       mbContentsVFS <-
@@ -792,21 +783,11 @@ getCPPmodule recorder state session t = do
       case mbContentsVFS of
         Just contents -> return $ Rope.toText contents
         Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
-    -- ps <- useOrFail state "GetAnnotatedParsedSource" NoParse GetAnnotatedParsedSource nt
     pm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule nt
     let
       ps = GHC.pm_parsed_source pm
       extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
-    if LangExt.Cpp `EnumSet.member` extensions
-      then do
-        fixitiesRef <- newIORef mempty
-        let parseModule x = do
-              (fix, res) <- getParsedModule nt x
-              atomicModifyIORef'_ fixitiesRef (fix <>)
-              return res
-        res <- parseCPP parseModule contents
-        fixities <- readIORef fixitiesRef
-        return (fixities, res, ps, contents)
-      else do
-        (fixities, pm) <- reuseParsedModule state nt
-        return (fixities, NoCPP pm, ps, contents)
+    cpp <- if LangExt.Cpp `EnumSet.member` extensions
+      then parseCPP parseWith contents
+      else NoCPP <$> transformA (fixAnns pm) (fix fixities)
+    return (cpp, ps, contents)
