@@ -64,6 +64,8 @@ inlineThisTests =
       , testInline "top level function in another file" "Imported" 4 6
       , testInline "nested where function" "NestedWhere" 3 6
       , testInline "nested let function" "NestedLet" 5 5
+      , testInline "nested function shadowing a top-level one" "ShadowLocal" 6 26
+      , testInline "guard let function" "GuardLet" 5 12
       , testInline "operator" "Operator" 4 8
       , testInline "uses imported fixities" "OpChain" 8 4
       , testInline "definition uses imported fixities" "OpChainDef" 8 4
