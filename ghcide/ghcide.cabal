@@ -189,6 +189,7 @@ library
     Development.IDE.Spans.AtPoint
     Development.IDE.Spans.Common
     Development.IDE.Spans.Documentation
+    Development.IDE.Spans.Fixity
     Development.IDE.Spans.LocalBindings
     Development.IDE.Spans.Pragmas
     Development.IDE.Types.Diagnostics
