@@ -66,6 +66,7 @@ inlineThisTests =
       , testInline "nested let function" "NestedLet" 5 5
       , testInline "operator" "Operator" 4 8
       , testInline "uses imported fixities" "OpChain" 8 4
+      , testInline "definition uses imported fixities" "OpChainDef" 8 4
       , testInline "expression has lower precedence" "Parenthesis" 7 8
       , testInline "partially applied function" "Partial" 7 8
       , testInline "infix with extra arguments" "InfixExtraArg" 8 8
