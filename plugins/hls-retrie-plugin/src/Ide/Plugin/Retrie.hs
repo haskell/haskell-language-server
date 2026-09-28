@@ -33,6 +33,7 @@ import qualified Data.ByteString                       as BS
 import           Data.Data
 import           Data.Either                           (fromRight,
                                                         partitionEithers)
+import           Data.Foldable                         (toList)
 import           Data.Hashable                         (unhashed)
 import qualified Data.HashSet                          as Set
 import           Data.List.Extra                       (nubOrdOn)
@@ -53,12 +54,10 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         GenLocated (L), GhcPs,
                                                         GhcRn,
                                                         HsBindLR (FunBind),
-                                                        HsExpr (HsApp, OpApp),
-                                                        HsGroup (..),
+                                                        HsExpr, HsGroup (..),
                                                         HsValBindsLR (..),
                                                         HscEnv, ImportDecl (..),
                                                         LHsExpr, LRuleDecls,
-                                                        Match,
                                                         ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                         Outputable,
                                                         ParsedModule,
@@ -73,7 +72,8 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         rds_rules, srcSpanFile,
                                                         topDir, unLoc, unLocA)
 import qualified Development.IDE.GHC.Compat            as GHC
-import           Development.IDE.GHC.Compat.Util       hiding (catch, try)
+import           Development.IDE.GHC.Compat.Util       hiding (catch, toList,
+                                                        try)
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
                                                         TransformT)
 import           Development.IDE.Plugin.CodeAction     (newImportInsertRange)
@@ -95,8 +95,6 @@ import           Language.LSP.Protocol.Types           as LSP
 import           Language.LSP.Server                   (ProgressCancellable (Cancellable))
 import           Retrie                                (Annotated (astA),
                                                         AnnotatedModule,
-                                                        Fixity (Fixity),
-                                                        FixityDirection (InfixL),
                                                         Options, Options_ (..),
                                                         Verbosity (Loud), apply,
                                                         applyWithUpdate)
@@ -106,9 +104,8 @@ import           Retrie.ExactPrint                     (AnnotatedImports, fix,
                                                         makeDeltaAst,
                                                         transformA, unsafeMkA)
 import           Retrie.Expr                           (mkLocatedHsVar)
-import           Retrie.Fixity                         (FixityEnv, lookupOp,
-                                                        mkFixityEnv)
-import           Retrie.Monad                          (getGroundTerms,
+import           Retrie.Fixity                         (FixityEnv, mkFixityEnv)
+import           Retrie.Monad                          (Retrie, getGroundTerms,
                                                         runRetrie)
 import           Retrie.Options                        (defaultOptions,
                                                         getTargetFiles)
@@ -116,7 +113,8 @@ import           Retrie.Replace                        (Change (..),
                                                         Replacement (..))
 import           Retrie.Rewrites
 import           Retrie.Rewrites.Function              (matchToRewrites)
-import           Retrie.SYB                            (everything, extQ, mkQ)
+import           Retrie.SYB                            (GenericQ, everything,
+                                                        extQ, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                       (Universe)
 
@@ -229,7 +227,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
     sourceFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfpSource)
     targetFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfp)
-    (_, fun_matches) <-
+    (fun_id, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
     imports <- either (throwError . PluginInternalError . T.pack) pure $
@@ -243,8 +241,11 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
+    let inline
+          | GHCGHC.isExternalName (unLoc fun_id) = apply inlineRewrite
+          | otherwise = applyLocal fromRange inlineRewrite
     result <- liftIO $ try @_ @SomeException $
-        runRetrie (sourceFixities <> targetFixities) (applyWithUpdate myContextUpdater inlineRewrite) cpp
+        runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
         Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
         Right (_,_,NoChange) -> throwError $ PluginInternalError "Retrie - inline produced no changes"
@@ -273,35 +274,45 @@ findBinder originSpan =
         First $ Just (fun_id, fun_matches)
     matcher _ = First Nothing
 
--- Override to skip adding binders to the context, which prevents inlining
--- nested defined functions
-myContextUpdater :: ContextUpdater
-myContextUpdater c i =
-    updateContext c i
-    `extQ` (return . updExp)
-    `extQ` (skipUpdate @(GRHSs GhcPs (LHsExpr GhcPs)))
-    `extQ` (skipUpdate @(Match GhcPs (LHsExpr GhcPs)))
+-- | Only install rewrites when the target subtree has been reached.
+applyLocal :: GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
+applyLocal defSpan rewrites = applyWithUpdate updater moduleRewrites
   where
-    skipUpdate :: forall a m . Monad m => a -> TransformT m Context
-    skipUpdate _ = pure c
+    -- retrie will exit early if there are no rewrites, so just stub them out
+    -- at the top level.
+    moduleRewrites = map (setRewriteTransformer $ \_ _ -> pure NoMatch) rewrites
 
-    -- override to skip the HsLet case
-    updExp :: HsExpr GhcPs -> Context
-    updExp HsApp{} =
-#if MIN_VERSION_ghc(9,11,0)
-      c { ctxtParentPrec = HasPrec $ Retrie.Fixity (10 + i - firstChild) InfixL }
-#else
-      c { ctxtParentPrec = HasPrec $ Retrie.Fixity (SourceText "HsApp") (10 + i - firstChild) InfixL }
-#endif
-    -- Reason for 10 + i: (i is index of child, 0 = left, 1 = right)
-    -- In left child, prec is 10, so HsApp child will NOT get paren'd
-    -- In right child, prec is 11, so every child gets paren'd (unless atomic)
-    updExp (OpApp _ _ op _) = c { ctxtParentPrec = HasPrec $ lookupOp op (ctxtFixityEnv c) }
-    updExp _ = c { ctxtParentPrec = NeverParen }
-    -- Deal with Trees-That-Grow adding extension points
-    -- as the first child everywhere.
-    firstChild :: Int
-    firstChild = 1
+    updater :: ContextUpdater
+    updater c i x = do
+        c' <- updateContext c i x
+        pure $ if bindsDefinition i x then install c' else c'
+
+    -- attach the rewrites at this subtree
+    install c = c
+      { ctxtRewriter =
+          foldMap (mkLocalRewriter (ctxtInScope c)) rewrites <> ctxtRewriter c }
+
+    -- does this node bind the target definition for it's ith child?
+    bindsDefinition :: Int -> GenericQ Bool
+    bindsDefinition i = ownBinds `extQ` stmts `extQ` guards
+      where
+        stmts :: [GHC.ExprLStmt GhcPs] -> Bool
+        stmts (L _ s : _) = ownBinds s
+        stmts []          = False
+
+        guards :: GHCGHC.GRHS GhcPs (LHsExpr GhcPs) -> Bool
+        guards (GHCGHC.GRHS _ gs _) = i == body && any (ownBinds . unLoc) gs
+          where body = 2 -- after the extension field and the guard list
+
+    ownBinds :: GenericQ Bool
+    ownBinds = or . gmapQ (False `mkQ` definesIt)
+
+    definesIt :: GHC.HsLocalBinds GhcPs -> Bool
+    definesIt (GHC.HsValBinds _ (ValBinds _ binds _)) =
+        or [ sp == defSpan
+           | L _ FunBind{fun_id} <- toList binds
+           , RealSrcSpan sp _ <- [GHC.getLocA fun_id] ]
+    definesIt _ = False
 
 -------------------------------------------------------------------------------
 
