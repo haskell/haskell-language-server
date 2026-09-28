@@ -1364,10 +1364,7 @@ library hls-explicit-fixity-plugin
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
     , containers
-    , deepseq
-    , extra
     , ghcide                == 2.15.0.0
-    , hashable
     , hls-plugin-api        == 2.15.0.0
     , lsp                   >=2.8
     , text
