@@ -246,7 +246,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
 #endif
 #if explicitFixity
-      let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId :
+      let pId = "explicit-fixity" in ExplicitFixity.descriptor pId :
 #endif
 #if explicitFields
       let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId :

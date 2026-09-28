@@ -1,41 +1,26 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Ide.Plugin.ExplicitFixity(descriptor, Log) where
+module Ide.Plugin.ExplicitFixity(descriptor) where
 
-import           Control.DeepSeq
-import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Data.Either.Extra
-import           Data.Hashable
-import qualified Data.Map.Strict                      as M
+import qualified Data.Map.Strict                   as M
 import           Data.Maybe
-import qualified Data.Set                             as S
-import qualified Data.Text                            as T
-import           Development.IDE                      hiding (pluginHandlers,
-                                                       pluginRules)
+import qualified Data.Text                         as T
+import           Development.IDE                   hiding (pluginHandlers,
+                                                    pluginRules)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.PositionMapping (idDelta)
-import           Development.IDE.Core.Shake           (addPersistentRule)
-import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.GHC.Compat.Util      as Util
-import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
+import           Development.IDE.LSP.Notifications (ghcideNotificationsPluginPriority)
 import           Development.IDE.Spans.AtPoint
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
-import           Ide.Types                            hiding (pluginId)
+import           Ide.Types                         hiding (pluginId)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 
-descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides fixity information in hovers")
-    { pluginRules = fixityRule recorder
-    , pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor pluginId = (defaultPluginDescriptor pluginId "Provides fixity information in hovers")
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover
     -- Make this plugin has a lower priority than ghcide's plugin to ensure
     -- type info display first.
     , pluginPriority = ghcideNotificationsPluginPriority - 1
@@ -67,57 +52,3 @@ hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
         fixityText (name, Fixity _ precedence direction) =
 #endif
             printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
-
-newtype FixityMap = FixityMap (M.Map Name Fixity)
-instance Show FixityMap where
-  show _ = "FixityMap"
-
-instance NFData FixityMap where
-  rnf (FixityMap xs) = rnf xs
-
-#if __GLASGOW_HASKELL__ < 913
-instance NFData Fixity where
-  rnf = rwhnf
-#endif
-
-newtype Log = LogShake Shake.Log
-
-instance Pretty Log where
-    pretty = \case
-        LogShake log -> pretty log
-
-data GetFixity = GetFixity deriving (Show, Eq, Generic)
-
-instance Hashable GetFixity
-instance NFData GetFixity
-
-type instance RuleResult GetFixity = FixityMap
-
--- | Convert a HieAST to FixityTree with fixity info gathered
-lookupFixities :: MonadIO m => HscEnv -> TcGblEnv -> S.Set Name -> m (M.Map Name Fixity)
-lookupFixities hscEnv tcGblEnv names
-    = liftIO
-    $ fmap (fromMaybe M.empty . snd)
-    $ initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1)
-    $ M.traverseMaybeWithKey (\_ v -> v)
-    $ M.fromSet lookupFixity names
-  where
-    lookupFixity name = do
-      f <- Util.handleGhcException
-        (const $ pure Nothing)
-        (Just <$> lookupFixityRn name)
-      if f == Just defaultFixity
-      then pure Nothing
-      else pure f
-
-fixityRule :: Recorder (WithPriority Log) -> Rules ()
-fixityRule recorder = do
-    define (cmapWithPrio LogShake recorder) $ \GetFixity nfp -> do
-        HAR{refMap} <- use_ GetHieAst nfp
-        env <- hscEnv <$> use_ GhcSessionDeps nfp -- deps necessary so that we can consult already loaded in ifaces instead of loading in duplicates
-        tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
-        fs <- lookupFixities env tcGblEnv (S.mapMonotonic (\(Right n) -> n) $ S.filter isRight $ M.keysSet refMap)
-        pure ([], Just (FixityMap fs))
-
-    -- Ensure that this plugin doesn't block on startup
-    addPersistentRule GetFixity $ \_ -> pure $ Just (FixityMap M.empty, idDelta, Nothing)
