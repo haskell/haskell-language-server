@@ -8,14 +8,14 @@ module Main
 
 import           Control.Lens               (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad              (void)
-import           Data.Text                  (Text, pack, unpack, lines, unlines)
+import           Data.Maybe                 (maybeToList)
+import           Data.Text                  (Text, lines, unlines, unpack)
 import qualified Ide.Plugin.CaseSplit       as CS
 import qualified Language.LSP.Protocol.Lens as L
 import           Prelude                    hiding (lines, unlines)
 import           System.FilePath
 import           Test.Hls                   hiding (waitForDiagnosticsFrom)
 import qualified Test.Hls.FileSystem        as FS
-import Data.Maybe (maybeToList)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -172,7 +172,7 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , testGroup "GHC (No)UnicodeSyntax(?) flag × in-file (No)UnicodeSyntax(?) extension"
       $ let cradleArgs = [
-              "Module",
+              "TUnicodeArrow",
               "-XGHC2024"
               ]
 
