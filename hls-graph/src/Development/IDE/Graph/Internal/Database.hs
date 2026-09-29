@@ -344,14 +344,32 @@ edits and store outdated values.
 A 'Running' rule status captures this state. Its value is a memoized 'splitIO'
 thunk. Any thread that waits on the key can force the thunk later in the same
 step. This example could leak threads. Both builds run at step S:
-  1. A build inserts 'Running S' for some key. Then the build throws before it
-     forces the thunk, closing its scope. The entry stays in the database.
-  2. A second build at step S forces the thunk. If the thunk kept the scope of
-     the first build, the thunk would start its dependencies in that closed
-     scope.
+
+    build 1, thread A                  build 2, thread B
+    -----------------                  -----------------
+    insert 'Running S' for some key
+    throw, closing scope 1
+      (cancels nothing)
+                                       see 'Running S' for the key
+                                       force the thunk
+                                       start its dependencies in scope 1
+                                       (scope 1 is already closed)
+
+The first build throws before it forces the thunk, so closing its scope doesn't
+do anything. The entry stays in the database. If the thunk kept the scope of
+the first build, the second build would start its dependencies in that closed
+scope, orphaned.
 
 The solution is to keep scopes on the demand-side instead of capture-side. When
-a thread forces a thunk, the thunk opens its own scope with 'runAIO'.
+a thread forces a thunk, the thunk opens its own scope with 'runAIO':
+
+    build 2, thread B
+    -----------------
+    force the thunk
+      open scope 2 with 'runAIO'
+      start its dependencies in scope 2
+      on an exception: close scope 2, cancelling the dependencies
+
 -}
 
 cleanupAsync :: IORef [Async a] -> IO ()
