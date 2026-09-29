@@ -8,14 +8,14 @@ module Main
 
 import           Control.Lens               (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad              (void)
-import           Data.Text                  (Text, pack, unpack, lines, unlines)
+import           Data.Maybe                 (maybeToList)
+import           Data.Text                  (Text, lines, unlines, unpack)
 import qualified Ide.Plugin.CaseSplit       as CS
 import qualified Language.LSP.Protocol.Lens as L
 import           Prelude                    hiding (lines, unlines)
 import           System.FilePath
 import           Test.Hls                   hiding (waitForDiagnosticsFrom)
 import qualified Test.Hls.FileSystem        as FS
-import Data.Maybe (maybeToList)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -170,20 +170,10 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , goldenWithClass "As many → as ->" "TAsManyUnicodeAsNot" $
       Prelude.flip inspectCodeAction [title]
-  , testGroup "In-cabal (No)UnicodeSyntax(?) × in-file (No)UnicodeSyntax(?)"
-      $ let cabalFile = [
-              "cabal-version:      3.4",
-              "name:               foo",
-              "version:            0.1.0.0",
-              "build-type:         Simple",
-              "common warnings",
-              "    ghc-options: -Wall",
-              "library",
-              "    import:             warnings",
-              "    exposed-modules:    TUnicodeArrow",
-              "    build-depends:      base",
-              "    hs-source-dirs:     .",
-              "    default-language:   GHC2024"
+  , testGroup "GHC (No)UnicodeSyntax(?) flag × in-file (No)UnicodeSyntax(?) extension"
+      $ let cradleArgs = [
+              "TUnicodeArrow",
+              "-XGHC2024"
               ]
 
             haskellFile = [
@@ -199,7 +189,7 @@ codeActionTests = testGroup
               "foo x = case x of"
               ]
 
-            mkExt ext = "    default-extensions: " <> ext
+            mkFlag ext = "-X" <> ext
 
             mkPragma ext = "{-# LANGUAGE " <> ext <> " #-}"
 
@@ -223,11 +213,12 @@ codeActionTests = testGroup
               | otherwise = "N"
 
             in zipWith3 applyPlugin
-                        [ toYesNo inCabal <> " × " <> toYesNo inPragma
-                          | inCabal <- alts
-                          , inPragma <- alts ]
-                        [ (cabalFile <> cabalOpt, pragma <> haskellFile)
-                          | cabalOpt <- maybeToList . fmap mkExt <$> alts
+                        [ toYesNo fromGHCflag <> " × " <> toYesNo fromPragma
+                          | fromGHCflag <- alts
+                          , fromPragma <- alts ]
+                        [ ( FS.directCradle (cradleArgs <> ghcFlags)
+                          , pragma <> haskellFile)
+                          | ghcFlags <- maybeToList . fmap mkFlag <$> alts
                           , pragma <- maybeToList . fmap mkPragma <$> alts ]
                         (insertedLines <$> arrow)
 
@@ -238,27 +229,27 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   ]
 
-applyPlugin :: Text -> ([Text], [Text]) -> [Text] -> TestTree
-applyPlugin name (cabal, source) inserted =
+applyPlugin :: Text -> (FS.FileTree, [Text]) -> [Text] -> TestTree
+applyPlugin name (cradleFile, sourceLines) inserted =
   let path = "TUnicodeArrow"
       findAction = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
       languageKind = LanguageKind_Haskell
       config = def
       plugin = caseSplitPlugin
       tree = (mkFs $ FS.simpleCabalProject'
-                      $ [FS.file ("foo" <.> "cabal") (FS.sources cabal),
-                         FS.file (path <.> "hs") ((FS.sources source))])
+                      $ [cradleFile,
+                         FS.file (path <.> "hs") (FS.sources sourceLines)])
       act = \doc -> do _ <- waitForDiagnosticsFrom doc
                        actions <- getAllCodeActions doc
                        action <- liftIO $ findAction actions
                        executeCodeAction action
   in testCase (unpack name) $ do
        newSource <- fmap lines $ runSessionWithServerInTmpDir config plugin tree $ do
-              doc <- createDoc (path <.> "hs") languageKind (unlines source)
+              doc <- createDoc (path <.> "hs") languageKind (unlines sourceLines)
               void waitForBuildQueue
               act doc
               documentContents doc
-       newSource @?= source <> inserted
+       newSource @?= sourceLines <> inserted
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
