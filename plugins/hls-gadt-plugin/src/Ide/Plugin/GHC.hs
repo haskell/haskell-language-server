@@ -218,18 +218,29 @@ prettyGADTDecl df decl =
 #if MIN_VERSION_ghc(9,11,0)
                 dd_ext = adjustDefnWhere (dd_ext tcdDataDefn),
 #endif
-                dd_cons =
-                      fmap adjustCon (dd_cons tcdDataDefn)
+                dd_cons = adjustCons (dd_cons tcdDataDefn)
                 }
             , ..
             }
         adjustDataDecl x = x
 
+#if MIN_VERSION_ghc_exactprint(1,14,3)
+        -- the first constructor sets the layout column and the others are
+        -- placed relative to it.
+        adjustCons (DataTypeCons td (c:cs)) = DataTypeCons td (adjustCon c : map (conAtCol 0) cs)
+        adjustCons cons = fmap adjustCon cons
+#else
+        adjustCons = fmap adjustCon
+#endif
+
         -- Make every data constructor start with a new line and 2 spaces
         adjustCon :: LConDecl GP -> LConDecl GP
 #if MIN_VERSION_ghc(9,11,0)
-        adjustCon (L _ r) =
-            let delta = EpaDelta (UnhelpfulSpan UnhelpfulNoLocationInfo) (DifferentLine 1 2) []
+        adjustCon = conAtCol 2
+
+        conAtCol :: Int -> LConDecl GP -> LConDecl GP
+        conAtCol col (L _ r) =
+            let delta = EpaDelta (UnhelpfulSpan UnhelpfulNoLocationInfo) (DifferentLine 1 col) []
             in L (EpAnn delta (AnnListItem []) (EpaComments [])) r
 #elif MIN_VERSION_ghc(9,9,0)
         adjustCon (L _ r) =
