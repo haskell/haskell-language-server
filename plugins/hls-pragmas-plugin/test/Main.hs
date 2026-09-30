@@ -22,6 +22,9 @@ pragmasSuggestPlugin = mkPluginTestDescriptor' suggestPragmaDescriptor "pragmas"
 pragmasCompletionPlugin :: PluginTestDescriptor ()
 pragmasCompletionPlugin = mkPluginTestDescriptor' completionDescriptor "pragmas"
 
+pragmasHoverPlugin :: PluginTestDescriptor ()
+pragmasHoverPlugin = mkPluginTestDescriptor' hoverDescriptor "pragmas"
+
 pragmasDisableWarningPlugin :: PluginTestDescriptor ()
 pragmasDisableWarningPlugin = mkPluginTestDescriptor' suggestDisableWarningDescriptor "pragmas"
 
@@ -31,6 +34,11 @@ tests =
   [ codeActionTests
   , codeActionTests'
   , completionTests
+  , completionDocumentationTest
+  , hoverDocumentationTest
+  , hoverStatusAndImplicationsTest
+  , hoverSelectsExtensionTest
+  , hoverIgnoresNonPragmaTest
   , completionSnippetTests
   , dontSuggestCompletionTests
   ]
@@ -138,6 +146,88 @@ completionTests =
   , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing (0, 13, 0, 31, 0, 23)
   , completionTest "completes GHC2021 extensions" "Completion.hs" "ghc" "GHC2021" Nothing Nothing Nothing (0, 13, 0, 31, 0, 16)
   ]
+
+completionDocumentationTest :: TestTree
+completionDocumentationTest = testCase "documents language extension completions" $ runSessionWithServer def pragmasCompletionPlugin testDataDir $ do
+  doc <- openDoc "Completion.hs" "haskell"
+  _ <- waitForDiagnostics
+  compls <- getCompletions doc (Position 0 24)
+  item <- getCompletionByLabel "OverloadedStrings" compls
+  liftIO $ case item ^. L.documentation of
+    Just (InR (MarkupContent MarkupKind_Markdown contents)) -> do
+      assertBool "documentation names the extension" ("OverloadedStrings" `T.isInfixOf` contents)
+      assertBool "documentation describes the extension" ("Desugar string literals via `IsString` class." `T.isInfixOf` contents)
+      assertBool "documentation links to the extension page" ("overloaded_strings.html#extension-OverloadedStrings" `T.isInfixOf` contents)
+      assertBool "documentation includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
+      assertBool "documentation uses a table" ("| Field | Value |" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for OverloadedStrings"
+
+  bangDoc <- openDoc "TargetedLinks.hs" "haskell"
+  _ <- waitForDiagnostics
+  bangCompletions <- getCompletions bangDoc (Position 0 18)
+  bangPatterns <- getCompletionByLabel "BangPatterns" bangCompletions
+  liftIO $ case bangPatterns ^. L.documentation of
+    Just (InR (MarkupContent MarkupKind_Markdown contents)) -> do
+      assertBool "documentation links to the shared strictness page" ("strict.html#extension-BangPatterns" `T.isInfixOf` contents)
+      assertBool "documentation includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
+      assertBool "documentation includes language editions" ("Included in GHC2024, GHC2021" `T.isInfixOf` contents)
+      assertBool "documentation labels the status" ("| Status | Included in GHC2024, GHC2021 |" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for BangPatterns"
+
+hoverDocumentationTest :: TestTree
+hoverDocumentationTest = testCase "documents language extensions on hover" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
+  doc <- openDoc "Completion.hs" "haskell"
+  _ <- waitForDiagnostics
+  hover <- getHover doc (Position 0 20)
+  liftIO $ case hover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) -> do
+      assertBool "hover names the extension" ("OverloadedStrings" `T.isInfixOf` contents)
+      assertBool "hover describes the extension" ("Desugar string literals via `IsString` class." `T.isInfixOf` contents)
+      assertBool "hover links to the extension page" ("overloaded_strings.html#extension-OverloadedStrings" `T.isInfixOf` contents)
+      assertBool "hover includes the GHC version" ("Since GHC 6.8.1" `T.isInfixOf` contents)
+      assertBool "hover uses a table" ("| Field | Value |" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for OverloadedStrings"
+
+hoverStatusAndImplicationsTest :: TestTree
+hoverStatusAndImplicationsTest = testCase "documents extension status and linked implications" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
+  doc <- openDoc "Hover.hs" "haskell"
+  _ <- waitForDiagnostics
+  hover <- getHover doc (Position 1 20)
+  liftIO $ case hover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) -> do
+      assertBool "hover shows deprecated status" ("| Status | Deprecated |" `T.isInfixOf` contents)
+      assertBool "hover links implied extensions" ("[OverlappingInstances](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/instances.html#extension-OverlappingInstances)" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for IncoherentInstances"
+  negatedHover <- getHover doc (Position 2 20)
+  liftIO $ case negatedHover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) ->
+      assertBool "negated extensions do not imply enabled extensions" (not $ "| Implies |" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for NoIncoherentInstances"
+  nondecreasingHover <- getHover doc (Position 3 20)
+  liftIO $ case nondecreasingHover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) ->
+      assertBool "extensions beginning with No are not treated as negated" (not $ "Disable the" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for NondecreasingIndentation"
+
+hoverSelectsExtensionTest :: TestTree
+hoverSelectsExtensionTest = testCase "selects the language extension under the cursor" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
+  doc <- openDoc "Hover.hs" "haskell"
+  _ <- waitForDiagnostics
+  hover <- getHover doc (Position 0 33)
+  liftIO $ case hover of
+    Just (Hover (InL (MarkupContent MarkupKind_Markdown contents)) _) ->
+      assertBool "hover documents the selected extension" ("OverloadedStrings" `T.isInfixOf` contents)
+    _ -> assertFailure "Expected Markdown documentation for OverloadedStrings"
+
+hoverIgnoresNonPragmaTest :: TestTree
+hoverIgnoresNonPragmaTest = testCase "does not document ordinary Haskell code on hover" $ runSessionWithServer def pragmasHoverPlugin testDataDir $ do
+  doc <- openDoc "Completion.hs" "haskell"
+  _ <- waitForDiagnostics
+  hover <- getHover doc (Position 3 1)
+  liftIO $ case hover of
+    Nothing -> pure ()
+    Just (Hover (InL (MarkupContent _ contents)) _) -> contents @?= ""
+    _ -> assertFailure "Expected no documentation for ordinary Haskell code"
 
 completionSnippetTests :: TestTree
 completionSnippetTests =

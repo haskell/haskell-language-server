@@ -8,6 +8,9 @@ module Development.IDE.Plugin.HLS.GhcIde
   , Log(..)
   ) where
 
+import           Control.Monad.IO.Class              (liftIO)
+import qualified Data.Text                            as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE
 import qualified Development.IDE.LSP.HoverDefinition as Hover
 import qualified Development.IDE.LSP.Notifications   as Notifications
@@ -66,5 +69,22 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 -- ---------------------------------------------------------------------
 
 hover' :: Recorder (WithPriority Hover.Log) -> PluginMethodHandler IdeState Method_TextDocumentHover
-hover' recorder ideState _ HoverParams{..} =
-    Hover.hover recorder ideState TextDocumentPositionParams{..}
+hover' recorder ideState _ HoverParams
+    { _textDocument = TextDocumentIdentifier uri
+    , _position = position
+    } = do
+    contents <- liftIO $ runAction "GhcIde.hover" ideState $ getUriContents $ toNormalizedUri uri
+    if isLanguagePragmaLine position (Rope.toText <$> contents)
+      then pure $ InR Null
+      else Hover.hover recorder ideState $ TextDocumentPositionParams
+        (TextDocumentIdentifier uri) position
+
+isLanguagePragmaLine :: Position -> Maybe T.Text -> Bool
+isLanguagePragmaLine (Position line _) contents =
+  maybe False (T.isPrefixOf "{-# LANGUAGE " . T.stripStart) $ do
+    source <- contents
+    atMay (T.lines source) (fromIntegral line)
+  where
+    atMay xs index = case drop index xs of
+      x : _ -> Just x
+      []    -> Nothing
