@@ -34,8 +34,7 @@ import           Data.Aeson                            (FromJSON (..),
 import           Data.Bifunctor                        (second)
 import qualified Data.ByteString                       as BS
 import           Data.Data
-import           Data.Either                           (fromRight,
-                                                        partitionEithers)
+import           Data.Either                           (partitionEithers)
 import           Data.Foldable                         (toList)
 import           Data.Hashable                         (unhashed)
 import qualified Data.HashSet                          as Set
@@ -216,7 +215,8 @@ resolveInlineThis
   -> CodeAction
   -> RunRetrieInlineThisParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
-resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
+resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
+  outcome <- runExceptT $ runExceptT $ do
     nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:
@@ -236,15 +236,8 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     (fun_id, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
-    imports <- case extractInlineImports check checktgt fun_matches of
-      Left msg -> do
-        -- TODO: if there was a problem generating the imports (for example, a
-        -- name is not exported) we should reject the rewrite
-        lift $
-          pluginSendNotification SMethod_WindowShowMessage $
-            ShowMessageParams MessageType_Warning (T.pack msg)
-        return []
-      Right imps -> return imps
+    imports <- either (refuse . T.pack) pure $
+      extractInlineImports check checktgt fun_matches
     let
         annotatedImports = renderImports imports
     fixedSrc <- liftIO $ transformA (unsafeMkA (makeDeltaAst astSrc) 0) (fix sourceFixities)
@@ -269,6 +262,17 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
             return $ ca & L.edit ?~ wedit
+  case outcome of
+    Left msg -> do
+      -- warn and don't make any edits
+      pluginSendNotification SMethod_WindowShowMessage $
+        ShowMessageParams MessageType_Warning msg
+      return (Right ca)
+    Right resolved -> return resolved
+  where
+    refuse :: T.Text -> ExceptT PluginError (ExceptT T.Text (HandlerM Config)) a
+    refuse = lift . throwError
+
 
 -- | Finds the binder at the provided span.
 findBinder
