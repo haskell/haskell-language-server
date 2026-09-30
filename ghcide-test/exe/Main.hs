@@ -52,6 +52,7 @@ import           FindImplementationAndHoverTests
 import           GarbageCollectionTests
 import           HaddockTests
 import           HighlightTests
+import           HoverRangeTests
 import           IfaceTests
 import           InitializeResponseTests
 import           LogType                         ()
@@ -83,6 +84,7 @@ main = do
     , CodeLensTests.tests
     , OutlineTests.tests
     , HighlightTests.tests
+    , HoverRangeTests.tests
     , ConstructorHoverTests.tests
     , FindDefinitionAndHoverTests.tests
     , FindImplementationAndHoverTests.tests

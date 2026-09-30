@@ -8,6 +8,7 @@ module Development.IDE.Plugin.HLS.GhcIde
   , Log(..)
   ) where
 
+import           Data.Proxy                          (Proxy (..))
 import           Development.IDE
 import qualified Development.IDE.LSP.HoverDefinition as Hover
 import qualified Development.IDE.LSP.Notifications   as Notifications
@@ -46,6 +47,8 @@ descriptors recorder =
 descriptor :: Recorder (WithPriority Hover.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover (hover' recorder)
+                  <> mkPluginHandler (SMethod_CustomMethod (Proxy @"haskell/hoverRange")) (\ide _ params ->
+                      Hover.hoverRange recorder ide params)
                   <> mkPluginHandler SMethod_TextDocumentDocumentSymbol moduleOutline
                   <> mkPluginHandler SMethod_TextDocumentDefinition (\ide _ DefinitionParams{..} ->
                       Hover.gotoDefinition recorder ide TextDocumentPositionParams{..})
