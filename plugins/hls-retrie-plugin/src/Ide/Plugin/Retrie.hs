@@ -569,6 +569,7 @@ data CallRetrieError
   | NoParse NormalizedFilePath
   | GHCParseError NormalizedFilePath String
   | NoTypeCheck NormalizedFilePath
+  | CannotImport NormalizedFilePath String
   deriving (Eq)
 
 instance Show CallRetrieError where
@@ -576,6 +577,7 @@ instance Show CallRetrieError where
   show (NoParse f) = "Cannot parse: " <> fromNormalizedFilePath f
   show (GHCParseError f m) = "Cannot parse " <> fromNormalizedFilePath f <> " : " <> m
   show (NoTypeCheck f) = "File does not typecheck: " <> fromNormalizedFilePath f
+  show (CannotImport f m) = "Cannot add import to " <> fromNormalizedFilePath f <> " : " <> m
 
 instance Exception CallRetrieError
 
@@ -627,8 +629,8 @@ callRetrie recorder state session spec origin binds = do
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     (cpp, pm, contents) <- ExceptT $ try $
       getCPPmodule recorder state session targetFixities t
-    -- FIXME(simon): raise the error properly
-    let imps = fromRight mempty $ extractImports tcd tct binds spec
+    imps <- either (throwError . CannotImport nt) pure $
+      extractImports tcd tct binds spec
     (_user, _ast, change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
     return $ asTextEdits nt pm contents $ case change of
       NoChange              -> NoChange
