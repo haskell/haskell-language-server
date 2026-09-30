@@ -6,6 +6,8 @@ module ActionSpec where
 import           Control.Concurrent                      (MVar, readMVar)
 import qualified Control.Concurrent                      as C
 import           Control.Concurrent.STM
+import           Control.Exception                       (bracket_)
+import           Control.Monad                           (void)
 import           Control.Monad.IO.Class                  (MonadIO (..))
 import           Development.IDE.Graph                   (shakeOptions)
 import           Development.IDE.Graph.Database          (shakeNewDatabase,
@@ -17,6 +19,7 @@ import           Development.IDE.Graph.Internal.Types
 import           Development.IDE.Graph.Rule
 import           Example
 import qualified StmContainers.Map                       as STM
+import           System.Timeout                          (timeout)
 import           Test.Hspec
 
 
@@ -129,3 +132,21 @@ spec = do
     res `shouldBe` [[True]]
     Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
     resultDeps res `shouldBe` UnknownDeps
+
+  describe "Rule computations own their scope" $ do
+    it "cancels the deps of a stale key with the build that forces it" $ do
+      running <- newTVarIO (0 :: Int)
+      let leaf = bracket_ (atomically $ modifyTVar' running succ)
+                          (atomically $ modifyTVar' running pred)
+                          (C.threadDelay maxBound)
+          waitRunning n = timeout 2_000_000 $ atomically $ readTVar running >>= check . (== n)
+      (ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions (ruleCycleAfterVictim leaf)
+      -- A previous result makes the stale thunk refresh its deps, and two dirty
+      -- deps make that refresh spawn a thread.
+      _ <- build theDb emptyStack [CycleRule 1]
+      incDatabase theDb (Just (map (newKey . CycleRule) [2, 3]))
+      build theDb emptyStack [CycleRule 0] `shouldThrow` \StackException{} -> True
+      builder <- C.forkIO $ void $ build theDb emptyStack [CycleRule 1]
+      waitRunning 2 `shouldReturn` Just ()
+      C.killThread builder
+      waitRunning 0 `shouldReturn` Just ()
