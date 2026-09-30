@@ -58,6 +58,7 @@ inlineThisTests =
       , testProvider "pattern-bound argument" "Class" 6 8 []
       , testProvider "record field" "Field" 8 9 []
       , testProvider "record field control" "Field" 8 6 ["Inline g"]
+      , testProvider "where binder" "NestedWhere" 5 4 []
       , testProvider "operator" "Operator" 4 8 ["Inline */"]
       , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards"]
       , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Fold UserId"]
