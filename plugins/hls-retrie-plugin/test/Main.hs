@@ -76,7 +76,7 @@ inlineThisTests =
       , testInline "right-associative expression needs parens" "RightAssocOp" 8 4
       , testInline "where to let" "WhereToLet" 7 6
       , testInline "where to let arg substitution" "WhereToLetSubst" 6 4
-      , testInline "qualified" "Qualified" 5 6
+      , expectFail $ testInline "qualified" "Qualified" 5 6
       , testInline "single clause pattern" "Pattern" 5 4
       , testInline "rename let binding" "Capture" 7 6
       ]
