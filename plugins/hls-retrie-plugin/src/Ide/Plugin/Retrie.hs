@@ -236,8 +236,15 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = do
     (fun_id, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
-    imports <- either (throwError . PluginInternalError . T.pack) pure $
-      extractInlineImports check checktgt fun_matches
+    imports <- case extractInlineImports check checktgt fun_matches of
+      Left msg -> do
+        -- TODO: if there was a problem generating the imports (for example, a
+        -- name is not exported) we should reject the rewrite
+        lift $
+          pluginSendNotification SMethod_WindowShowMessage $
+            ShowMessageParams MessageType_Warning (T.pack msg)
+        return []
+      Right imps -> return imps
     let
         annotatedImports = renderImports imports
     fixedSrc <- liftIO $ transformA (unsafeMkA (makeDeltaAst astSrc) 0) (fix sourceFixities)
