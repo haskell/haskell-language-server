@@ -744,7 +744,10 @@ makeSimpleDetails hsc_env =
 
 mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> Maybe CoreProgram -> TcGblEnv -> IO ModIface
 mkIfaceTc hscEnv shm md _ms _mcp =
-  GHC.mkIfaceTc hscEnv shm md _ms _mcp -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
+  -- GHC >= 9.14.2
+  GHC.mkIfaceTc hscEnv shm md _ms _mcp Nothing -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
+  -- Otherwise:
+  -- GHC.mkIfaceTc hscEnv shm md _ms _mcp Nothing -- mcp::Maybe CoreProgram is only used in GHC >= 9.6
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
