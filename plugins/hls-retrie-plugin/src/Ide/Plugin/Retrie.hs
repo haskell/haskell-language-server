@@ -254,7 +254,9 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
         Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
-        Right (_,_,NoChange) -> throwError $ PluginInternalError "Retrie - inline produced no changes"
+        -- a refused site is not an error: leave the action without an edit
+        Right (_,_,NoChange) ->
+            refuse "Not inlined: the call site did not match the definition, or a binding there would capture one of its variables"
         Right (_,_,Change replacements imports) -> do
             let edits = asEditMap $ asTextEdits nfp ps contents $ Change ourReplacement imports
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
