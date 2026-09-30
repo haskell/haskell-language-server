@@ -18,14 +18,17 @@ import           Control.Exception.Safe                (Exception (..),
                                                         SomeException, assert,
                                                         catch, throwIO, try)
 import           Control.Lens.Operators
-import           Control.Monad                         (forM, unless, when)
+import           Control.Monad                         (filterM, forM, unless,
+                                                        when)
 import           Control.Monad.Error.Class             (MonadError (throwError))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
+import           Data.Maybe                            (fromMaybe)
 
-import           Control.Monad.Trans.Maybe             (MaybeT)
+import           Control.Monad.Trans.Maybe             (MaybeT, hoistMaybe,
+                                                        runMaybeT)
 import           Data.Aeson                            (FromJSON (..),
                                                         ToJSON (..))
 import           Data.Bifunctor                        (second)
@@ -83,6 +86,9 @@ import           Development.IDE.Types.Shake           (WithHieDb)
 import qualified GHC                                   as GHCGHC
 import qualified GHC.Data.EnumSet                      as EnumSet
 import           GHC.Generics                          (Generic)
+import           GHC.Iface.Ext.Types                   (BindType (RegularBind),
+                                                        ContextInfo (ValBind),
+                                                        identInfo)
 import qualified GHC.LanguageExtensions.Type           as LangExt (Extension (..))
 import           Ide.Plugin.Error                      (PluginError (..),
                                                         getNormalizedFilePathE)
@@ -474,9 +480,24 @@ suggestBindInlines _uri binds range hie lookupMod = do
             Just siteLoc
               | siteRange <- getLocationRange siteLoc
               , range `isSubrangeOf` siteRange -> do
-                    mbSrcLocation <- nameToLocation withHieDb lookupModule name
-                    return $ maybe mempty (Set.fromList . map (nameOccName name, siteLoc,)) mbSrcLocation
+                    srcLocations <- nameToLocation withHieDb lookupModule name
+                    equations <- filterM (equationBound name) (fromMaybe [] srcLocations)
+                    return $ Set.fromList (map (nameOccName name, siteLoc,) equations)
             _ -> pure mempty
+
+-- | Whether name is defined by a regular ValBind (i.e. it's not a class
+-- method, field, constructor, pattern synonym, etc).
+equationBound :: GHC.Name -> Location -> IdeAction Bool
+equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
+    defFile <- hoistMaybe $
+      uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri loc
+    (HAR{refMap}, _) <- useWithStaleFastMT GetHieAst defFile
+    -- occurrences of the name in the defining module
+    let occs = Map.findWithDefault [] (Right name) refMap
+    pure $ any (any isEquation . identInfo . snd) occs
+  where
+    isEquation (ValBind RegularBind _ _) = True
+    isEquation _                         = False
 
 suggestTypeRewrites ::
   Uri ->
