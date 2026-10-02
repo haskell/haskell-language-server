@@ -1054,5 +1054,11 @@
         "description": "Enables splice plugin",
         "scope": "resource",
         "type": "boolean"
+    },
+    "haskell.plugin.tilia.config.external": {
+        "default": false,
+        "markdownDescription": "Call out to an external \"tilia\" executable, rather than using the bundled library",
+        "scope": "resource",
+        "type": "boolean"
     }
 }
