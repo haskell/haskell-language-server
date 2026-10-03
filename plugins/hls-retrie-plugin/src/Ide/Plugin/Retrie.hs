@@ -633,7 +633,7 @@ callRetrie recorder state session spec origin binds = do
 
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
-  originPm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule origin
+  originPm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments origin
   originParsedModule <- transformA (fixAnns originPm) (fix originFixities)
   -- TODO(simon): It would be better to compute imports per-clause.
   rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
@@ -830,6 +830,11 @@ getCPPmodule recorder state session fixities t = do
                 modSummary
                   { ms_hspp_buf =
                       Just (stringToStringBuffer contents)
+                    -- keep comments, as GetParsedModuleWithComments does
+                  , ms_hspp_opts =
+                      ms_hspp_opts modSummary
+                        `GHC.gopt_set` GHC.Opt_KeepRawTokenStream
+                        `GHC.gopt_unset` GHC.Opt_Haddock
                   }
           logWith recorder Info $ LogParsingModule t
           parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
@@ -842,7 +847,7 @@ getCPPmodule recorder state session fixities t = do
       case mbContentsVFS of
         Just contents -> return $ Rope.toText contents
         Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
-    pm <- useOrFail state "Retrie.GetParsedModule" NoParse GetParsedModule nt
+    pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
     let
       ps = GHC.pm_parsed_source pm
       extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
