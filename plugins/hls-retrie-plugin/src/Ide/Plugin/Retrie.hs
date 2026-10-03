@@ -222,8 +222,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
-    --   Run retrie to get a list of changes
-    --   Select the change that inlines the identifier in the given position
+    --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
     astSrc <- runActionE "retrie" state $
         useE GetAnnotatedParsedSource nfpSource
@@ -248,8 +247,9 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
       useWithStaleE GhcSessionDeps nfp
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
     let inline
-          | GHCGHC.isExternalName (unLoc fun_id) = apply inlineRewrite
-          | otherwise = applyLocal fromRange inlineRewrite
+          | GHCGHC.isExternalName (unLoc fun_id) =
+              applyWithUpdate (atSite intoRange updateContext) inlineRewrite
+          | otherwise = applyLocal intoRange fromRange inlineRewrite
     result <- liftIO $ try @_ @SomeException $
         runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
@@ -257,12 +257,9 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         -- a refused site is not an error: leave the action without an edit
         Right (_,_,NoChange) ->
             refuse "Not inlined: the call site did not match the definition, or a binding there would capture one of its variables"
-        Right (_,_,Change replacements imports) -> do
-            let edits = asEditMap $ asTextEdits nfp ps contents $ Change ourReplacement imports
+        Right (_,_,change) -> do
+            let edits = asEditMap $ asTextEdits nfp ps contents change
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
-                ourReplacement = [ r
-                    | r@Replacement{..} <- replacements
-                    , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
             return $ ca & L.edit ?~ wedit
   case outcome of
     Left msg -> do
@@ -294,8 +291,8 @@ findBinder originSpan =
     matcher _ = First Nothing
 
 -- | Only install rewrites when the target subtree has been reached.
-applyLocal :: GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
-applyLocal defSpan rewrites = applyWithUpdate updater moduleRewrites
+applyLocal ::GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
+applyLocal site defSpan rewrites = applyWithUpdate (atSite site updater) moduleRewrites
   where
     -- retrie will exit early if there are no rewrites, so just stub them out
     -- at the top level.
@@ -332,6 +329,21 @@ applyLocal defSpan rewrites = applyWithUpdate updater moduleRewrites
            | L _ FunBind{fun_id} <- toList binds
            , RealSrcSpan sp _ <- [GHC.getLocA fun_id] ]
     definesIt _ = False
+
+-- | Drop rewriters outside of the target span.
+atSite :: GHCGHC.RealSrcSpan -> ContextUpdater -> ContextUpdater
+atSite site update c i x = narrow <$> update c i x
+  where
+    narrow c'
+      | gmapQi i holdsSite x = c'
+      | otherwise = c' { ctxtRewriter = mempty }
+
+    -- anything but an expression can still lead to the site
+    holdsSite :: GenericQ Bool
+    holdsSite = True `mkQ` inExpr
+
+    inExpr :: LHsExpr GhcPs -> Bool
+    inExpr e = RealSrcSpan site Nothing `GHC.isSubspanOf` GHC.getLocA e
 
 -------------------------------------------------------------------------------
 
