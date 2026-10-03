@@ -19,12 +19,15 @@ module Ide.Plugin.Retrie.Imports
 import           Data.Foldable                             (find)
 import           Data.Generics                             (Data, everything,
                                                             mkQ)
+#if !MIN_VERSION_ghc(9,13,0)
+import           Data.Generics                             (everythingBut, extQ)
+#endif
 import qualified Data.Map                                  as Map
 import qualified Data.Text                                 as T
 import           Development.IDE                           hiding
                                                            (pluginHandlers)
 import           Development.IDE.GHC.Compat                (AvailInfo,
-                                                            EpAnnImportDecl (EpAnnImportDecl),
+                                                            EpAnnImportDecl (..),
                                                             Extension (PatternSynonyms),
                                                             GREInfo (IAmConLike),
                                                             GenLocated (L),
@@ -106,18 +109,27 @@ import           Retrie.ExactPrint                         (AnnotatedImports,
 
 -- TODO(simon): Apply with 'addRewriteImports'
 
--- | All of the 'Name's in this subtree along with their spellings.
-occurrences :: Data a => a -> [(Name, RdrName)]
+-- | All of the 'Name's in this subtree along with their spellings, given
+-- the parsed module the subtree was renamed from.
+occurrences :: Data a => GHCGHC.ParsedSource -> a -> [(Name, RdrName)]
 #if MIN_VERSION_ghc(9,13,0)
-occurrences = everything (++) (mkQ [] occ)
+occurrences _ = everything (++) (mkQ [] occ)
   where
     occ :: GHCGHC.LIdOccP GhcRn -> [(Name, RdrName)]
     occ (L _ (GHC.WithUserRdr rdr name)) = [(name, rdr)]
 #else
-occurrences mg = [ (name, rdr) | (sp, name) <- renamedOccs mg, Just rdr <- [Map.lookup sp parsedRdrs] ]
+-- look up the original spelling in the parsed source by span
+occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt)
   where
-    renamedOccs = everything (++) (mkQ [] locName)
-    parsedRdrs  = Map.fromList (everything (++) (mkQ [] locRdr) (pm_parsed_source (tmrParsed tmrDef)))
+    occ :: GHCGHC.LIdP GhcRn -> ([(Name, RdrName)], Bool)
+    occ (L l name) =
+      ([ (name, rdr) | Just sp <- [realSpan l], Just rdr <- [Map.lookup sp spellings] ], False)
+    ctxt :: GHC.HsMatchContextRn -> ([(Name, RdrName)], Bool)
+    ctxt _ = ([], True)
+    spellings = Map.fromList (everything (++) (mkQ [] spelling) ps)
+    spelling :: GHCGHC.LIdP GhcPs -> [(GHC.RealSrcSpan, RdrName)]
+    spelling (L l rdr) = [ (sp, rdr) | Just sp <- [realSpan l] ]
+    realSpan l = GHC.srcSpanToRealSrcSpan (GHC.locA l)
 #endif
 
 -- | Look at each 'Name' in the provided ast. If it can be imported, then
@@ -131,7 +143,7 @@ extractInlineImports
   -> Either String [(ModuleName, ImportForm)]
 extractInlineImports def tgt matches = sequence $ map importName names
   where
-    names = filter (not . skip) (occurrences matches)
+    names = filter (not . skip) (occurrences (GHCGHC.pm_parsed_source (tmrParsed def)) matches)
 
     skip (name, rdr) =
       isInternalName name ||
@@ -284,8 +296,12 @@ renderImport (m, form) = L noAnnSrcSpanDP0 $ case form of
     base = (simpleImportDecl m) { ideclName = L noAnnSrcSpanDP1 m }
     qualTok = EpTok (dn 1)
     ext qual as' = XImportDeclPass
-      (EpAnn d0 (EpAnnImportDecl (EpTok d0) Nothing Nothing Nothing qual Nothing as') emptyComments)
+      (EpAnn d0 ann emptyComments)
       NoSourceText False
+      where
+        ann = noAnn { importDeclAnnImport    = EpTok d0
+                    , importDeclAnnQualified = qual
+                    , importDeclAnnAs        = as' }
     member :: Int -> (OccName, MemberForm) -> LIE GhcPs
     member i (occ, mf) = setEntryDP ie (SameLine (min i 1))
       where
