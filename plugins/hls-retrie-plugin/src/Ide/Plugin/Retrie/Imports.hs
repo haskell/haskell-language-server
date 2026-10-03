@@ -29,12 +29,10 @@ import           Development.IDE                           hiding
 import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             EpAnnImportDecl (..),
                                                             Extension (PatternSynonyms),
-                                                            GREInfo (IAmConLike),
                                                             GenLocated (L),
                                                             GenModule (moduleName),
                                                             GhcPs, GhcRn,
                                                             GlobalRdrElt,
-                                                            GlobalRdrEltX (gre_info),
                                                             GlobalRdrEnv,
                                                             HsBindLR (..),
                                                             ImportDecl (..),
@@ -42,21 +40,19 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             ImportListInterpretation (Exactly),
                                                             LHsExpr, LIE,
                                                             LImportDecl,
-                                                            LookupGRE (LookupRdrName),
                                                             ModuleName, Name,
                                                             OccName,
                                                             Parent (NoParent, ParentIs),
                                                             RdrName (..),
                                                             SourceText (..),
                                                             TcGblEnv (..),
-                                                            WhichGREs (SameNameSpace),
                                                             XImportDeclPass (XImportDeclPass),
                                                             availsToNameSet,
                                                             elemNameSet, fun_id,
                                                             gre_imp, gre_lcl,
                                                             gre_name, gre_par,
                                                             isBuiltInSyntax,
-                                                            isExact,
+                                                            isDataOcc, isExact,
                                                             isInternalName,
                                                             lookupGRE_Name,
                                                             mkRdrUnqual,
@@ -96,7 +92,8 @@ import           GHC.Parser.Annotation                     (AddEpAnn (..),
                                                             realSrcSpan)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
-import           GHC.Types.Avail                           (AvailInfo (AvailTC))
+import           GHC.Types.Avail                           (AvailInfo (AvailTC),
+                                                            availNames)
 import           GHC.Types.Name                            (nameModule_maybe)
 import           GHC.Types.Name.Reader                     (is_decl)
 import           Retrie.Rewrites
@@ -214,7 +211,11 @@ inScope env rdr name = any ((== name) . gre_name) (lookupGRERdr env rdr)
 
 -- FIXME(simon): wrong namespace
 lookupGRERdr :: GlobalRdrEnv -> RdrName -> [GlobalRdrElt]
-lookupGRERdr env rdr = RdrName.lookupGRE env (LookupRdrName rdr SameNameSpace)
+#if MIN_VERSION_ghc(9,7,0)
+lookupGRERdr env rdr = RdrName.lookupGRE env (RdrName.LookupRdrName rdr RdrName.SameNameSpace)
+#else
+lookupGRERdr env rdr = RdrName.lookupGRE_RdrName rdr env
+#endif
 
 data Provenance
   = Importable
@@ -232,13 +233,18 @@ data Provenance
 -- | The import-facing module an 'ImportSpec' brought a name in from
 -- (@Data.Char@, not the defining @GHC.Internal.*@ module).
 greImportModule :: GHC.ImportSpec -> ModuleName
+#if MIN_VERSION_ghc(9,7,0)
 greImportModule = moduleName . RdrName.is_mod . is_decl
+#else
+greImportModule = RdrName.is_mod . is_decl
+#endif
 
 -- | Figure out how the defining module references this 'Name'.
 provenanceOf :: GlobalRdrEnv -> [AvailInfo] -> ModuleName -> Name -> Maybe Provenance
 provenanceOf gre exports mod name = do
   gre <- lookupGRE_Name gre name
-  let bundled = Map.fromList [ (n, p) | AvailTC p ns <- exports, n <- ns, n /= p ]
+  let bundled = Map.fromList
+        [ (n, p) | a@(AvailTC p _) <- exports, n <- availNames a, n /= p ]
   -- is the name defined in this module?
   if gre_lcl gre
     then Just $
@@ -255,11 +261,11 @@ provenanceOf gre exports mod name = do
         []    -> Nothing -- is this possible?
 
 memberForm :: GlobalRdrElt -> MemberForm
-memberForm gre = case (gre_par gre, gre_info gre) of
-  (ParentIs p, _)          -> ViaParent (nameOccName p)
+memberForm gre = case gre_par gre of
+  ParentIs p                                        -> ViaParent (nameOccName p)
   -- a data constructor always has its type as parent
-  (NoParent, IAmConLike _) -> AsPattern
-  _                        -> Plain
+  NoParent | isDataOcc (nameOccName (gre_name gre)) -> AsPattern
+  _                                                 -> Plain
 
 -- | How an unqualified name is spelled in an import list.
 data MemberForm
@@ -354,7 +360,7 @@ importList items =
 anchorDP :: DeltaPos -> Anchor
 anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
 
--- | Fresh annotations; exactprint 1.8 wants the span they stand in for.
+-- | Fresh annotations; older exactprint wants the span they stand in for.
 noAnnSrcSpanDP0, noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
 noAnnSrcSpanDP0 = ExactPrint.noAnnSrcSpanDP0 generatedSrcSpan
 noAnnSrcSpanDP1 = ExactPrint.noAnnSrcSpanDP1 generatedSrcSpan
