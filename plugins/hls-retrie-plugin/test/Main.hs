@@ -84,6 +84,8 @@ inlineThisTests =
       , expectFail $ testInline "qualified" "Qualified" 5 6
       , testInline "single clause pattern" "Pattern" 5 4
       , testInline "rename let binding" "Capture" 7 6
+      , testInline "comment in an argument" "CommentArg" 7 6
+      , testInline "comment in an argument, CPP module" "CommentArgCpp" 9 6
       ]
     , expectFail $ testGroup "dispatch"
       [ testInline "dispatch multi clause" "MultiClause" 7 4
@@ -106,6 +108,7 @@ unfoldTests =
   testGroup "Unfold"
     [ testUnfold "top level function" "Identity" 4 0
     , testUnfold "cpp branches" "CPP" 5 0
+    , testUnfold "comment in the definition" "UnfoldComment" 4 0
 
       -- The action is run in the defining module, but the changes all happen
       -- in the target module.
