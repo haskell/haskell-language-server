@@ -67,6 +67,7 @@ inlineThisTests =
       [ testInline "top level function" "Identity" 7 6
       , testInline "top level function in another file" "Imported" 4 6
       , testInline "nested where function" "NestedWhere" 3 6
+      , testInline "nested where function, one of two uses" "NestedWhereTwice" 3 12
       , testInline "nested let function" "NestedLet" 5 5
       , testInline "nested function shadowing a top-level one" "ShadowLocal" 6 26
       , testInline "guard let function" "GuardLet" 5 12
@@ -92,6 +93,7 @@ inlineThisTests =
       ]
     , testGroup "imports"
       [ testInline "appends an import" "CrossFileUse" 6 4
+      , testInline "appends an import once when other uses remain" "CrossFileUses" 6 4
       , testInline "append import at layout column" "IndentImportUse" 6 6
       , testInline "import unqualified to match template" "QualifiedScopeUse" 6 4
       , testInline "import qualified" "QualifiedBodyUse" 5 4
