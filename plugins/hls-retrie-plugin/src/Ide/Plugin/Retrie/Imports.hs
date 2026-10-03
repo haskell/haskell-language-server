@@ -67,23 +67,36 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             simpleImportDecl)
 import qualified Development.IDE.GHC.Compat                as GHC
 import qualified Development.IDE.GHC.Compat                as RdrName
-import           Development.IDE.GHC.Compat.ExactPrint     (d0, dn,
-                                                            noAnnSrcSpanDP0,
-                                                            noAnnSrcSpanDP1,
-                                                            setEntryDP)
+import           Development.IDE.GHC.Compat.ExactPrint     (d0, dn, setEntryDP)
+#if MIN_VERSION_ghc(9,11,0)
+import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP0,
+                                                            noAnnSrcSpanDP1)
+#else
+import qualified Development.IDE.GHC.Compat.ExactPrint     as ExactPrint
+#endif
 import qualified GHC                                       as GHCGHC
 import qualified GHC.Data.EnumSet                          as EnumSet
 import           GHC.Parser.Annotation                     (AnnList (..),
-                                                            AnnListBrackets (ListParens),
                                                             DeltaPos (SameLine),
                                                             EpAnn (EpAnn),
+                                                            EpaLocation,
+                                                            emptyComments)
+#if MIN_VERSION_ghc(9,11,0)
+import           GHC.Parser.Annotation                     (AnnListBrackets (ListParens),
                                                             EpToken (EpTok),
                                                             LocatedLI,
-                                                            NoAnn (noAnn),
-                                                            emptyComments)
+                                                            NoAnn (noAnn))
+#else
+import           GHC.Parser.Annotation                     (AddEpAnn (..),
+                                                            Anchor (..),
+                                                            AnchorOperation (..),
+                                                            AnnKeywordId (..),
+                                                            LocatedL,
+                                                            SrcSpanAnn' (..),
+                                                            realSrcSpan)
+import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+#endif
 import           GHC.Types.Avail                           (AvailInfo (AvailTC))
-import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo),
-                                                            ConLikeInfo (ConIsPatSyn))
 import           GHC.Types.Name                            (nameModule_maybe)
 import           GHC.Types.Name.Reader                     (is_decl)
 import           Retrie.Rewrites
@@ -124,7 +137,11 @@ occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt)
     occ :: GHCGHC.LIdP GhcRn -> ([(Name, RdrName)], Bool)
     occ (L l name) =
       ([ (name, rdr) | Just sp <- [realSpan l], Just rdr <- [Map.lookup sp spellings] ], False)
+#if MIN_VERSION_ghc(9,9,0)
     ctxt :: GHC.HsMatchContextRn -> ([(Name, RdrName)], Bool)
+#else
+    ctxt :: GHCGHC.HsMatchContext GhcRn -> ([(Name, RdrName)], Bool)
+#endif
     ctxt _ = ([], True)
     spellings = Map.fromList (everything (++) (mkQ [] spelling) ps)
     spelling :: GHCGHC.LIdP GhcPs -> [(GHC.RealSrcSpan, RdrName)]
@@ -239,10 +256,10 @@ provenanceOf gre exports mod name = do
 
 memberForm :: GlobalRdrElt -> MemberForm
 memberForm gre = case (gre_par gre, gre_info gre) of
-  (ParentIs p, _) -> ViaParent (nameOccName p)
-  (NoParent, IAmConLike con)
-    | ConIsPatSyn <- conLikeInfo con -> AsPattern
-  _ -> Plain
+  (ParentIs p, _)          -> ViaParent (nameOccName p)
+  -- a data constructor always has its type as parent
+  (NoParent, IAmConLike _) -> AsPattern
+  _                        -> Plain
 
 -- | How an unqualified name is spelled in an import list.
 data MemberForm
@@ -284,24 +301,17 @@ renderImport (m, form) = L noAnnSrcSpanDP0 $ case form of
   ImportModule -> base { ideclExt = ext Nothing Nothing }
   ImportQualifiedAs q
     | q == m ->
-        base { ideclQualified = QualifiedPre, ideclExt = ext (Just qualTok) Nothing }
+        base { ideclQualified = QualifiedPre, ideclExt = ext (Just (dn 1)) Nothing }
     | otherwise ->
         base { ideclQualified = QualifiedPre
              , ideclAs        = Just (L noAnnSrcSpanDP1 q)
-             , ideclExt       = ext (Just qualTok) (Just (EpTok (dn 1))) }
+             , ideclExt       = ext (Just (dn 1)) (Just (dn 1)) }
   ImportMembers ms ->
     base { ideclImportList = Just (Exactly, importList (zipWith member [0 ..] ms))
          , ideclExt        = ext Nothing Nothing }
   where
     base = (simpleImportDecl m) { ideclName = L noAnnSrcSpanDP1 m }
-    qualTok = EpTok (dn 1)
-    ext qual as' = XImportDeclPass
-      (EpAnn d0 ann emptyComments)
-      NoSourceText False
-      where
-        ann = noAnn { importDeclAnnImport    = EpTok d0
-                    , importDeclAnnQualified = qual
-                    , importDeclAnnAs        = as' }
+    ext qual as' = XImportDeclPass (importAnn qual as') NoSourceText False
     member :: Int -> (OccName, MemberForm) -> LIE GhcPs
     member i (occ, mf) = setEntryDP ie (SameLine (min i 1))
       where
@@ -310,8 +320,42 @@ renderImport (m, form) = L noAnnSrcSpanDP0 $ case form of
           ViaParent p -> mkTypeWithIE (mkRdrUnqual p) (mkRdrUnqual occ :| [])
           AsPattern   -> ieVar (mkWrappedName WrapPattern (mkRdrUnqual occ))
 
+-- | The @import@ keyword, plus @qualified@ and @as@ at the given
+-- deltas when present.
+importAnn :: Maybe EpaLocation -> Maybe EpaLocation -> EpAnn EpAnnImportDecl
+#if MIN_VERSION_ghc(9,11,0)
+importAnn qual as' = EpAnn d0 ann emptyComments
+  where
+    ann = noAnn { importDeclAnnImport    = EpTok d0
+                , importDeclAnnQualified = EpTok <$> qual
+                , importDeclAnnAs        = EpTok <$> as' }
+#else
+importAnn qual as' = EpAnn (anchorDP (SameLine 0)) ann emptyComments
+  where
+    ann = EpAnnImportDecl d0 Nothing Nothing qual Nothing as'
+#endif
+
 -- | @(item, item)@ one space after the module name.
+#if MIN_VERSION_ghc(9,11,0)
 importList :: [LIE GhcPs] -> LocatedLI [LIE GhcPs]
 importList items = L (EpAnn (dn 1) ann emptyComments) (withCommas items)
   where
     ann = noAnn { al_brackets = ListParens (EpTok d0) (EpTok d0) }
+#else
+importList :: [LIE GhcPs] -> LocatedL [LIE GhcPs]
+importList items =
+  L (SrcSpanAnn (EpAnn (anchorDP (SameLine 1)) ann emptyComments) generatedSrcSpan)
+    (withCommas items)
+  where
+    ann = mempty { al_open  = Just (AddEpAnn AnnOpenP d0)
+                 , al_close = Just (AddEpAnn AnnCloseP d0) }
+
+-- | An anchor with no source position, printed at the given delta.
+anchorDP :: DeltaPos -> Anchor
+anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
+
+-- | Fresh annotations; exactprint 1.8 wants the span they stand in for.
+noAnnSrcSpanDP0, noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP0 = ExactPrint.noAnnSrcSpanDP0 generatedSrcSpan
+noAnnSrcSpanDP1 = ExactPrint.noAnnSrcSpanDP1 generatedSrcSpan
+#endif
