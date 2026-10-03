@@ -38,7 +38,7 @@ import           Data.Either                           (partitionEithers)
 import           Data.Foldable                         (toList)
 import           Data.Hashable                         (unhashed)
 import qualified Data.HashSet                          as Set
-import           Data.List.Extra                       (nubOrdOn)
+import           Data.List.Extra                       (sortOn)
 import qualified Data.Map                              as Map
 import           Data.Monoid                           (First (First), getFirst)
 import qualified Data.Text                             as T
@@ -71,8 +71,8 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         nameOccName, occNameFS,
                                                         pattern RealSrcSpan,
                                                         pm_parsed_source,
-                                                        rds_rules, srcSpanFile,
-                                                        topDir, unLoc, unLocA)
+                                                        rds_rules, topDir,
+                                                        unLoc, unLocA)
 import qualified Development.IDE.GHC.Compat            as GHC
 import           Development.IDE.GHC.Compat.Util       hiding (catch, toList,
                                                         try)
@@ -104,7 +104,8 @@ import           Retrie                                (Annotated (astA),
                                                         Verbosity (Loud), apply,
                                                         applyWithUpdate)
 import           Retrie.Context
-import           Retrie.CPP                            (CPP (NoCPP), parseCPP)
+import           Retrie.CPP                            (CPP (NoCPP), parseCPP,
+                                                        printCPP)
 import           Retrie.ExactPrint                     (AnnotatedImports, fix,
                                                         makeDeltaAst,
                                                         transformA, unsafeMkA)
@@ -239,6 +240,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
       extractInlineImports check checktgt fun_matches
     let
         annotatedImports = renderImports imports
+        uri = filePathToUri $ fromNormalizedFilePath nfp
     fixedSrc <- liftIO $ transformA (unsafeMkA (makeDeltaAst astSrc) 0) (fix sourceFixities)
     inlineRewrite <- liftIO $
       constructInlineFromIdentifer annotatedImports fixedSrc fromRange
@@ -257,8 +259,8 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         -- a refused site is not an error: leave the action without an edit
         Right (_,_,NoChange) ->
             refuse "Not inlined: the call site did not match the definition, or a binding there would capture one of its variables"
-        Right (_,_,change) -> do
-            let edits = asEditMap $ asTextEdits nfp ps contents change
+        Right (_,cpp',change) -> do
+            let edits = asEditMap $ asTextEdits uri ps contents cpp cpp' change
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
             return $ ca & L.edit ?~ wedit
   case outcome of
@@ -643,14 +645,15 @@ callRetrie recorder state session spec origin binds = do
 
   results <- forM targets $ \t -> runExceptT $ do
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
+        uri = filePathToUri $ fromNormalizedFilePath nt
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     (cpp, pm, contents) <- ExceptT $ try $
       getCPPmodule recorder state session targetFixities t
     imps <- either (throwError . CannotImport nt) pure $
       extractImports tcd tct binds spec
-    (_user, _ast, change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
-    return $ asTextEdits nt pm contents $ case change of
+    (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
+    return $ asTextEdits uri pm contents cpp cpp' $ case change of
       NoChange              -> NoChange
       Change replacements _ -> Change replacements [imps]
 
@@ -753,35 +756,46 @@ constructInlineFromIdentifer imports originParsedModule originSpan = do
               -> constructfromFunMatches imports fun_id fun_matches
             _ -> return $ error "could not find source code to inline"
 
+-- | Group 'TextEdit's by file.
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
-asEditMap = Map.fromListWith (++) . map (second pure)
+asEditMap =
+  Map.map (sortOn (^. L.range . L.start))
+    . Map.fromListWith (++)
+    . map (second pure)
 
-asTextEdits :: NormalizedFilePath -> GHCGHC.ParsedSource -> T.Text -> Change -> [(Uri, TextEdit)]
-asTextEdits _ _ _ NoChange = []
-asTextEdits _ _ _ (Change [] _) = []
-asTextEdits target ps contents (Change reps imports) =
-  replacementTextEdits reps <>
-  importTextEdits target ps contents imports
+asTextEdits
+  :: Uri
+  -> GHCGHC.ParsedSource
+  -> T.Text
+  -> CPP AnnotatedModule
+  -> CPP AnnotatedModule
+  -> Change
+  -> [(Uri, TextEdit)]
+asTextEdits _ _ _ _ _ NoChange = []
+asTextEdits _ _ _ _ _ (Change [] _) = []
+asTextEdits target ps contents before after (Change reps imports) =
+  importTextEdits target ps contents imports <>
+  map (target,) (rewriteTextEdits before after reps)
 
-replacementTextEdits :: [Replacement] -> [(Uri, TextEdit)]
-replacementTextEdits reps =
-  [ (filePathToUri spanLoc, edit)
-  | Replacement{..} <- nubOrdOn (realSpan . replLocation) reps
-  , (RealSrcSpan rspan _) <- [replLocation]
-  , let spanLoc = unpackFS $ srcSpanFile rspan
-  , let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
-  ]
+rewriteTextEdits
+  :: CPP AnnotatedModule
+  -> CPP AnnotatedModule
+  -> [Replacement]
+  -> [TextEdit]
+rewriteTextEdits before after reps =
+  makeDiffTextEdit
+    (T.pack $ printCPP [] before)
+    (T.pack $ printCPP reps after)
 
 importTextEdits
-  :: NormalizedFilePath -> GHCGHC.ParsedSource -> T.Text -> [AnnotatedImports] -> [(Uri, TextEdit)]
-importTextEdits target ps contents imp
+  :: Uri -> GHCGHC.ParsedSource -> T.Text -> [AnnotatedImports] -> [(Uri, TextEdit)]
+importTextEdits uri ps contents imp
   | not (null imp)
   , Just (range, indent) <- newImportInsertRange ps contents
   = let print = [(T.pack . exactPrint) i | i <- concatMap astA imp]
         sep   = "\n" <> T.replicate indent " "
         text  = T.concat [ p <> sep | p <- print ]
         edit  = TextEdit range text
-        uri   = filePathToUri $ fromNormalizedFilePath target
     in [(uri, edit)]
 importTextEdits _ _ _ _ = []
 
