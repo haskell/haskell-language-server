@@ -70,6 +70,8 @@ inlineThisTests =
       , testInline "nested where function" "NestedWhere" 3 6
       , testInline "nested where function, one of two uses" "NestedWhereTwice" 3 12
       , testInline "where binder, every use" "WhereBinder" 5 4
+      , testInline "where binder, nested use" "WhereBinderNested" 5 4
+      , testInline "recursive where binder is refused" "WhereBinderRec" 5 4
       , testInline "let binder" "NestedLet" 4 6
       , testInline "nested let function" "NestedLet" 5 5
       , testInline "nested function shadowing a top-level one" "ShadowLocal" 6 26
