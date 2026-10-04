@@ -121,6 +121,8 @@ import           Retrie.Replace                        (Change (..),
                                                         Replacement (..))
 import           Retrie.Rewrites
 import           Retrie.Rewrites.Function              (matchToRewrites)
+import           Retrie.Substitution                   (HoleVal (HoleExpr),
+                                                        foldSubst)
 import           Retrie.SYB                            (GenericQ, everything,
                                                         extQ, mkQ)
 import           Retrie.Types
@@ -254,10 +256,11 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
-    let inline
+    let rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) site
+        inline
           | GHCGHC.isExternalName (unLoc fun_id) =
-              applyAt site updateContext inlineRewrite
-          | otherwise = applyLocal site fromRange inlineRewrite
+              applyAt site updateContext rewrites
+          | otherwise = applyLocal site fromRange rewrites
     result <- liftIO $ try @_ @SomeException $
         runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
@@ -348,6 +351,20 @@ applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
 applyAt :: Maybe GHCGHC.RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
 applyAt (Just site) update = applyWithUpdate (atSite site update)
 applyAt Nothing update     = applyWithUpdateAndStrategy update topDown
+
+-- | In the case of nested matches, such as @f (f x)@, the cursor on the inner
+-- @f@ matches both the inner and outer applications. If a match occurs within
+-- an argument hole then map it to 'NoMatch' so the traversal decends into the
+-- inner match.
+headAt :: GHCGHC.RealSrcSpan -> Rewrite Universe -> Rewrite Universe
+headAt site q = q { qResult = second (\transform c -> fmap refuse . transform c) (qResult q) }
+  where
+    refuse (MatchResult sub _)
+      | foldSubst (\(_, v) found -> found || holds v) False sub = NoMatch
+    refuse m = m
+
+    holds (HoleExpr e) = RealSrcSpan site Nothing `GHC.isSubspanOf` GHC.getLocA (astA e)
+    holds _            = False
 
 -- | Drop rewriters outside of the target span.
 atSite :: GHCGHC.RealSrcSpan -> ContextUpdater -> ContextUpdater
