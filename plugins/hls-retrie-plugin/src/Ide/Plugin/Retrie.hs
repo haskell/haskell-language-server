@@ -25,7 +25,7 @@ import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
-import           Data.Maybe                            (fromMaybe)
+import           Data.Maybe                            (fromMaybe, isNothing)
 
 import           Control.Monad.Trans.Maybe             (MaybeT, hoistMaybe,
                                                         runMaybeT)
@@ -102,7 +102,9 @@ import           Retrie                                (Annotated (astA),
                                                         AnnotatedModule,
                                                         Options, Options_ (..),
                                                         Verbosity (Loud), apply,
-                                                        applyWithUpdate)
+                                                        applyWithUpdate,
+                                                        applyWithUpdateAndStrategy,
+                                                        topDown)
 import           Retrie.Context
 import           Retrie.CPP                            (CPP (NoCPP), parseCPP,
                                                         printCPP)
@@ -229,6 +231,8 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         useE GetAnnotatedParsedSource nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
+        -- on the binder itself, inline every use
+        site = if intoRange == fromRange then Nothing else Just intoRange
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
     sourceFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfpSource)
@@ -236,6 +240,8 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     (fun_id, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
         findBinder fromRange (tmrRenamed check)
+    when (isNothing site && referencesName (unLoc fun_id) fun_matches) $
+      refuse $ "Not inlined: " <> inlineThisDefinition <> " is recursive"
     imports <- either (refuse . T.pack) pure $
       extractInlineImports check checktgt fun_matches
     let
@@ -248,9 +254,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
-    let -- on the binder itself, inline every use
-        site = if intoRange == fromRange then Nothing else Just intoRange
-        inline
+    let inline
           | GHCGHC.isExternalName (unLoc fun_id) =
               applyAt site updateContext inlineRewrite
           | otherwise = applyLocal site fromRange inlineRewrite
@@ -294,6 +298,13 @@ findBinder originSpan =
         First $ Just (fun_id, fun_matches)
     matcher _ = First Nothing
 
+-- | Whether a definition's body uses the name it defines.
+referencesName :: GHC.Name -> GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+referencesName name = everything (||) (False `mkQ` uses)
+  where
+    uses :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
+    uses = everything (||) (False `mkQ` (== name))
+
 -- | Only install rewrites when the target subtree has been reached.
 applyLocal :: Maybe GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
 applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
@@ -334,10 +345,9 @@ applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
            , RealSrcSpan sp _ <- [GHC.getLocA fun_id] ]
     definesIt _ = False
 
--- | Apply rewrites at the site, or everywhere without one.
 applyAt :: Maybe GHCGHC.RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
 applyAt (Just site) update = applyWithUpdate (atSite site update)
-applyAt Nothing update     = applyWithUpdate update
+applyAt Nothing update     = applyWithUpdateAndStrategy update topDown
 
 -- | Drop rewriters outside of the target span.
 atSite :: GHCGHC.RealSrcSpan -> ContextUpdater -> ContextUpdater
