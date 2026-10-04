@@ -69,6 +69,9 @@ inlineThisTests =
       , testInline "top level function in another file" "Imported" 4 6
       , testInline "nested where function" "NestedWhere" 3 6
       , testInline "nested where function, one of two uses" "NestedWhereTwice" 3 12
+      , testInline "inner of two nested uses" "NestedUse" 3 9
+      , testInline "inner of two nested uses, top level" "NestedUseTop" 7 9
+      , testInline "outer of two nested uses" "NestedUseOuter" 3 6
       , testInline "where binder, every use" "WhereBinder" 5 4
       , testInline "where binder, nested use" "WhereBinderNested" 5 4
       , testInline "recursive where binder is refused" "WhereBinderRec" 5 4
