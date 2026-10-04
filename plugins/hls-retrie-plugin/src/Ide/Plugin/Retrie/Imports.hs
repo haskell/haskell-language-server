@@ -103,6 +103,12 @@ import           Development.IDE.GHC.ExactPrint.Annotation
 import           Development.IDE.GHC.ExactPrint.IE
 import           Retrie.ExactPrint                         (AnnotatedImports,
                                                             unsafeMkA)
+#if MIN_VERSION_ghc(9,14,0)
+import           Development.IDE.GHC.Compat                (GREInfo (IAmConLike),
+                                                            gre_info)
+import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo),
+                                                            ConLikeInfo (ConIsPatSyn))
+#endif
 
 -- TODO(simon):
 -- * Unfold name -> lookup definition of name and determine necessary imports
@@ -261,11 +267,19 @@ provenanceOf gre exports mod name = do
         []    -> Nothing -- is this possible?
 
 memberForm :: GlobalRdrElt -> MemberForm
+#if MIN_VERSION_ghc(9,14,0)
+memberForm gre = case (gre_par gre, gre_info gre) of
+  (ParentIs p, _)                    -> ViaParent (nameOccName p)
+  (NoParent, IAmConLike con)
+    | ConIsPatSyn <- conLikeInfo con -> AsPattern
+  _                                  -> Plain
+#else
 memberForm gre = case gre_par gre of
-  ParentIs p                                        -> ViaParent (nameOccName p)
-  -- a data constructor always has its type as parent
-  NoParent | isDataOcc (nameOccName (gre_name gre)) -> AsPattern
-  _                                                 -> Plain
+  ParentIs p                                 -> ViaParent (nameOccName p)
+  NoParent
+    | isDataOcc (nameOccName (gre_name gre)) -> AsPattern
+  _                                          -> Plain
+#endif
 
 -- | How an unqualified name is spelled in an import list.
 data MemberForm
