@@ -248,10 +248,12 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
-    let inline
+    let -- on the binder itself, inline every use
+        site = if intoRange == fromRange then Nothing else Just intoRange
+        inline
           | GHCGHC.isExternalName (unLoc fun_id) =
-              applyWithUpdate (atSite intoRange updateContext) inlineRewrite
-          | otherwise = applyLocal intoRange fromRange inlineRewrite
+              applyAt site updateContext inlineRewrite
+          | otherwise = applyLocal site fromRange inlineRewrite
     result <- liftIO $ try @_ @SomeException $
         runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
@@ -293,8 +295,8 @@ findBinder originSpan =
     matcher _ = First Nothing
 
 -- | Only install rewrites when the target subtree has been reached.
-applyLocal ::GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
-applyLocal site defSpan rewrites = applyWithUpdate (atSite site updater) moduleRewrites
+applyLocal :: Maybe GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
+applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
   where
     -- retrie will exit early if there are no rewrites, so just stub them out
     -- at the top level.
@@ -331,6 +333,11 @@ applyLocal site defSpan rewrites = applyWithUpdate (atSite site updater) moduleR
            | L _ FunBind{fun_id} <- toList binds
            , RealSrcSpan sp _ <- [GHC.getLocA fun_id] ]
     definesIt _ = False
+
+-- | Apply rewrites at the site, or everywhere without one.
+applyAt :: Maybe GHCGHC.RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
+applyAt (Just site) update = applyWithUpdate (atSite site update)
+applyAt Nothing update     = applyWithUpdate update
 
 -- | Drop rewriters outside of the target span.
 atSite :: GHCGHC.RealSrcSpan -> ContextUpdater -> ContextUpdater
@@ -494,7 +501,15 @@ suggestBindInlines _uri binds range hie lookupMod = do
         -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
       getGRHSIdentifierDetails a b it@GRHSs{} =
         -- we only select candidates for which we have source code
-        everything (<>) (pure mempty `mkQ` getDefinedIdentifierDetailsViaHieDb a b) it
+        everything (<>) (pure mempty `mkQ` getDefinedIdentifierDetailsViaHieDb a b `extQ` getLocalBinderDetails) it
+
+      -- a local binder is its own definition: inline it into every use
+      getLocalBinderDetails :: HsBindLR GhcRn GhcRn -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+      getLocalBinderDetails FunBind{fun_id}
+        | Just defLoc <- srcSpanToLocation (GHC.getLocA fun_id)
+        , range `isSubrangeOf` getLocationRange defLoc =
+            pure $ Set.singleton (nameOccName (unLoc fun_id), defLoc, defLoc)
+      getLocalBinderDetails _ = pure mempty
 
 #if MIN_VERSION_ghc(9,13,0)
       getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> GHCGHC.LIdOccP GhcRn -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))

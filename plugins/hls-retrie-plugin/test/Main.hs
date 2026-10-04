@@ -59,6 +59,7 @@ inlineThisTests =
       , testProvider "record field" "Field" 8 9 []
       , testProvider "record field control" "Field" 8 6 ["Inline g"]
       , testProvider "where binder" "NestedWhere" 5 4 ["Inline e"]
+      , testProvider "let binder" "NestedLet" 4 6 ["Inline e"]
       , testProvider "operator" "Operator" 4 8 ["Inline */"]
       , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards"]
       , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Fold UserId"]
@@ -68,6 +69,8 @@ inlineThisTests =
       , testInline "top level function in another file" "Imported" 4 6
       , testInline "nested where function" "NestedWhere" 3 6
       , testInline "nested where function, one of two uses" "NestedWhereTwice" 3 12
+      , testInline "where binder, every use" "WhereBinder" 5 4
+      , testInline "let binder" "NestedLet" 4 6
       , testInline "nested let function" "NestedLet" 5 5
       , testInline "nested function shadowing a top-level one" "ShadowLocal" 6 26
       , testInline "guard let function" "GuardLet" 5 12
