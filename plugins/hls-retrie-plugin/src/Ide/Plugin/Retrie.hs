@@ -500,8 +500,9 @@ suggestBindRewrites ::
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName}
-  | pos `isInsideSrcSpan` l' =
+suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName, fun_matches}
+  | pos `isInsideSrcSpan` l'
+  , triviallySelectable fun_matches =
     let pprNameText = printOutputable rdrName
         pprName = T.unpack pprNameText
         unfoldRewrite =

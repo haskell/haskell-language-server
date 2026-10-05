@@ -63,6 +63,8 @@ inlineThisTests =
       , testProvider "operator" "Operator" 4 8 ["Inline */"]
       , testProvider "rule" "RuleMaybeNothing" 2 11 ["Apply rule maybe/nothing forward", "Apply rule maybe/nothing backwards"]
       , testProvider "type synonym" "TypeSyn" 2 5 ["Unfold UserId", "Fold UserId"]
+      , testProvider "multi clause lhs" "MultiClause" 3 0 []
+      , testProvider "guarded lhs" "Guards" 4 0 []
       ]
     , testGroup "resolve"
       [ testInline "top level function" "Identity" 7 6
