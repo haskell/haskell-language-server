@@ -95,6 +95,13 @@ inlineThisTests =
       , testInline "comment in an argument" "CommentArg" 7 6
       , testInline "comment in an argument, CPP module" "CommentArgCpp" 9 6
       ]
+    , testGroup "refused"
+      [ testRefused "multi clause" "MultiClause" 7 4
+      , testRefused "guards" "Guards" 9 4
+      , testRefused "multi parameter" "MultiClauseTuple" 7 6
+      , testRefused "multi clause partial" "MultiClausePartial" 8 8
+      , testRefused "record wildcard construction" "WildcardCon" 10 4
+      ]
     , expectFail $ testGroup "dispatch"
       [ testInline "dispatch multi clause" "MultiClause" 7 4
       , testInline "transfer guards to case" "Guards" 9 4
@@ -160,6 +167,22 @@ testUnfold = testResolve $ titleStartsWith "Unfold"
 
 testInline :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testInline = testResolve $ titleStartsWith "Inline"
+
+-- | The Inline action at the position resolves to a refusal: the document
+-- is left as it was.
+testRefused :: TestName -> FilePath -> UInt -> UInt -> TestTree
+testRefused title file row col = testCase title $ runWithRetrie $ do
+    adoc <- openDoc (file <.> "hs") "haskell"
+    _ <- waitForTypecheck adoc
+    before <- documentContents adoc
+    let p = Position row col
+    codeActions <- getCodeActions adoc $ Range p p
+    case filter (titleStartsWith "Inline") codeActions of
+        [InR ca] -> resolveAndExecuteCodeAction ca
+        cas -> liftIO . assertFailure $
+          "One code action expected, got " <> show (map codeActionTitle cas)
+    after <- documentContents adoc
+    liftIO $ after @?= before
 
 testResolve :: (Command |? CodeAction -> Bool) -> TestName -> FilePath -> UInt -> UInt -> TestTree
 testResolve keep title file row col = goldenWithRetrie title file $ \adoc -> do
