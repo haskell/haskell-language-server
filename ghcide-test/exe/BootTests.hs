@@ -6,8 +6,6 @@ import           Control.Applicative.Combinators
 import           Control.Monad
 import           Control.Monad.IO.Class          (liftIO)
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test            (expectNoMoreDiagnostics,
-                                                  isReferenceReady)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
@@ -17,6 +15,8 @@ import           Language.LSP.Protocol.Types     hiding
                                                   mkRange)
 import           Language.LSP.Test
 import           System.FilePath                 ((</>))
+import           Test.Hls                        (expectNoMoreDiagnostics,
+                                                  isReferenceReady)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

@@ -2,12 +2,12 @@ module CPPTests (tests) where
 
 import           Control.Exception           (catch)
 import qualified Data.Text                   as T
-import           Development.IDE.Test        (Cursor, expectDiagnostics,
-                                              expectNoMoreDiagnostics)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
+import           Test.Hls                    (Cursor, expectDiagnostics,
+                                              expectNoMoreDiagnostics)
 -- import Test.QuickCheck.Instances ()
 import           Config
 import           Test.Tasty

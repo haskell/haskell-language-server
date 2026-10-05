@@ -51,7 +51,20 @@ module Test.Hls
     waitForBuildQueue,
     waitForProgressBegin,
     waitForTypecheck,
+    tryWaitForTypecheck,
     waitForAction,
+    tryWaitForAction,
+    tryCallTestPlugin,
+    callTestPlugin,
+    getInterfaceFilesDir,
+    garbageCollectDirtyKeys,
+    getFilesOfInterest,
+    getStoredKeys,
+    waitForCustomMessage,
+    waitForGC,
+    configureCheckProject,
+    isReferenceReady,
+    referenceReady,
     hlsConfigToClientConfig,
     setHlsConfig,
     getLastBuildKeys,
@@ -104,8 +117,8 @@ import           Development.IDE                          (IdeState,
 import           Development.IDE.Main                     hiding (Log)
 import qualified Development.IDE.Main                     as IDEMain
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
-import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
-                                                           WaitForIdeRuleResult (ideResultSuccess))
+import           Development.IDE.Plugin.Test              (TestRequest (..),
+                                                           WaitForIdeRuleResult (..))
 import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Session                  (SessionLoadingOptions (..),
                                                            getHieDbLocIn)
@@ -932,26 +945,85 @@ waitForBuildQueue = do
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                    -> return 0
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
-callTestPlugin cmd = do
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
+tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
     TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
-    return $ do
-      e <- _result
-      case A.fromJSON e of
+    return $ case _result of
+      Left e -> Left e
+      Right json -> case A.fromJSON json of
+        A.Success a -> Right a
         A.Error err -> Left $ TResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
-        A.Success a -> pure a
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) WaitForIdeRuleResult)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a
+
+-- | Wait for an IDE rule to finish
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-waitForTypecheck :: TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Bool)
-waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
+-- | Like 'waitForAction', but returns 'Either' in case of error
+tryWaitForAction :: String -> TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) WaitForIdeRuleResult)
+tryWaitForAction key TextDocumentIdentifier{_uri} =
+    tryCallTestPlugin (WaitForIdeRule key _uri)
+
+-- | Wait for typecheck to finish
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
+
+-- | Like 'waitForTypecheck', but returns 'Either' in case of error
+tryWaitForTypecheck :: TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Bool)
+tryWaitForTypecheck tid = fmap ideResultSuccess <$> tryWaitForAction "typecheck" tid
 
 getLastBuildKeys :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
-getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
+getLastBuildKeys = tryCallTestPlugin GetBuildKeysBuilt
+
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
+getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]
+garbageCollectDirtyKeys parents age = callTestPlugin (GarbageCollectDirtyKeys parents age)
+
+getStoredKeys :: Session [T.Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
+
+waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
+waitForCustomMessage msg pred =
+    skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params = value})
+            | symbolVal p == T.unpack msg -> pred value
+        _ -> Nothing
+
+waitForGC :: Session [T.Text]
+waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
+    case A.fromJSON v of
+        A.Success x -> Just x
+        _           -> Nothing
+
+configureCheckProject :: Bool -> Session ()
+configureCheckProject overrideCheckProject = setConfigSection "haskell" (toJSON $ def{checkProject = overrideCheckProject})
+
+-- | Pattern match a message from ghcide indicating that a file has been indexed
+isReferenceReady :: FilePath -> Session ()
+isReferenceReady p = void $ referenceReady (equalFilePath p)
+
+referenceReady :: (FilePath -> Bool) -> Session FilePath
+referenceReady pred = satisfyMaybe $ \case
+  FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params})
+    | A.Success fp <- A.fromJSON _params
+    , pred fp
+    , symbolVal p == "ghcide/reference/ready"
+    -> Just fp
+  _ -> Nothing
 
 hlsConfigToClientConfig :: Config -> A.Object
 hlsConfigToClientConfig config = [("haskell", toJSON config)]

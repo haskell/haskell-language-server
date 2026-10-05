@@ -13,9 +13,6 @@ import           Data.List                       (nub)
 import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as T
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
-import           Development.IDE.Test            (expectDiagnostics,
-                                                  expectNoMoreDiagnostics,
-                                                  waitForAction)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
                                                  (SemanticTokenAbsolute (..),
@@ -25,6 +22,9 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
+import           Test.Hls                        (expectDiagnostics,
+                                                  expectNoMoreDiagnostics,
+                                                  waitForAction)
 import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit

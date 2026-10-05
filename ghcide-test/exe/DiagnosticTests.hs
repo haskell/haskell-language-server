@@ -10,12 +10,6 @@ import           Control.Monad.IO.Class          (liftIO)
 import           Data.List.Extra
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test            (diagnostic,
-                                                  expectCurrentDiagnostics,
-                                                  expectDiagnostics,
-                                                  expectDiagnosticsWithTags,
-                                                  expectNoMoreDiagnostics,
-                                                  flushMessages, waitForAction)
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -27,6 +21,12 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
+import           Test.Hls                        (diagnostic,
+                                                  expectCurrentDiagnostics,
+                                                  expectDiagnostics,
+                                                  expectDiagnosticsWithTags,
+                                                  expectNoMoreDiagnostics,
+                                                  flushMessages, waitForAction)
 
 import           Config
 import           Control.Lens                    ((^.))

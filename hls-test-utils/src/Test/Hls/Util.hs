@@ -31,6 +31,7 @@ module Test.Hls.Util
     , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
+    , expectNoMoreDiagnosticsFromSource
     , failIfSessionTimeout
     , getCompletionByLabel
     , noLiteralCaps
@@ -42,6 +43,18 @@ module Test.Hls.Util
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
+    , expectMessages
+    , flushMessages
+    , pollMessagesTillFlush
+    -- * Diagnostic expectations
+    , module Test.Hls.Diagnostic
+    , diagnostic
+    , expectDiagnostics
+    , expectDiagnosticsWithTags
+    , expectDiagnosticsWithTags'
+    , expectCurrentDiagnostics
+    , checkDiagnosticsForDoc
+    , canonicalizeUri
     -- * Temporary directories
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
@@ -56,11 +69,13 @@ where
 import           Control.Applicative.Combinators          (skipManyTill, (<|>))
 import           Control.Exception                        (catch, throw,
                                                            throwIO)
-import           Control.Lens                             (_Just, (&), (.~),
-                                                           (?~), (^.))
+import           Control.Lens                             (_1, _Just,
+                                                           traverseOf, (&),
+                                                           (.~), (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                               as A
+import           Data.Bifunctor                           (second)
 import           Data.Bool                                (bool)
 import           Data.Default
 import           Data.List.Extra                          (find)
@@ -68,6 +83,7 @@ import           Data.Proxy
 import qualified Data.Text                                as T
 import           Development.IDE                          (GhcVersion (..),
                                                            ghcVersion)
+import           GHC.Stack                                (HasCallStack)
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -78,15 +94,17 @@ import           System.Info.Extra                        (isMac, isWindows)
 import qualified System.IO.Extra
 import           System.IO.Temp
 import           System.Time.Extra                        (Seconds, sleep)
+import           Test.Hls.Diagnostic
 import           Test.Tasty                               (TestTree)
 import           Test.Tasty.ExpectedFailure               (expectFailBecause,
                                                            ignoreTestBecause)
-import           Test.Tasty.HUnit                         (assertFailure)
+import           Test.Tasty.HUnit                         (Assertion,
+                                                           assertFailure)
 
 import           Data.Foldable                            (traverse_)
 import qualified Data.List                                as List
 import qualified Data.Map                                 as Map
-import           Data.Maybe                               (fromJust)
+import           Data.Maybe                               (fromJust, fromMaybe)
 import           Data.String.Interpolate                  (__i)
 import qualified Data.Text.Internal.Search                as T
 import qualified Data.Text.Utf16.Rope.Mixed               as Rope
@@ -296,10 +314,60 @@ waitForDiagnosticsFrom doc = do
 waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSource = waitForDiagnosticsFromSourceWithTimeout 5
 
+-- | Drain messages until a dummy response arrives from the server.
+-- This ensures that pending server messages have time to arrive and avoids indefinite blocking.
+-- If the handler returns 'Just a', 'pollMessagesTillFlush' returns immediately with 'Just a'.
+-- If the dummy response arrives without a match, it returns 'Nothing'.
+pollMessagesTillFlush
+    :: SMethod m
+    -> Seconds
+    -> (TServerMessage m -> Test.Session (Maybe a))
+    -> Test.Session (Maybe a)
+pollMessagesTillFlush m timeout handle = do
+    when (timeout > 0) $
+        liftIO $ sleep timeout
+    let cm = SMethod_CustomMethod (Proxy @"test")
+    testId <- Test.sendRequest cm A.Null
+    let handleMessages =
+            (do msg <- Test.message m
+                res <- handle msg
+                case res of
+                    Just a  -> pure (Just a)
+                    Nothing -> handleMessages)
+            <|> (Test.responseForId cm testId >> pure Nothing)
+            <|> (Test.anyMessage >> handleMessages)
+    handleMessages
+
+-- | Process server messages for method @m@ until the server queue is flushed.
+expectMessages :: SMethod m -> Seconds -> (TServerMessage m -> Test.Session ()) -> Test.Session ()
+expectMessages m timeout handle = void $
+    pollMessagesTillFlush m timeout (\msg -> handle msg >> pure Nothing)
+
+-- | Flush the LSP message queue by sending a dummy request and discarding messages until its response.
+flushMessages :: Test.Session ()
+flushMessages = do
+    let cm = SMethod_CustomMethod (Proxy @"non-existent-method")
+    i <- Test.sendRequest cm A.Null
+    let handleMessages = void (Test.responseForId cm i) <|> (Test.anyMessage >> handleMessages)
+    handleMessages
+
 -- | wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
-expectNoMoreDiagnostics :: Seconds -> TextDocumentIdentifier -> String -> Test.Session ()
-expectNoMoreDiagnostics timeout doc src = do
+expectNoMoreDiagnostics :: HasCallStack => Seconds -> Test.Session ()
+expectNoMoreDiagnostics timeout =
+  expectMessages SMethod_TextDocumentPublishDiagnostics timeout $ \diagsNot -> do
+    let fileUri = diagsNot ^. L.params . L.uri
+        actual = diagsNot ^. L.params . L.diagnostics
+    unless (null actual) $ liftIO $
+      assertFailure $
+        "Got unexpected diagnostics for " <> show fileUri
+          <> " got "
+          <> show actual
+
+-- | wait for @timeout@ seconds and report an assertion failure
+-- if any diagnostic messages from the given source for the given document arrive in that period
+expectNoMoreDiagnosticsFromSource :: Seconds -> TextDocumentIdentifier -> String -> Test.Session ()
+expectNoMoreDiagnosticsFromSource timeout doc src = do
     diags <- waitForDiagnosticsFromSourceWithTimeout timeout doc src
     unless (null diags) $
         liftIO $ assertFailure $
@@ -310,31 +378,108 @@ expectNoMoreDiagnostics timeout doc src = do
 -- If timeout is 0 it will wait until the session timeout
 waitForDiagnosticsFromSourceWithTimeout :: Seconds -> TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSourceWithTimeout timeout document source = do
-    when (timeout > 0) $
-        -- Give any further diagnostic messages time to arrive.
-        liftIO $ sleep timeout
-        -- Send a dummy message to provoke a response from the server.
-        -- This guarantees that we have at least one message to
-        -- process, so message won't block or timeout.
-    testId <- Test.sendRequest (SMethod_CustomMethod (Proxy @"test")) A.Null
-    handleMessages testId
-  where
-    matches :: Diagnostic -> Bool
-    matches d = d ^. L.source == Just (T.pack source)
-
-    handleMessages testId = handleDiagnostic testId <|> handleMethod_CustomMethodResponse testId <|> ignoreOthers testId
-    handleDiagnostic testId = do
-        diagsNot <- Test.message SMethod_TextDocumentPublishDiagnostics
+    mb <- pollMessagesTillFlush SMethod_TextDocumentPublishDiagnostics timeout $ \diagsNot -> do
         let fileUri = diagsNot ^. L.params . L.uri
             diags = diagsNot ^. L.params . L.diagnostics
-            res = filter matches diags
-        if fileUri == document ^. L.uri && not (null res)
-            then return res else handleMessages testId
-    handleMethod_CustomMethodResponse testId = do
-        _ <- Test.responseForId (SMethod_CustomMethod (Proxy @"test")) testId
-        pure []
+            res = filter (\d -> d ^. L.source == Just (T.pack source)) diags
+        pure $ if fileUri == document ^. L.uri && not (null res)
+            then Just res
+            else Nothing
+    pure $ fromMaybe [] mb
 
-    ignoreOthers testId = void Test.anyMessage >> handleMessages testId
+-- ---------------------------------------------------------------------
+-- Diagnostics assertions
+-- ---------------------------------------------------------------------
+
+canonicalizeUri :: Uri -> IO Uri
+canonicalizeUri uri = filePathToUri <$> Directory.canonicalizePath (fromJust (uriToFilePath uri))
+
+expectedDiagnosticWithNothing :: ExpectedDiagnostic -> ExpectedDiagnosticWithTag
+expectedDiagnosticWithNothing (ds, c, t, code) = (ds, c, t, code, Nothing)
+
+requireDiagnosticM
+    :: (Foldable f, Show (f Diagnostic), HasCallStack)
+    => f Diagnostic
+    -> ExpectedDiagnosticWithTag
+    -> Assertion
+requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
+    Nothing  -> pure ()
+    Just err -> assertFailure err
+
+unwrapDiagnostic :: TServerMessage Method_TextDocumentPublishDiagnostics -> (Uri, [Diagnostic])
+unwrapDiagnostic diagsNot = (diagsNot ^. L.params . L.uri, diagsNot ^. L.params . L.diagnostics)
+
+-- | It is not possible to use 'expectDiagnostics []' to assert the absence of diagnostics,
+--   only that existing diagnostics have been cleared.
+--
+--   Rather than trying to assert the absence of diagnostics, introduce an
+--   expected diagnostic (e.g. a redundant import) and assert the singleton diagnostic.
+expectDiagnostics :: HasCallStack => [(FilePath, [ExpectedDiagnostic])] -> Test.Session ()
+expectDiagnostics
+  = expectDiagnosticsWithTags
+  . map (second (map expectedDiagnosticWithNothing))
+
+expectDiagnosticsWithTags :: HasCallStack => [(String, [ExpectedDiagnosticWithTag])] -> Test.Session ()
+expectDiagnosticsWithTags expected = do
+    let toSessionPath = Test.getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
+        next = unwrapDiagnostic <$> skipManyTill Test.anyMessage diagnostic
+    expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) toSessionPath expected
+    expectDiagnosticsWithTags' next expected'
+
+expectDiagnosticsWithTags' ::
+  (HasCallStack, MonadIO m) =>
+  m (Uri, [Diagnostic]) ->
+  Map.Map NormalizedUri [ExpectedDiagnosticWithTag] ->
+  m ()
+expectDiagnosticsWithTags' next m | null m = do
+    (_,actual) <- next
+    case actual of
+        [] ->
+            return ()
+        _ ->
+            liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
+
+expectDiagnosticsWithTags' next expected = go expected
+  where
+    go m
+      | Map.null m = pure ()
+      | otherwise = do
+        (fileUri, actual) <- next
+        canonUri <- liftIO $ toNormalizedUri <$> canonicalizeUri fileUri
+        case Map.lookup canonUri m of
+          Nothing -> do
+            liftIO $
+              assertFailure $
+                "Got diagnostics for " <> show fileUri
+                  <> " but only expected diagnostics for "
+                  <> show (Map.keys m)
+                  <> " got "
+                  <> show actual
+          Just expected -> do
+            liftIO $ mapM_ (requireDiagnosticM actual) expected
+            liftIO $
+              unless (length expected == length actual) $
+                assertFailure $
+                  "Incorrect number of diagnostics for " <> show fileUri
+                    <> ", expected "
+                    <> show expected
+                    <> " but got "
+                    <> show actual
+            go $ Map.delete canonUri m
+
+expectCurrentDiagnostics :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> Test.Session ()
+expectCurrentDiagnostics doc expected = do
+    diags <- Test.getCurrentDiagnostics doc
+    checkDiagnosticsForDoc doc expected diags
+
+checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> [Diagnostic] -> Test.Session ()
+checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
+    let expected' = Map.singleton nuri (map expectedDiagnosticWithNothing expected)
+        nuri = toNormalizedUri _uri
+    expectDiagnosticsWithTags' (return (_uri, obtained)) expected'
+
+diagnostic :: Test.Session (TNotificationMessage Method_TextDocumentPublishDiagnostics)
+diagnostic = Test.message SMethod_TextDocumentPublishDiagnostics
 
 failIfSessionTimeout :: IO a -> IO a
 failIfSessionTimeout action = action `catch` errorHandler
