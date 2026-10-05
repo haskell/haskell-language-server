@@ -78,7 +78,7 @@ import           Data.Data                             (Data)
 import           Data.Function                         (on, (&))
 import           Data.Generics.Schemes                 (everywhereM)
 import           Data.List.Extra                       (chunksOf, dropEnd,
-                                                        takeEnd)
+                                                        takeEnd, unsnoc)
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         nonEmpty)
 import qualified Data.List.NonEmpty                    as NE
@@ -678,24 +678,24 @@ parseSimpleConMatch :: PrintUnqualified -> IsUnicodeSyntax -> PmAltConApp -> Eit
 parseSimpleConMatch pprCtx arrow PACA{ paca_con = PmAltConLike con
                                      , paca_ids
                                      }
-  | let (rdrConName, infixed) = first (qualifyIfNeeded pprCtx) $ case con of
-                    RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
-                    PatSynCon patSyn    -> (getName patSyn, False)
+  | (Just rdrConName, infixed) <- first (qualifyIfNeeded pprCtx)
+                                $ case con of RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
+                                              PatSynCon patSyn    -> (getName patSyn, False)
 
-        underscore = WildPat NoExtField
 
-  , Just (locatedCon, args) <- case (paca_ids, infixed) of
-                  -- Prefixed, laid out like @Foo _ _@
-                  (_, False) -> Just  (-- leave no space before the constructor
-                                        L noSrcSpanA $ rdrConName,
-                                        -- leave one space before each argument
-                                        PrefixCon $ map (const $ L noAnnSrcSpanDP1 underscore) paca_ids)
-                  -- Infixed (only allowed if binary), laid out like @_ : _@
-                  ([_, _], True) -> Just (-- leave one space before the constructor
-                                          L noAnnSrcSpanDP1 $ rdrConName,
-                                          -- leave no space before the first argument, but one after the second
-                                          InfixCon (L noAnnSrcSpanDP0 underscore) (L noAnnSrcSpanDP1 underscore))
-                  _ -> Nothing
+  , Just (locatedCon, args) <- let underscore = WildPat NoExtField
+      in case (paca_ids, infixed) of
+        -- Prefixed, laid out like @Foo _ _@
+        (_, False) -> Just  (-- leave no space before the constructor
+                              L noSrcSpanA $ rdrConName,
+                              -- leave one space before each argument
+                              PrefixCon $ map (const $ L noAnnSrcSpanDP1 underscore) paca_ids)
+        -- Infixed (only allowed if binary), laid out like @_ : _@
+        ([_, _], True) -> Just (-- leave one space before the constructor
+                                L noAnnSrcSpanDP1 $ rdrConName,
+                                -- leave no space before the first argument, but one after the second
+                                InfixCon (L noAnnSrcSpanDP0 underscore) (L noAnnSrcSpanDP1 underscore))
+        _ -> Nothing
 
   , let conPat = if length paca_ids <= maxUnderscores def -- for low number of arguments
                      -- create as many underscores as needed
@@ -716,16 +716,17 @@ parseSimpleConMatch _ _ paca = Left $ showSDocUnsafe $ ppr paca
 
 -- | Given a 'PrintUnqualified' context and a 'Name', return the corresponding
 -- 'RdrName', but qualified if needed.
-qualifyIfNeeded :: PrintUnqualified -> Name -> RdrName
-qualifyIfNeeded pprCtx name
-  = let moduleName = printOutputableQualified pprCtx name
-                   & T.split (== '.')
-                   & init
-                   & T.intercalate "."
-    in case moduleName of
-        "" -> nameRdrName name
-        _ -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
-                       (occName name)
+qualifyIfNeeded :: PrintUnqualified -> Name -> Maybe RdrName
+qualifyIfNeeded pprCtx name = do
+
+  (moduleParts, _) <- unsnoc
+                    $ T.split (== '.')
+                    $ printOutputableQualified pprCtx name
+
+  Just $ case T.intercalate "." moduleParts of
+           "" -> nameRdrName name
+           moduleName -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
+                                   (occName name)
 
 -- | Wrapper to the all the non-default info needed to construct an 'LMatch':
 --
