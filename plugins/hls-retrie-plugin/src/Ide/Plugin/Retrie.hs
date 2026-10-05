@@ -696,8 +696,8 @@ callRetrie recorder state session spec origin binds = do
       extractImports tcd tct binds spec
     (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
     return $ asTextEdits uri pm contents cpp cpp' $ case change of
-      NoChange              -> NoChange
-      Change replacements _ -> Change replacements [imps]
+      NoChange               -> NoChange
+      Change replacements im -> Change replacements (im++[imps])
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
