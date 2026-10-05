@@ -17,11 +17,11 @@ The following transformations are currently provided:
 * Patterns in the definitions arguments
 * Bindings in the expression are renamed to avoid capture
 * Where bindings in the definition are rewritten as let bindings in the rewrite
-* Definitions with multiple clauses are dispatched with a case statement
 * Use sites that are not fully applied get lambdas inserted
 * Cross-module support (including adding of imports)
 
 ### Currently unsupported scenarios
+* Definitions with several clauses, guards or a record wildcard construction: the inline is refused rather than spliced from one right-hand side
 * We do not emit changes for non-active CPP branches
 * Visible type application
 * Recursive functions
