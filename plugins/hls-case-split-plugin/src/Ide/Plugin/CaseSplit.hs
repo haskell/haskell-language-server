@@ -717,16 +717,16 @@ parseSimpleConMatch _ _ paca = Left $ showSDocUnsafe $ ppr paca
 -- | Given a 'PrintUnqualified' context and a 'Name', return the corresponding
 -- 'RdrName', but qualified if needed.
 qualifyIfNeeded :: PrintUnqualified -> Name -> Maybe RdrName
-qualifyIfNeeded pprCtx name = do
+qualifyIfNeeded pprCtx name
+  | Just (moduleParts, _) <- unsnoc
+                           $ T.split (== '.')
+                           $ printOutputableQualified pprCtx name
 
-  (moduleParts, _) <- unsnoc
-                    $ T.split (== '.')
-                    $ printOutputableQualified pprCtx name
-
-  Just $ case T.intercalate "." moduleParts of
-           "" -> nameRdrName name
-           moduleName -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
-                                   (occName name)
+  = Just $ case T.intercalate "." moduleParts of
+             "" -> nameRdrName name
+             moduleName -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
+                                     (occName name)
+  | otherwise = Nothing
 
 -- | Wrapper to the all the non-default info needed to construct an 'LMatch':
 --
