@@ -133,12 +133,7 @@ unfoldTests =
         defDoc <- openDoc "CrossFileDef.hs" "haskell"
         useDoc <- openDoc "CrossFileUse.hs" "haskell"
         _ <- waitForTypecheck useDoc
-        let p = Position 5 0
-        actions <- getCodeActions defDoc $ Range p p
-        ca <- liftIO $ case [ca | InR ca@CodeAction{_title = "Unfold e"} <- actions] of
-            [ca] -> pure ca
-            cas  -> assertFailure $ "One Unfold e action expected, got " <> show (length cas)
-        resolveAndExecuteCodeAction ca
+        resolveAndExecuteCodeAction =<< unfoldE defDoc
         useContents <- documentContents useDoc
         defContents <- documentContents defDoc
         useExpected <- liftIO $ T.readFile (testDataDir </> "CrossFileUse.expected.hs")
@@ -146,6 +141,15 @@ unfoldTests =
         liftIO $ useContents @?= useExpected
         liftIO $ defContents @?= defExpected
     ]
+
+-- | The "Unfold e" action on the definition in CrossFileDef.hs.
+unfoldE :: TextDocumentIdentifier -> Session CodeAction
+unfoldE defDoc = do
+    let p = Position 5 0
+    actions <- getCodeActions defDoc $ Range p p
+    liftIO $ case [ca | InR ca@CodeAction{_title = "Unfold e"} <- actions] of
+        [ca] -> pure ca
+        cas  -> assertFailure $ "One Unfold e action expected, got " <> show (length cas)
 
 foldTests :: TestTree
 foldTests =
