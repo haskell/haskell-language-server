@@ -737,7 +737,7 @@ useOrFail ::
   NormalizedFilePath ->
   IO (RuleResult r)
 useOrFail state lbl mkException rule f =
-  useRule lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
+  useRuleBlocking lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
 
 fixityEnvFor :: FixityMap -> FixityEnv
 fixityEnvFor (FixityMap fixities) =
@@ -866,9 +866,7 @@ importTextEdits _ _ _ _ = []
 -------------------------------------------------------------------------------
 -- Rule wrappers
 
-useRuleBlocking,
-  _useRuleStale,
-  useRule ::
+useRuleBlocking ::
     (IdeRule k v) =>
     String ->
     IdeState ->
@@ -876,12 +874,6 @@ useRuleBlocking,
     NormalizedFilePath ->
     IO (Maybe (RuleResult k))
 useRuleBlocking label state rule f = runAction label state (use rule f)
-_useRuleStale label state rule f =
-  fmap fst
-    <$> runIdeAction label (shakeExtras state) (useWithStaleFast rule f)
-
--- | Chosen approach for calling ghcide Shake rules
-useRule label = _useRuleStale ("Retrie." <> label)
 
 -------------------------------------------------------------------------------
 -- Serialization wrappers and instances
