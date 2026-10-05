@@ -723,7 +723,7 @@ qualifyIfNeeded pprCtx name
                    & init
                    & T.intercalate "."
     in case moduleName of
-        "" -> nameRdrName name -- XXX Or mkRdrUnqual? Or, since I know the name, I should use getRdrName? Or what?
+        "" -> nameRdrName name
         _ -> mkRdrQual (ModuleName $ mkFastString $ T.unpack moduleName)
                        (occName name)
 
