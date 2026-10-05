@@ -25,7 +25,8 @@ import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
-import           Data.Maybe                            (fromMaybe, isNothing)
+import           Data.Maybe                            (fromMaybe, isJust,
+                                                        isNothing)
 
 import           Control.Monad.Trans.Maybe             (MaybeT, hoistMaybe,
                                                         runMaybeT)
@@ -71,8 +72,8 @@ import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         nameOccName, occNameFS,
                                                         pattern RealSrcSpan,
                                                         pm_parsed_source,
-                                                        rds_rules, topDir,
-                                                        unLoc, unLocA)
+                                                        rds_rules, recDotDot,
+                                                        topDir, unLoc, unLocA)
 import qualified Development.IDE.GHC.Compat            as GHC
 import           Development.IDE.GHC.Compat.Util       hiding (catch, toList,
                                                         try)
@@ -124,7 +125,7 @@ import           Retrie.Rewrites.Function              (matchToRewrites)
 import           Retrie.Substitution                   (HoleVal (HoleExpr),
                                                         foldSubst)
 import           Retrie.SYB                            (GenericQ, everything,
-                                                        extQ, mkQ)
+                                                        extQ, listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                       (Universe)
 
@@ -244,6 +245,10 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         findBinder fromRange (tmrRenamed check)
     when (isNothing site && referencesName (unLoc fun_id) fun_matches) $
       refuse $ "Not inlined: " <> inlineThisDefinition <> " is recursive"
+    -- TODO(simon): Generate a case dispatch if we can't statically determine
+    -- the clause.
+    unless (triviallySelectable fun_matches) $
+      refuse $ "Not inlined: " <> inlineThisDefinition <> " has several clauses, guards or a record wildcard"
     imports <- either (refuse . T.pack) pure $
       extractInlineImports check checktgt fun_matches
     let
@@ -307,6 +312,22 @@ referencesName name = everything (||) (False `mkQ` uses)
   where
     uses :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
     uses = everything (||) (False `mkQ` (== name))
+
+-- | Whether the clause can be determined statically. If there are multiple
+-- clauses or the clauses have guards then we cannot easily determine which
+-- clause should be used in the rewrite.
+triviallySelectable :: GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+triviallySelectable mg = case unLoc (GHC.mg_alts mg) of
+  [L _ m] -> unguarded (GHCGHC.m_grhss m) && (null . listify wildcardCon) m
+  _       -> False
+  where
+    unguarded :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
+    unguarded g = case toList (GHCGHC.grhssGRHSs g) of
+      [L _ (GHCGHC.GRHS _ [] _)] -> True
+      _                          -> False
+
+    wildcardCon :: GHCGHC.HsRecFields GhcRn (LHsExpr GhcRn) -> Bool
+    wildcardCon = isJust . recDotDot
 
 -- | Only install rewrites when the target subtree has been reached.
 applyLocal :: Maybe GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
