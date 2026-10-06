@@ -124,6 +124,9 @@ tests = let
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
+  typeAppMap = Position 71 22; typeAppMapTxt = [ExpectHoverText ["mapM_ :: (Float ->"]]
+  typeAppAt2 = Position 71 28; typeAppAt2Txt = [ExpectHoverText ["-> IO ()"]]
+  typeAppAt3 = Position 71 32; typeAppAt3Txt = [ExpectHoverText ["_ :: (Float"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -170,14 +173,17 @@ tests = let
   , testM yes            yes               imported   importedSig   "Imported symbol"
   , if isWindows then
         -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
-        testM no     yes    reexported reexportedSig "Imported symbol reexported"
+        testM no         yes               reexported reexportedSig "Imported symbol reexported"
     else
-        testM yes    yes    reexported reexportedSig "Imported symbol reexported"
-  , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
-  , test yes yes import310 pkgTxt "show package name and its version"
+        testM yes        yes               reexported reexportedSig "Imported symbol reexported"
+  , test  no             yes               thLocL57   thLoc         "TH Splice Hover"
+  , test  yes            yes               import310  pkgTxt        "show package name and its version"
   , test  no             yes               kkkL30     kkkType       "hover shows 'Go to' link for class in constraint"
   , test  no             yes               bbbL16     bbbType       "hover shows 'Go to' link for data constructor's type"
   , test  no             yes               aaaL11     aaaType       "hover shows 'Go to' link for binding's underlying type"
+  , test  yes            yes               typeAppMap typeAppMapTxt "Type application function hover"
+  , test  yes            yes               typeAppAt2 typeAppAt2Txt "Type application signature hover (@IO)"
+  , test  yes            yes               typeAppAt3 typeAppAt3Txt "Type application signature hover (@Float)"
   ]
   where yes :: (TestTree -> Maybe TestTree)
         yes = Just -- test should run and pass
