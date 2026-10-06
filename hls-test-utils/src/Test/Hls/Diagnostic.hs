@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module Development.IDE.Test.Diagnostic where
+module Test.Hls.Diagnostic where
 
 import           Control.Lens                ((^.))
 import qualified Data.Text                   as T

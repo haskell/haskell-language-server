@@ -138,7 +138,6 @@ import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Session                  (SessionLoadingOptions (..),
                                                            getHieDbLocIn)
 import           Development.IDE.Session.Ghc              (getCacheDirsIn)
-import           Development.IDE.Test.Diagnostic
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                                (HasCallStack)
@@ -177,6 +176,7 @@ import           System.IO.Extra                          (newTempDirWithin)
 import           System.IO.Unsafe                         (unsafePerformIO)
 import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
+import           Test.Hls.Diagnostic
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
 import           Test.Hls.TestEnv                         (getTestRootDir,

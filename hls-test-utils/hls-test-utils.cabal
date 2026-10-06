@@ -27,10 +27,10 @@ source-repository head
 library
   exposed-modules:
     Test.Hls
+    Test.Hls.Diagnostic
     Test.Hls.FileSystem
     Test.Hls.TestEnv
     Test.Hls.Util
-    Development.IDE.Test.Diagnostic
 
   hs-source-dirs:   src
   build-depends:
