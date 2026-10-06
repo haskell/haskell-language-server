@@ -107,6 +107,42 @@ main = defaultTestRunner $ testGroup "import-actions"
               o = "(Athing, Bthing, ... (4 items))"
           in ExplicitImports.abbreviateImportTitleWithoutModule i @?= o
       ]
+    ],
+  testGroup
+    "Import package inlay hints"
+    [ testGroup "Without package imports"
+      (let testWithCap = inlayHintsTestWithCap "ImportUsual"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportUsual"
+      in
+        [ testWithCap 2 $ (@=?) [mkInlayHintNoTextEdit (Position 2 6) "\"base\""]
+        , testWithCap 3 $ (@=?) [mkInlayHintNoTextEdit (Position 3 16) "\"containers\""]
+        , testWithCap 4 $ (@=?) []
+        , testWithoutCap 2 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        ])
+    , testGroup "With package imports"
+      (let testWithCap = inlayHintsTestWithCap "ImportWithPackageImport"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportWithPackageImport"
+      in
+        [ testWithCap 3 $ (@=?) []
+        , testWithCap 4 $ (@=?) [mkInlayHintNoTextEdit (Position 4 16) "\"containers\""]
+        , testWithCap 5 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        , testWithoutCap 5 $ (@=?) []
+        ])
+    , testGroup "When using ImportQualifiedPost"
+      (let testWithCap = inlayHintsTestWithCap "ImportWithQualifiedPost"
+           testWithoutCap = inlayHintsTestWithoutCap "ImportWithQualifiedPost"
+      in
+        [ testWithCap 3 $ (@=?) [mkInlayHintNoTextEdit (Position 3 6) "\"base\""]
+        , testWithCap 4 $ (@=?) [mkInlayHintNoTextEdit (Position 4 6) "\"containers\""]
+        , testWithCap 5 $ (@=?) []
+        , testWithoutCap 3 $ (@=?) []
+        , testWithoutCap 4 $ (@=?) []
+        , testWithoutCap 5 $ (@=?) []
+        ])
     ]]
 
 -- code action tests
@@ -247,6 +283,19 @@ mkInlayHint pos label textEdit =
   , _kind = Nothing
   , _textEdits = Just [textEdit]
   , _tooltip = Just $ InL "Make this import explicit"
+  , _paddingLeft = Just True
+  , _paddingRight = Nothing
+  , _data_ = Nothing
+  }
+
+mkInlayHintNoTextEdit :: Position -> Text -> InlayHint
+mkInlayHintNoTextEdit pos label =
+  InlayHint
+  { _position = pos
+  , _label = InL label
+  , _kind = Nothing
+  , _textEdits = Nothing
+  , _tooltip = Nothing
   , _paddingLeft = Just True
   , _paddingRight = Nothing
   , _data_ = Nothing
