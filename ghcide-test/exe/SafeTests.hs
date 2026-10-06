@@ -1,9 +1,9 @@
 
 module SafeTests (tests) where
 
-import qualified Data.Text            as T
-import           Development.IDE.Test (expectNoMoreDiagnostics)
+import qualified Data.Text         as T
 import           Language.LSP.Test
+import           Test.Hls          (expectNoMoreDiagnostics)
 
 import           Config
 import           Test.Tasty

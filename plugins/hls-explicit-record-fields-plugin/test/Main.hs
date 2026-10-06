@@ -8,7 +8,6 @@ import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import           Development.IDE           (filePathToUri',
                                             toNormalizedFilePath')
-import           Development.IDE.Test      (canonicalizeUri)
 import qualified Ide.Plugin.ExplicitFields as ExplicitFields
 import           System.FilePath           ((<.>), (</>))
 import           Test.Hls

@@ -30,7 +30,6 @@ library
     Test.Hls.FileSystem
     Test.Hls.TestEnv
     Test.Hls.Util
-    Development.IDE.Test
     Development.IDE.Test.Diagnostic
 
   hs-source-dirs:   src

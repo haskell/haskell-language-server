@@ -12,7 +12,6 @@ import           Control.Monad
 import           Data.Foldable
 import           Data.Maybe                 (mapMaybe)
 import qualified Data.Text                  as T
-import           Development.IDE.Test
 import qualified Language.LSP.Protocol.Lens as L
 import           Test.Hls
 import           Text.Regex.TDFA
