@@ -51,7 +51,7 @@ Plugins can also be disabled independently to allow users to customize the behav
 
 These plugins all (currently) live in the HLS repository and are developed in tandem with the core HLS functionality.
 
-See the [configuration page](./configuration.md#Generic plugin configuration) for more on configuring plugins.
+See the [configuration page](./configuration.md#generic-plugin-configuration) for more on configuring plugins.
 
 ### hie-bios
 
