@@ -52,7 +52,7 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             gre_imp, gre_lcl,
                                                             gre_name, gre_par,
                                                             isBuiltInSyntax,
-                                                            isDataOcc, isExact,
+                                                            isExact,
                                                             isInternalName,
                                                             lookupGRE_Name,
                                                             mkRdrUnqual,
@@ -108,6 +108,8 @@ import           Development.IDE.GHC.Compat                (GREInfo (IAmConLike)
                                                             gre_info)
 import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo),
                                                             ConLikeInfo (ConIsPatSyn))
+#else
+import           Development.IDE.GHC.Compat                (isDataOcc)
 #endif
 
 -- TODO(simon):
@@ -257,8 +259,8 @@ provenanceOf gre exports mod name = do
       -- check whether the defining module exports this name
       if name `elemNameSet` (availsToNameSet exports)
         then Importable mod $ case Map.lookup name bundled of
-          Just p  -> ViaParent (nameOccName p)
-          Nothing -> memberForm gre
+          Just p | conLike gre -> ViaParent (nameOccName p)
+          _                    -> memberForm gre
         else LocalOnly mod
     else
       -- the name is imported into the defining module
@@ -267,18 +269,23 @@ provenanceOf gre exports mod name = do
         []    -> Nothing -- is this possible?
 
 memberForm :: GlobalRdrElt -> MemberForm
-#if MIN_VERSION_ghc(9,14,0)
-memberForm gre = case (gre_par gre, gre_info gre) of
-  (ParentIs p, _)                    -> ViaParent (nameOccName p)
-  (NoParent, IAmConLike con)
-    | ConIsPatSyn <- conLikeInfo con -> AsPattern
-  _                                  -> Plain
-#else
 memberForm gre = case gre_par gre of
-  ParentIs p                                 -> ViaParent (nameOccName p)
-  NoParent
-    | isDataOcc (nameOccName (gre_name gre)) -> AsPattern
-  _                                          -> Plain
+  ParentIs p | conLike gre -> ViaParent (nameOccName p)
+  NoParent   | patSyn gre  -> AsPattern
+  _                        -> Plain
+
+conLike, patSyn :: GlobalRdrElt -> Bool
+#if MIN_VERSION_ghc(9,14,0)
+conLike gre
+  | IAmConLike{} <- gre_info gre = True
+  | otherwise                    = False
+patSyn gre
+  | IAmConLike con <- gre_info gre
+  , ConIsPatSyn <- conLikeInfo con = True
+  | otherwise                      = False
+#else
+conLike = isDataOcc . nameOccName . gre_name
+patSyn = conLike
 #endif
 
 -- | How an unqualified name is spelled in an import list.
