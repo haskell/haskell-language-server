@@ -7,6 +7,7 @@ module Development.IDE
 ) where
 
 import           Development.IDE.Core.Actions          as X (getAtPoint,
+                                                             getAtPointRange,
                                                              getDefinition,
                                                              getTypeDefinition)
 import           Development.IDE.Core.FileExists       as X (getFileExists)

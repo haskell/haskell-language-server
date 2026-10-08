@@ -7,6 +7,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | [Diagnostics](#diagnostics)                         | `textDocument/publishDiagnostics`                                                                 |
 | [Hovers](#hovers)                                   | `textDocument/hover`                                                                              |
+| [Hover over a selection](#hover-over-a-selection)   | `haskell/hoverRange` (custom method)                                                              |
 | [Signature help](#signature-help)                   | `textDocument/signatureHelp`                                                                      |
 | [Jump to definition](#jump-to-definition)           | `textDocument/definition`                                                                         |
 | [Jump to type definition](#jump-to-type-definition) | `textDocument/typeDefinition`                                                                     |
@@ -63,6 +64,26 @@ Type information and documentation on hover, [including from local definitions](
 Provided by: `hls-explicit-fixity-plugin`
 
 Provides fixity information.
+
+## Hover over a selection
+
+Provided by: `ghcide`
+
+Shows the type of the smallest expression that encloses an arbitrary selection of code, so you can inspect the type of any sub-expression, not just identifiers.
+
+This is an LSP extension modelled after [rust-analyzer's "Hover Range" extension](https://rust-analyzer.github.io/book/contributing/lsp-extensions.html#hover-range), exposed as the custom request method `haskell/hoverRange`, since standard LSP hover only carries a single position ([microsoft/language-server-protocol#377](https://github.com/microsoft/language-server-protocol/issues/377)).
+
+Clients can send the following request whenever the user hovers over (or invokes a "show type of selection" command on) a non-empty selection:
+
+```typescript
+method: "haskell/hoverRange"
+params: {
+    textDocument: TextDocumentIdentifier,
+    range: Range, // the current selection
+}
+```
+
+The response is a standard LSP `Hover | null` value describing the smallest expression that fully contains the given range. An empty range behaves exactly like `textDocument/hover`.
 
 ## Signature help
 
