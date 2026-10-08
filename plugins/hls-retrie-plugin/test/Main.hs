@@ -117,8 +117,9 @@ inlineThisTests =
       , testInline "import unqualified to match template" "QualifiedScopeUse" 6 4
       , testInline "import qualified" "QualifiedBodyUse" 5 4
       , testInline "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
-      -- rendered as `ChildExportDef (C (method))`, which GHC rejects
-      , expectFail $ testInline "import a method exported without its class" "ChildExportUse" 5 4
+      , testInline "import a method exported without its class" "ChildExportUse" 5 4
+      , testInline "import a method imported without its class" "LoneMethodUse" 5 4
+      , testInline "import a constructor via its type" "ConstructorUse" 5 4
       ]
     ]
 
