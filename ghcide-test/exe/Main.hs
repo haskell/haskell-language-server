@@ -31,9 +31,9 @@
 module Main (main) where
 
 import qualified HieDbRetry
+import           Test.Hls                        (defaultTestRunner)
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
-import           Test.Hls (defaultTestRunner)
 
 import           AsyncTests
 import           BootTests
@@ -65,6 +65,7 @@ import           ReferenceTests
 import           ResolveTests
 import           RootUriTests
 import           SafeTests
+import           SessionCacheDirTests
 import           SymlinkTests
 import           THTests
 import           UnitTests
@@ -90,6 +91,7 @@ main = do
     , THTests.tests
     , SymlinkTests.tests
     , SafeTests.tests
+    , SessionCacheDirTests.tests
     , UnitTests.tests
     , HaddockTests.tests
     , PositionMappingTests.tests

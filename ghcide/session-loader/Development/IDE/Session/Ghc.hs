@@ -15,6 +15,7 @@ import qualified Data.List.NonEmpty                 as NE
 import qualified Data.Map.Strict                    as Map
 import           Data.Maybe
 import qualified Data.Text                          as T
+import           Data.Text.Encoding                 (encodeUtf8)
 import           Development.IDE.Core.Shake         hiding (Log, knownTargets,
                                                      withHieDb)
 import qualified Development.IDE.GHC.Compat         as Compat
@@ -40,10 +41,11 @@ import           Ide.Logger                         (Pretty (pretty),
 import           System.Directory
 import           System.FilePath
 import           System.Info
+import           System.IO.Error                    (tryIOError)
 
 
 import           Control.DeepSeq
-import           Control.Exception                  (evaluate)
+import           Control.Exception                  (IOException, evaluate)
 import           Control.Monad.IO.Unlift            (MonadUnliftIO)
 import qualified Data.Set                           as OS
 import qualified Development.IDE.GHC.Compat.Util    as Compat
@@ -68,6 +70,7 @@ data Log
   | LogMakingNewHscEnv ![UnitId]
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogDLLLoadError !String
+  | LogResponseFileUnreadable !FilePath !IOException
 deriving instance Show Log
 
 instance Pretty Log where
@@ -80,6 +83,9 @@ instance Pretty Log where
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogDLLLoadError errorString ->
       "Error dynamically loading libm.so.6:" <+> pretty errorString
+    LogResponseFileUnreadable path err ->
+      "Could not read response file" <+> pretty path <> ", so the interface"
+        <+> "file cache will not be reused between sessions:" <+> viaShow err
 -- | Configuration info for a particular home unit.
 data HomeUnitConfig = HomeUnitConfig
   {
@@ -278,7 +284,7 @@ setOptions haddockOpt cfp (ComponentOptions theOpts compRoot _) dflags rootDir =
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hashBytes =H.finalize $ H.updates H.init (map B.pack this_opts)
+                       let hashBytes = hashOptions Nothing this_opts
                            hash =  B.unpack $ B16.encode hashBytes
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in (setHomeUnitId_ hashed_uid dflags', Just hashBytes)
@@ -313,12 +319,13 @@ addComponentInfo ::
   MonadUnliftIO m =>
   Recorder (WithPriority Log) ->
   (String -> Maybe B.ByteString -> [String] -> IO CacheDirs) ->
+  [String] ->
   DependencyInfo ->
   NonEmpty HomeUnitConfig->
   (Maybe FilePath, NormalizedFilePath, ComponentOptions) ->
   Map.Map (Maybe FilePath) [RawComponentInfo] ->
   m (Map.Map (Maybe FilePath) [RawComponentInfo], ([ComponentInfo], [ComponentInfo]))
-addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts) m = do
+addComponentInfo recorder getCacheDirs cacheDirOpts dep_info newDynFlags (hieYaml, cfp, opts) m = do
   -- Just deps if there's already an HscEnv
   -- Nothing is it's the first time we are making an HscEnv
   let oldDeps = Map.lookup hieYaml m
@@ -333,7 +340,6 @@ addComponentInfo recorder getCacheDirs dep_info newDynFlags (hieYaml, cfp, opts)
   all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
     let prefix = show rawComponentUnitId
     -- See Note [Avoiding bad interface files]
-    let cacheDirOpts = componentOptions opts
     cacheDirs <- liftIO $ getCacheDirs prefix rawComponentHash cacheDirOpts
     processed_df <- setCacheDirs recorder cacheDirs rawComponentDynFlags
     -- The final component information, mostly the same but the DynFlags don't
@@ -436,8 +442,44 @@ Since this causes a lot of recompilation, we only update the cache-directory,
 if the dependencies of a component have really changed.
 E.g. when you load two executables, they can not depend on each other. They
 should be filtered out, such that we dont have to re-compile everything.
+
+Similarly, the project's cache directory *should* be stable if nothing changed.
+There are two behaviors that make it difficult to determine a stable cache key
+from cabal's multi-repl component calls.
+
+  1. It writes each unit's options to a response file in different directories
+     every time, so every run passes a new `-unit @path` argument.
+  2. It does not deterministically order the units.
+
+We solve (1) by using the response file contents as the hash input. For (2) we
+sort the units.
 -}
 
+
+-- | The options a component's cache folder is keyed on, with response files
+-- expanded and units sorted. See Note [Avoiding bad interface files].
+cacheDirOptions :: Recorder (WithPriority Log) -> FilePath -> [String] -> IO [String]
+cacheDirOptions recorder compRoot opts = do
+  ((global, _errs, _warns), unitArgs) <- processCmdLineP unit_flags [] (map noLoc opts)
+  units <- mapM (readResponseFileArg recorder compRoot) unitArgs
+  evaluate $ force $ map unLoc global ++ concatMap ("-unit" :) (sort units)
+
+-- | Hash GHC options, continuing from an earlier hash if one is given.
+hashOptions :: Maybe B.ByteString -> [String] -> B.ByteString
+hashOptions mCtx = H.finalize . H.updates ctx . map (encodeUtf8 . T.pack)
+  where ctx = maybe H.init (H.updates H.init . pure) mCtx
+
+readResponseFileArg :: Recorder (WithPriority Log) -> FilePath -> String -> IO [String]
+readResponseFileArg recorder compRoot arg
+  | ('@' : path) <- arg = do
+      contents <- tryIOError $ readFileUtf8 (toAbsolute compRoot path)
+      case contents of
+        Right t ->
+          concatMapM (readResponseFileArg recorder compRoot) $ unescapeArgs $ T.unpack t
+        Left e -> do
+          logWith recorder Info $ LogResponseFileUnreadable path e
+          pure [arg]
+  | otherwise = pure [arg]
 
 -- | Set the cache-directory based on the ComponentOptions and a list of
 -- internal packages.
@@ -479,10 +521,7 @@ cacheDirsUnder base prefix mFirstHash opts = CacheDirs dir dir dir
         dir = Just (base </> prefix' ++ "-" ++ opts_hash)
         -- Create a unique folder per set of different GHC options.
         prefix' = if isJust mFirstHash then "main" else prefix
-        basectx = case mFirstHash of
-          Just h  -> H.updates H.init [h]
-          Nothing -> H.init
-        opts_hash = B.unpack $ B16.encode $ H.finalize $ H.updates basectx (map B.pack opts)
+        opts_hash = B.unpack $ B16.encode $ hashOptions mFirstHash opts
 
 setNameCache :: NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }

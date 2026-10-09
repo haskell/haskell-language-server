@@ -2231,6 +2231,7 @@ test-suite ghcide-tests
     ResolveTests
     RootUriTests
     SafeTests
+    SessionCacheDirTests
     SymlinkTests
     THTests
     UnitTests
