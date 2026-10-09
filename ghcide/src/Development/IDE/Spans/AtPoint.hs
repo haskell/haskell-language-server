@@ -71,7 +71,7 @@ import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
 import           Development.IDE.Core.Shake           (Log (..), ShakeExtras (..),
-                                                       runIdeAction)
+                                                       runIdeAction, useWithStaleFast)
 import           Ide.Logger                           (Priority (Debug), logWith)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
@@ -347,6 +347,8 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         prettyImportedModule mod = do
           mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
           mdoc <- maybe (pure Nothing) (getModuleDocs env (Just currentMod)) mpkg
+          let nfp = undefined :: NormalizedFilePath
+          Just (modiface, _) <- runIdeAction "prettyImportedModule" shakeExtras $ useWithStaleFast GetModIface nfp
           --ToDoFabian Remove the Logs
           logWith (shakeRecorder shakeExtras) Debug $
             LogHoverImport $ "Hover on import " <> printOutputable mod <> ", docs found: " <> T.pack (show (isJust mdoc))
