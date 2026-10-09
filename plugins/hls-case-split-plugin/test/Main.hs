@@ -123,6 +123,8 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , goldenWithClass "Inside `do`" "TInsideDo" $
       Prelude.flip inspectCodeAction [title]
+  , goldenWithRange "Split pattern inside Just _" "TSplitJustUnderscore" $
+      Range (Position 1 17) (Position 1 18)
 
   -- Nested case expressions
   , goldenWithClass "Complete `case` nested in incomplete `case`" "TCompleteCaseInsideIncompleteCase" $
