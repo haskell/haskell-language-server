@@ -108,7 +108,14 @@ case "${TARBALL_EXT}" in
         hls_bin=$(ls "$CI_PROJECT_DIR/out/${TARBALL_PREFIX}"-*-"${ARTIFACT}.tar.xz")
         hls_ver_=${hls_bin#*haskell-language-server-}
         hls_ver=${hls_ver_%-"${ARTIFACT}"*}
-        ghcup install hls -u "file://${hls_bin}" "${hls_ver}" --force
+
+        # use a clean isolated directory to install the tarball into.
+        hls_root="$CI_PROJECT_DIR/hls-bindist-test"
+        rm -rf "$hls_root"
+        ghcup install hls -u "file://${hls_bin}" "${hls_ver}" --isolate "$hls_root"
+
+        # PATH is the only place the wrapper looks for the per-GHC binaries.
+        export PATH="${hls_root}/bin:$PATH"
 
         # cleanup from previous dirty runs
         rm -rf "$HOME"/.local/lib/haskell-language-server-* || true
@@ -116,27 +123,24 @@ case "${TARBALL_EXT}" in
         # print rpaths and libdirs
         case "$(uname -s)" in
             "Darwin"|"darwin")
-                otool -l "$(ghcup whereis basedir)/hls/${hls_ver}/lib/haskell-language-server-${hls_ver}/bin/"haskell-language-server-*
+                otool -l "$hls_root"/lib/haskell-language-server-*/bin/haskell-language-server-*
                 ;;
             "FreeBSD")
-                readelf -Ws "$(ghcup whereis basedir)/hls/${hls_ver}/lib/haskell-language-server-${hls_ver}/bin/"haskell-language-server-*
+                readelf -Ws "$hls_root"/lib/haskell-language-server-*/bin/haskell-language-server-*
                 ;;
             *)
-                objdump -x "$(ghcup whereis basedir)/hls/${hls_ver}/lib/haskell-language-server-${hls_ver}/bin/"haskell-language-server-*
+                objdump -x "$hls_root"/lib/haskell-language-server-*/bin/haskell-language-server-*
                 ;;
         esac
-        tree "$(ghcup whereis basedir)/hls/${hls_ver}/lib/haskell-language-server-${hls_ver}/bin/"
-        tree "$GHCUP_BIN"
+        tree "$hls_root"
 
         enter_test_package
         create_cradle
         create_cabal_project
-        test_all_hls "$(ghcup whereis bindir)"
+        test_all_hls "${hls_root}/bin"
 
         ;;
     *)
         fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"
         ;;
 esac
-
-
