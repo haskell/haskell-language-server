@@ -1062,6 +1062,21 @@ handleGenerationErrors' dflags source action =
           )
     ]
 
+{- Note [Home modules are resolved by HLS]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Which file provides a home module is decided by 'GetLocatedImports' in the build
+graph. We do not want GHC to try looking for the module on its own, as this can
+lead to subtle correctness or performance bugs (at best GHC goes looking in the
+filesystem for a while, for a module which we've already established doesn't
+exist).
+
+To prevent GHC's finder from repeating work we've already done in HLS and to
+avoid masking bugs in the HLS finding logic, we poison the hook so that GHC can
+never succeed in finding home modules by itself.
+
+Only possible from GHC 9.11, where the finder cache became a set of hooks.
+-}
+
 -- Merge the HPTs, module graphs and FinderCaches
 -- See Note [GhcSessionDeps] in Development.IDE.Core.Rules
 -- Add the current ModSummary to the graph, along with the
@@ -1084,10 +1099,11 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                         if moduleUnit im `elem` hsc_all_home_unit_ids env
                         then pure ()
                         else addToFinderCache (hsc_FC env) im val
+                  -- See Note [Home modules are resolved by HLS]
                   , lookupFinderCache = \im ->
                         if moduleUnit im `elem` hsc_all_home_unit_ids env
                         then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
-                               Nothing -> pure Nothing
+                               Nothing -> pure $ Just $ InstalledNotFound [] (Just $ moduleUnit im)
                                Just fs -> let ml = fromJust $ do
                                                     id <- lookupPathToId (depPathIdMap dep_info) fs
                                                     artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
@@ -1110,10 +1126,11 @@ mergeEnvs env mg dep_info ms extraMods envs = do
                   if moduleUnit im `elem` hsc_all_home_unit_ids env
                   then pure ()
                   else addToFinderCache (hsc_FC env) gwib val
+            -- See Note [Home modules are resolved by HLS]
             , lookupFinderCache = \gwib@(GWIB im _) ->
                   if moduleUnit im `elem` hsc_all_home_unit_ids env
                   then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
-                         Nothing -> pure Nothing
+                         Nothing -> pure $ Just $ InstalledNotFound [] (Just $ moduleUnit im)
                          Just fs -> let ml = fromJust $ do
                                               id <- lookupPathToId (depPathIdMap dep_info) fs
                                               artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
