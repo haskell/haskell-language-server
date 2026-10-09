@@ -187,6 +187,56 @@ tests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
       expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
+    -- The file watch capability is disabled so that opening a document is the
+    -- only thing that registers it: lsp-test otherwise sends a watched file
+    -- notification for it first, which would register it through the watcher
+    -- instead.
+  , testCase "add missing hs-boot (unsaved)" $
+    runSessionWithTestConfig def
+        { testPluginDescriptor = dummyPlugin
+        , testConfigCaps = lspTestCapsNoFileWatches
+        , testDirLocation = Right (mkIdeTestFs [])
+        }
+    $ \dir -> do
+      -- ModuleA.hs-boot is a candidate location of the declared target
+      -- ModuleA, so opening it later reuses the cached session instead of
+      -- consulting the cradle again. Resolving the import must not depend on
+      -- that reload happening.
+      liftIO $ do
+        atomicFileWriteString (dir </> "hie.yaml")
+          "cradle: {direct: {arguments: [\"ModuleA\", \"ModuleB\"]}}"
+        atomicFileWriteString (dir </> "ModuleA.hs")
+          "module ModuleA where"
+        atomicFileWriteString (dir </> "ModuleB.hs") $ unlines
+          [ "module ModuleB where"
+          , "import {-# SOURCE #-} ModuleA ()"
+          ]
+      _ <- openDoc (dir </> "ModuleB.hs") "haskell"
+      expectDiagnostics [(dir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 22), "Could not find module", Nothing)])]
+      _ <- createDoc (dir </> "ModuleA.hs-boot") "haskell" "module ModuleA where"
+      expectDiagnostics [(dir </> "ModuleB.hs", [])]
+  , testCase "closing an unsaved module unregisters it" $
+    runSessionWithTestConfig def
+        { testPluginDescriptor = dummyPlugin
+        , testConfigCaps = lspTestCapsNoFileWatches
+        , testDirLocation = Right (mkIdeTestFs [])
+        }
+    $ \dir -> do
+      liftIO $ atomicFileWriteString (dir </> "hie.yaml")
+        "cradle: {direct: {arguments: [\"ModuleA\", \"ModuleB\"]}}"
+      adoc <- createDoc (dir </> "ModuleA.hs") "haskell" "module ModuleA where"
+      bdoc <- createDoc (dir </> "ModuleB.hs") "haskell" $ T.unlines
+        [ "module ModuleB where"
+        , "import ModuleA ()"
+        ]
+      WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" bdoc
+      liftIO $ assertBool "ModuleB should typecheck against the open ModuleA" ideResultSuccess
+      closeDoc adoc
+      -- Closing also makes ModuleA itself report that it is gone, so only look
+      -- at the import resolution, which is what "not found" is reported by
+      diags <- waitForDiagnosticsSource "not found"
+      liftIO $ assertBool ("expected ModuleA to be unresolvable, got: " <> show diags)
+        (any (T.isInfixOf "ModuleA" . (^. L.message)) diags)
   , testWithDummyPluginEmpty' "import path order determines module file" $ \dir -> do
       -- GHC searches import paths in order: with -isrcA -isrcB, a module
       -- present in both directories must resolve to the file in srcA.
