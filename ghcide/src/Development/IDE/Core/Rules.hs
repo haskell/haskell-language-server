@@ -193,7 +193,7 @@ import           System.Directory.Extra                       (canonicalizePath,
                                                                doesDirectoryExist,
                                                                listContents)
 import           System.FilePath                              (dropExtension,
-                                                               equalFilePath,
+                                                               makeRelative,
                                                                normalise,
                                                                splitDirectories,
                                                                takeExtension,
@@ -713,16 +713,17 @@ computeModulesPaths env_eq = do
       acceptedExtensions = concatMap (\x -> ['.':x, '.':x <> "-boot"]) exts
       -- Files known to HLS, whether or not they exist on disk yet
       knownPaths =
-        [ (p, splitDirectories p)
-        | p <- map fromNormalizedFilePath $ HS.toList $ toKnownFiles knownTargets
-        ]
+        [ (fromNormalizedFilePath p, p) | p <- HS.toList $ toKnownFiles knownTargets ]
 
   unit_maps <- forM (hugElts $ hsc_HUG env) $ \(u, hue) -> do
     dir_maps <- forM (importPaths $ homeUnitEnv_dflags hue) $ \dir' -> do
       let import_dir = normalise dir'
-          dirComponents = splitDirectories import_dir
-          toModule f = mkModuleName $ intercalate "." $
-            drop (length dirComponents) (splitDirectories (dropExtension f))
+          -- makeRelative gives back the path unchanged if it is not below
+          -- import_dir. Both paths are absolute, so this is unambiguous.
+          below f = let rel = makeRelative import_dir f
+                    in if rel == f then Nothing else Just rel
+          toModule rel = mkModuleName $ intercalate "." $
+            splitDirectories (dropExtension rel)
           accepted f = takeExtension f `elem` acceptedExtensions
           recurseInto path = case takeFileName path of
             []    -> False
@@ -730,15 +731,17 @@ computeModulesPaths env_eq = do
           firstWins = foldl'
             (\acc (m, p) -> addToUniqMap_C (\old _ -> old) acc m p) emptyUniqMap
           mkMaps fs =
-            let (boot, normal) = partition ("-boot" `isSuffixOf`) (filter accepted fs)
-            in ( firstWins [ (toModule f, toNormalizedFilePath' f) | f <- normal ]
-               , HS.fromList (map toNormalizedFilePath' boot)
+            let (boot, normal) = partition (("-boot" `isSuffixOf`) . fst) $
+                                   filter (accepted . fst) fs
+            in ( firstWins [ (toModule rel, p) | (rel, p) <- normal ]
+               , HS.fromList (map snd boot)
                )
 
       scanned <- liftIO $ listFilesRecursive recurseInto import_dir
-      let (scanNormal, scanBoot) = mkMaps scanned
-          (knownNormal, knownBoot) =
-            mkMaps [ p | (p, comps) <- knownPaths, dirComponents `isPrefixOf` comps ]
+      let (scanNormal, scanBoot) = mkMaps
+            [ (rel, toNormalizedFilePath' f) | f <- scanned, Just rel <- [below f] ]
+          (knownNormal, knownBoot) = mkMaps
+            [ (rel, p) | (f, p) <- knownPaths, Just rel <- [below f] ]
       -- Known files win within a directory: they may exist only in the editor
       pure (plusUniqMap_C const knownNormal scanNormal, HS.union knownBoot scanBoot)
     -- The first import dir providing a module wins, matching GHC's -i order
