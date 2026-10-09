@@ -96,6 +96,7 @@ import           GHC.Generics
 import           Ide.Plugin.Error
 import           Ide.Plugin.HandleRequestTypes
 import           Ide.Plugin.Properties
+import           Ide.Types.Location            (NormalizedOsPath)
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -1277,7 +1278,7 @@ type FormattingHandler a
   -> Maybe ProgressToken
   -> FormattingType
   -> T.Text
-  -> NormalizedFilePath
+  -> NormalizedOsPath
   -> FormattingOptions
   -> ExceptT PluginError (HandlerM Config) ([TextEdit] |? Null)
 

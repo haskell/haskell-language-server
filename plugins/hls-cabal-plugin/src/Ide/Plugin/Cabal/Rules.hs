@@ -32,7 +32,7 @@ import           Ide.Types
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedFilePath FileVersion
+  = LogModificationTime NormalizedOsPath FileVersion
   | LogShake Shake.Log
   | LogOfInterest OfInterest.Log
   | LogDocSaved Uri

@@ -27,7 +27,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCompletion, Method_TextDocumentDefinition, Method_TextDocumentHover, Method_TextDocumentReferences),
                                                    SMethod (SMethod_TextDocumentCompletion, SMethod_TextDocumentDefinition, SMethod_TextDocumentHover, SMethod_TextDocumentReferences))
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding
+                                                  (emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
@@ -35,8 +40,8 @@ import           Text.Regex.TDFA                  (Regex, caseSensitive,
 
 data Log
     = LogShake Shake.Log
-    | LogNotesFound NormalizedFilePath [(Text, [Position])]
-    | LogNoteReferencesFound NormalizedFilePath [(Text, [Position])]
+    | LogNotesFound NormalizedOsPath [(Text, [Position])]
+    | LogNoteReferencesFound NormalizedOsPath [(Text, [Position])]
     deriving Show
 
 data GetNotesInFile = MkGetNotesInFile
@@ -52,14 +57,14 @@ data GetNotes = MkGetNotes
     deriving anyclass (Hashable, NFData)
 -- GetNotes collects all note definition across all files in the
 -- project. It returns a map from note name to pair of (filepath, position).
-type instance RuleResult GetNotes = HashMap Text (NormalizedFilePath, Position)
+type instance RuleResult GetNotes = HashMap Text (NormalizedOsPath, Position)
 
 data GetNoteReferences = MkGetNoteReferences
     deriving (Show, Generic, Eq, Ord)
     deriving anyclass (Hashable, NFData)
 -- GetNoteReferences collects all note references across all files in the
 -- project. It returns a map from note name to list of (filepath, position).
-type instance RuleResult GetNoteReferences = HashMap Text [(NormalizedFilePath, Position)]
+type instance RuleResult GetNoteReferences = HashMap Text [(NormalizedOsPath, Position)]
 
 instance Pretty Log where
     pretty = \case
@@ -105,7 +110,7 @@ findNotesRules recorder = do
 err :: MonadError PluginError m => Text -> Maybe a -> m a
 err s = maybe (throwError $ PluginInternalError s) pure
 
-getNote :: NormalizedFilePath -> IdeState -> Position -> ExceptT PluginError (HandlerM c) (Maybe Text)
+getNote :: NormalizedOsPath -> IdeState -> Position -> ExceptT PluginError (HandlerM c) (Maybe Text)
 getNote nfp state (Position l c) = do
     contents <-
         err "Error getting file contents"
@@ -123,7 +128,7 @@ getNote nfp state (Position l c) = do
 
 listReferences :: PluginMethodHandler IdeState Method_TextDocumentReferences
 listReferences state _ param
-    | Just nfp <- uriToNormalizedFilePath uriOrig
+    | Just nfp <- uriToNormalizedOsPath (fromNormalizedUri uriOrig)
     = do
         let pos@(Position l _) = param ^. L.position
         noteOpt <- getNote nfp state pos
@@ -136,7 +141,7 @@ listReferences state _ param
                   Just poss -> pure $ InL $ mapMaybe (\(noteFp, pos@(Position l' _)) ->
                       if l' == l
                         then Nothing
-                        else Just (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                        else Just (Location (fromNormalizedUri $ filePathToUri' noteFp) (Range pos pos))
                     )
                     poss
     where
@@ -145,7 +150,7 @@ listReferences _ _ _ = throwError $ PluginInternalError "conversion to normalize
 
 jumpToNote :: PluginMethodHandler IdeState Method_TextDocumentDefinition
 jumpToNote state _ param
-    | Just nfp <- uriToNormalizedFilePath uriOrig
+    | Just nfp <- uriToNormalizedOsPath (fromNormalizedUri uriOrig)
     = do
         noteOpt <- getNote nfp state (param ^. L.position)
         case noteOpt of
@@ -155,12 +160,12 @@ jumpToNote state _ param
                 case HM.lookup note notes of
                   Nothing -> pure (InR (InR Null))
                   Just (noteFp, pos) -> pure $ InL $ Definition $ InL $
-                    Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos)
+                    Location (fromNormalizedUri $ filePathToUri' noteFp) (Range pos pos)
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
 jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
 
-findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position, HM.HashMap Text [Position]))
+findNotesInFile :: NormalizedOsPath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position, HM.HashMap Text [Position]))
 findNotesInFile file recorder = do
     -- GetFileContents only returns a value if the file is open in the editor of
     -- the user. If not, we need to read it from disk.
@@ -224,7 +229,7 @@ findNoteRange line _note lineNo =
 -- Given the path and position of a Note Declaration, finds Content in it.
 -- ignores ~ as a seprator
 extractNoteContent
-  :: NormalizedFilePath
+  :: NormalizedOsPath
   -> Position
   -> IO (Maybe Text)
 extractNoteContent nfp (Position startLine _) = do
@@ -276,7 +281,7 @@ normalizeNewlines = T.replace "\r\n" "\n"
 -- ignores Note Declaration
 hoverNote :: PluginMethodHandler IdeState Method_TextDocumentHover
 hoverNote state _ params
-  | Just nfp <- uriToNormalizedFilePath uriOrig
+  | Just nfp <- uriToNormalizedOsPath (fromNormalizedUri uriOrig)
   = do
       let pos@(Position line _) = params ^. L.position
       noteOpt <- getNote nfp state pos
@@ -347,7 +352,7 @@ autocomplete state _ params = do
         -- Suggest list of all NOTE DECLARATION if "note [" infix detected
         else if "note[" `T.isInfixOf` linePrefix || "note [" `T.isInfixOf` linePrefix
         then
-          case uriToNormalizedFilePath nuri of
+          case uriToNormalizedOsPath (fromNormalizedUri nuri) of
             Nothing -> pure []
 
             Just nfp -> do

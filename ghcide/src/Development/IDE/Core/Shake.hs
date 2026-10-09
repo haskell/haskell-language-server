@@ -180,7 +180,12 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types            hiding
+                                                        (emptyNormalizedFilePath,
+                                                         fromNormalizedFilePath,
+                                                         normalizedFilePathToUri,
+                                                         toNormalizedFilePath,
+                                                         uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types            as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
@@ -208,7 +213,7 @@ data Log
   | LogLookupPersistentKey !T.Text
   | LogShakeGarbageCollection !T.Text !Int !Seconds
   -- * OfInterest Log messages
-  | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
+  | LogSetFilesOfInterest ![(NormalizedOsPath, FileOfInterestStatus)]
   deriving Show
 
 instance Pretty Log where
@@ -258,7 +263,7 @@ instance Pretty Log where
 data HieDbWriter
   = HieDbWriter
   { indexQueue             :: IndexQueue
-  , indexPending           :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexPending           :: TVar (HMap.HashMap NormalizedOsPath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
   , indexCompleted         :: TVar Int -- ^ to report progress
   , indexProgressReporting :: ProgressReporting
   }
@@ -301,7 +306,7 @@ data ShakeExtras = ShakeExtras
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
 
-    ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
+    ,semanticTokensCache:: STM.Map NormalizedOsPath SemanticTokens
     -- ^ Cache of last response of semantic tokens for each file,
     -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
     -- putting semantic tokens cache and id in shakeExtras might not be ideal
@@ -356,7 +361,7 @@ type WithProgressFunc = forall a.
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
 
-type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
+type GetStalePersistent = NormalizedOsPath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
@@ -398,7 +403,7 @@ getPluginConfigAction plId = do
 -- This is called when we don't already have a result, or computing the rule failed.
 -- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
 -- be queued if the rule hasn't run before.
-addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
+addPersistentRule :: IdeRule k v => k -> (NormalizedOsPath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
   void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) (fmap (fmap (first3 toDyn)) . getVal)
@@ -406,7 +411,7 @@ addPersistentRule k getVal = do
 class Typeable a => IsIdeGlobal a where
 
 -- | Read a virtual file from the current snapshot
-getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
+getVirtualFile :: NormalizedOsPath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $!  -- Don't leak a reference to the entire map
@@ -469,7 +474,7 @@ getIdeOptionsIO ide = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
+lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedOsPath -> IO (Maybe (v, PositionMapping))
 lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
 
     let readPersistent
@@ -489,7 +494,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             Just (v,del,mbVer) -> do
                 actual_version <- case mbVer of
                   Just ver -> pure (Just $ VFSVersion ver)
-                  Nothing -> (Just . ModificationTime <$> getModTime (fromNormalizedFilePath file))
+                  Nothing -> (Just . ModificationTime <$> let NormalizedOsPath _ osp = file in getModTime osp)
                               `catch` (\(_ :: IOException) -> pure Nothing)
                 atomicallyNamed "lastValueIO 2" $ do
                   STM.focus (Focus.alter (alterValue $ Stale (Just del) actual_version (toDyn v))) (toKey k file) state
@@ -515,14 +520,14 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValue :: IdeRule k v => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
+lastValue :: IdeRule k v => k -> NormalizedOsPath -> Action (Maybe (v, PositionMapping))
 lastValue key file = do
     s <- getShakeExtras
     liftIO $ lastValueIO s key file
 
 mappingForVersion
     :: STM.Map NormalizedUri (EnumMap Int32 (a, PositionMapping))
-    -> NormalizedFilePath
+    -> NormalizedOsPath
     -> Maybe FileVersion
     -> STM PositionMapping
 mappingForVersion allMappings file (Just (VFSVersion ver)) = do
@@ -601,7 +606,7 @@ shakeDatabaseProfileIO mbProfileDir = do
 setValues :: IdeRule k v
           => Values
           -> k
-          -> NormalizedFilePath
+          -> NormalizedOsPath
           -> Value v
           -> Vector FileDiagnostic
           -> STM ()
@@ -615,7 +620,7 @@ deleteValue
   :: Shake.ShakeValue k
   => ShakeExtras
   -> k
-  -> NormalizedFilePath
+  -> NormalizedOsPath
   -> STM [Key]
 deleteValue ShakeExtras{state} key file = do
     STM.delete (toKey key file) state
@@ -628,7 +633,7 @@ getValues ::
   IdeRule k v =>
   Values ->
   k ->
-  NormalizedFilePath ->
+  NormalizedOsPath ->
   STM (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
     STM.lookup (toKey key file) state >>= \case
@@ -652,8 +657,8 @@ knownTargets = do
 -- see Note [Serializing runs in separate thread].
 updateKnownTargets
   :: ShakeExtras
-  -> [NormalizedFilePath] -- ^ appeared
-  -> [NormalizedFilePath] -- ^ disappeared
+  -> [NormalizedOsPath] -- ^ appeared
+  -> [NormalizedOsPath] -- ^ disappeared
   -> IO [Key]
 updateKnownTargets ShakeExtras{knownTargetsVar} added removed
   | null added && null removed = pure []
@@ -1055,22 +1060,22 @@ preservedKeys checkParents = HSet.fromList $
 -- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
-    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+    => Recorder (WithPriority Log) -> (k -> NormalizedOsPath -> Action (IdeResult v)) -> Rules ()
 define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
     :: IdeRule k v
-    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+    => Recorder (WithPriority Log) -> (k -> NormalizedOsPath -> Action (Maybe v)) -> Rules ()
 defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
 use :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe v)
+    => k -> NormalizedOsPath -> Action (Maybe v)
 use key file = runIdentity <$> uses key (Identity file)
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
+    => k -> NormalizedOsPath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
 -- |Request a Rule result, it not available return the last computed result
@@ -1081,7 +1086,7 @@ useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
 useWithStale_ :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (v, PositionMapping)
+    => k -> NormalizedOsPath -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
 -- |Plural version of 'useWithStale_'
@@ -1090,7 +1095,7 @@ useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers.
-usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
+usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedOsPath -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files
     case sequence res of
@@ -1121,11 +1126,11 @@ data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate ::
 -- | Lookup value in the database and return with the stale value immediately
 -- Will queue an action to refresh the value.
 -- Might block the first time the rule runs, but never blocks after that.
-useWithStaleFast :: IdeRule k v => k -> NormalizedFilePath -> IdeAction (Maybe (v, PositionMapping))
+useWithStaleFast :: IdeRule k v => k -> NormalizedOsPath -> IdeAction (Maybe (v, PositionMapping))
 useWithStaleFast key file = stale <$> useWithStaleFast' key file
 
 -- | Same as useWithStaleFast but lets you wait for an up to date result
-useWithStaleFast' :: IdeRule k v => k -> NormalizedFilePath -> IdeAction (FastResult v)
+useWithStaleFast' :: IdeRule k v => k -> NormalizedOsPath -> IdeAction (FastResult v)
 useWithStaleFast' key file = do
   -- This lookup directly looks up the key in the shake database and
   -- returns the last value that was computed for this key without
@@ -1161,7 +1166,7 @@ useNoFile key = use key emptyFilePath
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
-use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
+use_ :: IdeRule k v => k -> NormalizedOsPath -> Action v
 use_ key file = runIdentity <$> uses_ key (Identity file)
 
 useNoFile_ :: IdeRule k v => k -> Action v
@@ -1173,7 +1178,7 @@ useNoFile_ key = use_ key emptyFilePath
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
-uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f v)
+uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedOsPath -> Action (f v)
 uses_ key files = do
     res <- uses key files
     case sequence res of
@@ -1182,12 +1187,12 @@ uses_ key files = do
 
 -- | Plural version of 'use'
 uses :: (Traversable f, IdeRule k v)
-    => k -> f NormalizedFilePath -> Action (f (Maybe v))
+    => k -> f NormalizedOsPath -> Action (f (Maybe v))
 uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
 
 -- | Return the last computed result which might be stale.
 usesWithStale :: (Traversable f, IdeRule k v)
-    => k -> f NormalizedFilePath -> Action (f (Maybe (v, PositionMapping)))
+    => k -> f NormalizedOsPath -> Action (f (Maybe (v, PositionMapping)))
 usesWithStale key files = do
     _ <- apply (fmap (Q . (key,)) files)
     -- We don't look at the result of the 'apply' since 'lastValue' will
@@ -1198,7 +1203,7 @@ usesWithStale key files = do
 -- we use separate fingerprint rules to trigger the rebuild of the rule
 useWithSeparateFingerprintRule
     :: (IdeRule k v, IdeRule k1 Fingerprint)
-    => k1 -> k -> NormalizedFilePath -> Action (Maybe v)
+    => k1 -> k -> NormalizedOsPath -> Action (Maybe v)
 useWithSeparateFingerprintRule fingerKey key file = do
     _ <- use fingerKey file
     useWithoutDependency key emptyFilePath
@@ -1206,25 +1211,25 @@ useWithSeparateFingerprintRule fingerKey key file = do
 -- we use separate fingerprint rules to trigger the rebuild of the rule
 useWithSeparateFingerprintRule_
     :: (IdeRule k v, IdeRule k1 Fingerprint)
-    => k1 -> k -> NormalizedFilePath -> Action v
+    => k1 -> k -> NormalizedOsPath -> Action v
 useWithSeparateFingerprintRule_ fingerKey key file = do
     useWithSeparateFingerprintRule fingerKey key file >>= \case
         Just v -> return v
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
 
 useWithoutDependency :: IdeRule k v
-    => k -> NormalizedFilePath -> Action (Maybe v)
+    => k -> NormalizedOsPath -> Action (Maybe v)
 useWithoutDependency key file =
     (\(Identity (A value)) -> currentValue value) <$> applyWithoutDependency (Identity (Q (key, file)))
 
 data RuleBody k v
-  = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
-  | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+  = Rule (k -> NormalizedOsPath -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleNoDiagnostics (k -> NormalizedOsPath -> Action (Maybe BS.ByteString, Maybe v))
   | RuleWithCustomNewnessCheck
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
-    , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
+    , build :: k -> NormalizedOsPath -> Action (Maybe BS.ByteString, Maybe v)
     }
-  | RuleWithOldValue (k -> NormalizedFilePath -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleWithOldValue (k -> NormalizedOsPath -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 
 -- | Define a rule that can rerun without dirtying its dependents.
 --
@@ -1278,7 +1283,7 @@ defineEarlyCutoff'
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
-    -> NormalizedFilePath
+    -> NormalizedOsPath
     -> Maybe BS.ByteString
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
@@ -1344,7 +1349,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
     estimateFileVersionUnsafely
         :: k
         -> Maybe v
-        -> NormalizedFilePath
+        -> NormalizedOsPath
         -> Action (Maybe FileVersion)
     estimateFileVersionUnsafely _k v fp
         | fp == emptyFilePath = pure Nothing
@@ -1423,7 +1428,7 @@ traceA (A Succeeded{}) = "Success"
 
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
-  -> NormalizedFilePath
+  -> NormalizedOsPath
   -> Maybe Int32
   -> Key
   -> ShakeExtras
@@ -1467,7 +1472,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
             | coerce ideTesting = c & L.relatedInformation ?~
                         [ DiagnosticRelatedInformation
                             (Location
-                                (filePathToUri $ fromNormalizedFilePath fp)
+                                (LSP.fromNormalizedUri (filePathToUri' fp))
                                 _range
                             )
                             (T.pack $ show k)
@@ -1549,13 +1554,13 @@ updatePositionMappingHelper ver changes mappingForUri = snd $
 -- | sends a signal whenever shake session is run/restarted
 -- being used in cabal and hlint plugin tests to know when its time
 -- to look for file diagnostics
-kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [NormalizedFilePath] -> Proxy s -> Action ()
+kickSignal :: KnownSymbol s => Bool -> Maybe (LSP.LanguageContextEnv c) -> [NormalizedOsPath] -> Proxy s -> Action ()
 kickSignal testing lspEnv files msg = when testing $ liftIO $ mRunLspT lspEnv $
   LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
   toJSON $ map fromNormalizedFilePath files
 
 -- | Add kick start/done signal to rule
-runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedFilePath] -> k -> Action ()
+runWithSignal :: (KnownSymbol s0, KnownSymbol s1, IdeRule k v) => Proxy s0 -> Proxy s1 -> [NormalizedOsPath] -> k -> Action ()
 runWithSignal msgStart msgEnd files rule = do
   ShakeExtras{ideTesting = Options.IdeTesting testing, lspEnv} <- getShakeExtras
   kickSignal testing lspEnv files msgStart

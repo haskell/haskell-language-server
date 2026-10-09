@@ -35,16 +35,15 @@ module Test.Hls.FileSystem
   , atomicFileWriteText
   ) where
 
-import           Control.Exception           (onException)
-import           Data.Foldable               (traverse_)
-import qualified Data.Text                   as T
-import qualified Data.Text.IO                as T
-import           Development.IDE             (NormalizedFilePath)
-import           Language.LSP.Protocol.Types (toNormalizedFilePath)
+import           Control.Exception    (onException)
+import           Data.Foldable        (traverse_)
+import qualified Data.Text            as T
+import qualified Data.Text.IO         as T
+import           Development.IDE      (NormalizedOsPath, toNormalizedFilePath')
 import           System.Directory
-import           System.FilePath             as FP
-import           System.IO.Extra             (newTempFileWithin, writeFileUTF8)
-import           System.Process.Extra        (readProcess)
+import           System.FilePath      as FP
+import           System.IO.Extra      (newTempFileWithin, writeFileUTF8)
+import           System.Process.Extra (readProcess)
 
 -- ----------------------------------------------------------------------------
 -- Top Level definitions
@@ -151,9 +150,9 @@ mkVirtualFileTree testDataDir tree =
 toAbsFp :: FileSystem -> FilePath -> FilePath
 toAbsFp fs fp = fsRoot fs </> FP.normalise fp
 
-toNfp :: FileSystem -> FilePath -> NormalizedFilePath
+toNfp :: FileSystem -> FilePath -> NormalizedOsPath
 toNfp fs fp =
-  toNormalizedFilePath $ toAbsFp fs fp
+  toNormalizedFilePath' $ toAbsFp fs fp
 
 -- ----------------------------------------------------------------------------
 -- Builders

@@ -16,6 +16,8 @@ import           Control.Monad.Trans.Except    (ExceptT (..), throwE)
 import qualified Data.Text                     as T
 import           Ide.Logger
 import           Ide.Plugin.HandleRequestTypes (RejectionReason)
+import           Ide.Types.Location            (NormalizedOsPath,
+                                                uriToNormalizedOsPath)
 import           Language.LSP.Protocol.Types
 
 -- ----------------------------------------------------------------------------
@@ -141,7 +143,6 @@ handleMaybe msg = maybe (throwE msg) return
 handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
 handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
-getNormalizedFilePathE :: Monad m => Uri -> ExceptT PluginError m NormalizedFilePath
+getNormalizedFilePathE :: Monad m => Uri -> ExceptT PluginError m NormalizedOsPath
 getNormalizedFilePathE uri = handleMaybe (PluginInvalidParams (T.pack $ "uriToNormalizedFile failed. Uri:" <>  show uri))
-        $ uriToNormalizedFilePath
-        $ toNormalizedUri uri
+        $ uriToNormalizedOsPath uri

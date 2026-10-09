@@ -16,31 +16,31 @@ import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic)
 import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
                                                     ideErrorWithSource)
+import           Development.IDE.Types.Location    (NormalizedOsPath,
+                                                    fromNormalizedFilePath)
 import           Distribution.Fields               (showPError, showPWarning)
 import qualified Distribution.Parsec               as Syntax
 import           Ide.PluginUtils                   (extendNextLine)
 import           Language.LSP.Protocol.Lens        (range)
 import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     DiagnosticSeverity (..),
-                                                    NormalizedFilePath,
                                                     Position (Position),
-                                                    Range (Range),
-                                                    fromNormalizedFilePath)
+                                                    Range (Range))
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
-fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
+fatalParseErrorDiagnostic :: NormalizedOsPath -> T.Text -> FileDiagnostic
 fatalParseErrorDiagnostic fp msg =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine Syntax.zeroPos) msg
 
 -- | Produce a diagnostic from a Cabal parser error
-errorDiagnostic :: NormalizedFilePath -> Syntax.PError -> FileDiagnostic
+errorDiagnostic :: NormalizedOsPath -> Syntax.PError -> FileDiagnostic
 errorDiagnostic fp err@(Syntax.PError pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
-warningDiagnostic :: NormalizedFilePath -> Syntax.PWarning -> FileDiagnostic
+warningDiagnostic :: NormalizedOsPath -> Syntax.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Syntax.PWarning _ pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg
   where
@@ -72,7 +72,7 @@ positionFromCabalPosition (Syntax.Position line column) = Position (fromIntegral
 
 -- | Create a 'FileDiagnostic'
 mkDiag
-  :: NormalizedFilePath
+  :: NormalizedOsPath
   -- ^ Cabal file path
   -> T.Text
   -- ^ Where does the diagnostic come from?

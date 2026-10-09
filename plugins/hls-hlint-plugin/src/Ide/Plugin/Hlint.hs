@@ -106,7 +106,12 @@ import           Language.Haskell.HLint                             as Hlint
 import qualified Language.LSP.Protocol.Lens                         as LSP
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                        hiding
-                                                                    (Null)
+                                                                    (Null,
+                                                                     emptyNormalizedFilePath,
+                                                                     fromNormalizedFilePath,
+                                                                     normalizedFilePathToUri,
+                                                                     toNormalizedFilePath,
+                                                                     uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types                        as LSP
 
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
@@ -125,12 +130,12 @@ import           Text.Regex.TDFA.Text                               ()
 
 data Log
   = LogShake Shake.Log
-  | LogApplying NormalizedFilePath (Either String WorkspaceEdit)
+  | LogApplying NormalizedOsPath (Either String WorkspaceEdit)
 #if APPLY_REFACT
-  | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
+  | LogGeneratedIdeas NormalizedOsPath [[Refact.Refactoring Refact.SrcSpan]]
 #endif
-  | LogGetIdeas NormalizedFilePath
-  | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
+  | LogGetIdeas NormalizedOsPath
+  | LogUsingExtensions NormalizedOsPath [String] -- Extension is only imported conditionally, so we just stringify them
   | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
@@ -213,7 +218,7 @@ rules recorder plugin = do
 
   where
 
-      diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
+      diagnostics :: NormalizedOsPath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) =
         [ideErrorFromLspDiag diag file Nothing | i <- ideas, Just diag <- [ideaToDiagnostic i]]
       diagnostics file (Left parseErr) =
@@ -287,7 +292,7 @@ rules recorder plugin = do
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
-getIdeas :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action (Either ParseError [Idea])
+getIdeas :: Recorder (WithPriority Log) -> NormalizedOsPath -> Action (Either ParseError [Idea])
 getIdeas recorder nfp = do
   logWith recorder Debug $ LogGetIdeas nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
@@ -321,7 +326,7 @@ getIdeas recorder nfp = do
 -- and the ModSummary dynflags. However using the parsedFlags extensions
 -- can sometimes interfere with the hlint parsing of the file.
 -- See https://github.com/haskell/haskell-language-server/issues/1279
-getExtensions :: NormalizedFilePath -> Action [Extension]
+getExtensions :: NormalizedOsPath -> Action [Extension]
 getExtensions nfp = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
@@ -365,7 +370,7 @@ getHlintConfig pId =
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context)
   | let TextDocumentIdentifier uri = documentId
-  , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
+  , Just docNormalizedFilePath <- uriToNormalizedOsPath uri
   = do
     verTxtDocId <-
         liftIO $
@@ -470,7 +475,7 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     textEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedOsPath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
 ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
   (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
   (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
@@ -507,7 +512,7 @@ data OneHint =
     , oneHintTitle :: HintTitle
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
-applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
+applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedOsPath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 #if !APPLY_REFACT
 applyHint _ _ _ _ _ =
   -- https://github.com/ndmitchell/hlint/pull/1594#issuecomment-2338898673

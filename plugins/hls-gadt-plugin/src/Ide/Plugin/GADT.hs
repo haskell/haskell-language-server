@@ -31,7 +31,12 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding
+                                                  (emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId "Provides a code action to convert datatypes to GADT syntax")
@@ -108,7 +113,7 @@ codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT ha
 getInRangeH98DeclsAndExts :: (MonadIO m) =>
     IdeState
     -> Range
-    -> NormalizedFilePath
+    -> NormalizedOsPath
     -> ExceptT GadtPluginError m ([LTyClDecl GP], [Extension])
 getInRangeH98DeclsAndExts state range nfp = do
     pm <- withExceptT GhcidePluginErrors

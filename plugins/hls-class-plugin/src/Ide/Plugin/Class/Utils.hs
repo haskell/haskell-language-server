@@ -42,7 +42,7 @@ toMethodName n
 --   if the module parsed success.
 insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
-    -> NormalizedFilePath
+    -> NormalizedOsPath
     -> Extension
     -> ExceptT PluginError m [TextEdit]
 insertPragmaIfNotPresent state nfp pragma = do

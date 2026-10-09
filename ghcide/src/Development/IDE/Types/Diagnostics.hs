@@ -49,7 +49,12 @@ import           GHC.Types.Error                (DiagnosticCode (..),
                                                  errMsgDiagnostic)
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
-import           Language.LSP.Protocol.Types    as LSP
+import           Language.LSP.Protocol.Types    as LSP hiding
+                                                       (emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
 import qualified Prettyprinter.Render.Terminal  as Terminal
@@ -72,14 +77,14 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 -- | an IdeResult with a fingerprint
 type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
--- | Produce a 'FileDiagnostic' for the given 'NormalizedFilePath'
+-- | Produce a 'FileDiagnostic' for the given 'NormalizedOsPath'
 -- with an error message.
-ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
+ideErrorText :: NormalizedOsPath -> T.Text -> FileDiagnostic
 ideErrorText nfp msg =
   ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg Nothing
 
 -- | Create a 'FileDiagnostic' from an existing 'LSP.Diagnostic' for a
--- specific 'NormalizedFilePath'.
+-- specific 'NormalizedOsPath'.
 -- The optional 'MsgEnvelope GhcMessage' is the original error message
 -- that was used for creating the 'LSP.Diagnostic'.
 -- It is included here, to allow downstream consumers, such as HLS plugins,
@@ -89,7 +94,7 @@ ideErrorText nfp msg =
 -- to provide documentation and explanations for error messages.
 ideErrorFromLspDiag
   :: LSP.Diagnostic
-  -> NormalizedFilePath
+  -> NormalizedOsPath
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
 ideErrorFromLspDiag lspDiag fdFilePath mbOrigMsg =
@@ -144,7 +149,7 @@ showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpec
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
-  -> NormalizedFilePath
+  -> NormalizedOsPath
   -> T.Text
   -> Maybe (MsgEnvelope GhcMessage)
   -> FileDiagnostic
@@ -234,7 +239,7 @@ instance NFData StructuredMessage where
 --   StructuredMessage.
 --
 data FileDiagnostic = FileDiagnostic
-  { fdFilePath             :: NormalizedFilePath
+  { fdFilePath             :: NormalizedOsPath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
     -- | The original diagnostic that was used to produce 'fdLspDiagnostic'.

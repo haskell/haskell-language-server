@@ -153,17 +153,17 @@ srcSpanToLocation src = do
   -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
   pure $ Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' fs) rng
 
-rangeToSrcSpan :: NormalizedFilePath -> Range -> SrcSpan
+rangeToSrcSpan :: NormalizedOsPath -> Range -> SrcSpan
 rangeToSrcSpan = fmap (\x -> Compat.RealSrcSpan x Nothing) . rangeToRealSrcSpan
 
 rangeToRealSrcSpan
-    :: NormalizedFilePath -> Range -> RealSrcSpan
+    :: NormalizedOsPath -> Range -> RealSrcSpan
 rangeToRealSrcSpan nfp =
     Compat.mkRealSrcSpan
         <$> positionToRealSrcLoc nfp . _start
         <*> positionToRealSrcLoc nfp . _end
 
-positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
+positionToRealSrcLoc :: NormalizedOsPath -> Position -> RealSrcLoc
 positionToRealSrcLoc nfp (Position l c)=
     Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 

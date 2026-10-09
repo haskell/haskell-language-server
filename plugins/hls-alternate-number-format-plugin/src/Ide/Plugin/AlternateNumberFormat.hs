@@ -9,9 +9,10 @@ import qualified Data.Map                         as Map
 import           Data.Text                        (Text, unpack)
 import qualified Data.Text                        as T
 import           Development.IDE                  (GetParsedModule (GetParsedModule),
-                                                   IdeState, RuleResult, Rules,
-                                                   define, realSrcSpanToRange,
-                                                   use)
+                                                   IdeState, NormalizedOsPath,
+                                                   RuleResult, Rules, define,
+                                                   filePathToUri',
+                                                   realSrcSpanToRange, use)
 import           Development.IDE.Core.PluginUtils
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
@@ -92,7 +93,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
     pure $ InL actions
     where
-        mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
+        mkCodeAction :: NormalizedOsPath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
         mkCodeAction nfp lit enabled npi af@(alt, ExtensionNeeded exts) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
             , _kind = Just $ CodeActionKind_Custom "quickfix.literals.style"
@@ -109,10 +110,10 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
                     ext': exts -> [insertNewPragma npi ext' | needsExtension enabled ext'] <> pragmaEdit exts
                     []         -> []
 
-        mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
+        mkWorkspaceEdit :: NormalizedOsPath -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
+                changes = Just $ Map.singleton (fromNormalizedUri $ filePathToUri' nfp) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
@@ -128,7 +129,7 @@ mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts
 needsExtension :: [GhcExtension] -> Extension -> Bool
 needsExtension ghcExts ext = ext `notElem` map unExt ghcExts
 
-requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
+requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedOsPath -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
     runActionE (unpack pId <> ".CollectLiterals") state
     . useE CollectLiterals

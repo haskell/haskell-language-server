@@ -12,7 +12,12 @@ module Development.IDE.LSP.Notifications
     ) where
 
 import qualified Language.LSP.Protocol.Message         as LSP
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types           hiding
+                                                       (emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types           as LSP
 
 import           Control.Concurrent.STM.Stats          (atomically)
@@ -38,7 +43,7 @@ import           Development.IDE.Types.Location
 import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
-import           System.Directory                      (doesFileExist)
+import qualified System.Directory.OsPath               as Dir
 import           System.FilePath                       (takeExtension)
 
 data Log
@@ -63,8 +68,8 @@ instance Pretty Log where
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
+whenUriFile :: Uri -> (NormalizedOsPath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (uriToNormalizedOsPath uri) act
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
@@ -102,7 +107,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
               let msg = "Closed text document: " <> getUri _uri
               -- A file that was only ever open in the editor stops existing
               -- when it is closed
-              onDisk <- doesFileExist (fromNormalizedFilePath file)
+              onDisk <- liftIO $ let NormalizedOsPath _ osp = file
+                                 in Dir.doesFileExist osp
               setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
                 scheduleGarbageCollection ide
                 ks <- updateKnownTargets (shakeExtras ide) [] [file | not onDisk]
@@ -118,8 +124,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
                 [ (nfp, event) | (FileEvent uri event) <- fileEvents
-                , Just fp <- [uriToFilePath uri]
-                , let nfp = toNormalizedFilePath fp
+                , Just nfp <- [uriToNormalizedOsPath uri]
                 , not $ HM.member nfp filesOfInterest
                 ]
         unless (null fileEvents') $ do

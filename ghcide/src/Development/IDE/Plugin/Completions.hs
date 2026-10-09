@@ -47,7 +47,12 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types              hiding
+                                                          (emptyNormalizedFilePath,
+                                                           fromNormalizedFilePath,
+                                                           normalizedFilePathToUri,
+                                                           toNormalizedFilePath,
+                                                           uriToNormalizedFilePath)
 import           Numeric.Natural
 import           Prelude                                  hiding (mod)
 import           Text.Fuzzy.Parallel                      (Scored (..))
@@ -84,7 +89,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc)
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
     define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
-        let uri = fromNormalizedUri $ normalizedFilePathToUri file
+        let uri = fromNormalizedUri $ filePathToUri' file
         mbPm <- useWithStale GetParsedModule file
         case mbPm of
             Just (pm, _) -> do
@@ -106,7 +111,7 @@ produceCompletions recorder = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let visibleMods = listVisibleModuleNames $ hscEnv sess
-                      let uri = fromNormalizedUri $ normalizedFilePathToUri file
+                      let uri = fromNormalizedUri $ filePathToUri' file
                       let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
@@ -169,7 +174,7 @@ getCompletionsLSP ide plId
       liftIO $ runAction "Completion" ide $ getUriContents $ toNormalizedUri uri
     fmap Right $ case (contentsMaybe, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath' path
+        let npath = either (error . show) toNormalizedFilePath' (decodeOsPath path)
         (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath

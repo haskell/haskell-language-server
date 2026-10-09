@@ -20,9 +20,10 @@ import           Data.Maybe                        (catMaybes)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic,
-                                                    IdeState (..), Pretty (..),
-                                                    Priority (..), Recorder,
-                                                    WithPriority,
+                                                    IdeState (..),
+                                                    NormalizedOsPath,
+                                                    Pretty (..), Priority (..),
+                                                    Recorder, WithPriority,
                                                     fdLspDiagnosticL,
                                                     fdStructuredMessageL,
                                                     logWith, realSrcSpanToRange)
@@ -96,7 +97,7 @@ codeActionHandler recorder plId ideState _ CodeActionParams{_textDocument, _rang
     actions <- lift $ mapM (generateAction recorder plId uri decls) fileDiags
     pure $ InL $ catMaybes actions
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedOsPath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . fmap (hsmodDecls . unLoc . pm_parsed_source)

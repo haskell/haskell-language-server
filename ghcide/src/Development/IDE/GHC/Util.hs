@@ -139,7 +139,7 @@ runGhcEnv env act = do
 -- | Given a module location, and its parse tree, figure out what is the include directory implied by it.
 --   For example, given the file @\/usr\/\Test\/Foo\/Bar.hs@ with the module name @Foo.Bar@ the directory
 --   @\/usr\/Test@ should be on the include path to find sibling modules.
-moduleImportPath :: NormalizedFilePath -> GHC.ModuleName -> Maybe FilePath
+moduleImportPath :: NormalizedOsPath -> GHC.ModuleName -> Maybe FilePath
 -- The call to takeDirectory is required since DAML does not require that
 -- the file name matches the module name in the last component.
 -- Once that has changed we can get rid of this.

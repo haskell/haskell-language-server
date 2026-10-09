@@ -91,6 +91,7 @@ import qualified Data.Text                             as T
 import           Development.IDE                       (FileDiagnostic (fdStructuredMessage),
                                                         GetParsedModule (GetParsedModule),
                                                         IdeState (shakeExtras),
+                                                        NormalizedOsPath,
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
                                                         getExtensionsSet,
@@ -206,7 +207,6 @@ import           Language.LSP.Protocol.Types           (ClientCapabilities,
                                                         CodeActionKind (CodeActionKind_QuickFix),
                                                         CodeActionParams (CodeActionParams, _range, _textDocument),
                                                         Diagnostic,
-                                                        NormalizedFilePath,
                                                         TextDocumentIdentifier,
                                                         VersionedTextDocumentIdentifier,
                                                         WorkspaceEdit,
@@ -282,7 +282,7 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 -- | Retrieve the pretty printing context, which is used to determine whether
 -- the constructors of the patterns to be inserted need be qualified, and what
 -- the qualifier should be.
-getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
+getPprCtx :: IdeState -> NormalizedOsPath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
 getPprCtx state nfp = do
   (typechecked, hscEnvEq) <- runActionE "CaseSplit.GetPprContext" state $ do
     typechecked <- useE TypeCheck nfp
@@ -296,7 +296,7 @@ getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config Versione
 getVerTxtDocId state textDoc = liftIO $ runAction "CaseSplit.GetVersionedTextDoc" state $ getVersionedTextDoc textDoc
 
 -- | Retrieve 'ParsedModule' from the handler.
-getParsedModule :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedModule
+getParsedModule :: IdeState -> NormalizedOsPath -> ExceptT PluginError (HandlerM Config) ParsedModule
 getParsedModule state nfp = runActionE "CaseSplit.GetParsedModule"
                                        state
                                        (useE GetParsedModule nfp)

@@ -50,7 +50,7 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath    :: !NormalizedFilePath
+  { artifactFilePath    :: !NormalizedOsPath
   , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ 'True' for a real Haskell source file ('HsSrcFile');
                                           -- 'False' for a boot ('HsBootFile') or signature ('HsigFile') file.
@@ -67,7 +67,7 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf PackageImport  = ()
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation :: NormalizedOsPath -> Maybe ModSummary -> ArtifactsLocation
 modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
   where
     isSource HsSrcFile = True
@@ -83,11 +83,11 @@ modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms
 -- resolves to.
 data ModuleToFilenames = ModuleToFilenames {
   -- | Modules and the unit, source pairs they correspond to
-  moduleMap      :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath)),
+  moduleMap      :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedOsPath)),
   -- | Boot files we know exist. If you want to check if a boot file exists,
   -- check this field for precisely the -boot file corresponding to the non-boot
   -- file you have already resolved.
-  bootFiles      :: HS.HashSet NormalizedFilePath,
+  bootFiles      :: HS.HashSet NormalizedOsPath,
   -- | Fingerprint of the two, for early cutoff
   mtfFingerprint :: !Fingerprint
 }
@@ -103,8 +103,8 @@ instance Show ModuleToFilenames where
   show mtf = "ModuleToFilenames " ++ show (mtfFingerprint mtf)
 
 mkModuleToFilenames
-    :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedFilePath))
-    -> HS.HashSet NormalizedFilePath
+    :: UniqMap ModuleName (NonEmpty (UnitId, NormalizedOsPath))
+    -> HS.HashSet NormalizedOsPath
     -> ModuleToFilenames
 mkModuleToFilenames normal boots =
     ModuleToFilenames normal boots (fingerprintFingerprints [fpMap normal, fpSet boots])
@@ -122,7 +122,7 @@ data LocateResult
   = LocateNotFound
   | LocateFoundReexport UnitId ModuleName
     -- ^ The unit reexporting the module, and the name it has there
-  | LocateFoundFile UnitId NormalizedFilePath
+  | LocateFoundFile UnitId NormalizedOsPath
 
 -- | What a home unit exposes to the units depending on it.
 data UnitVisibility = UnitVisibility

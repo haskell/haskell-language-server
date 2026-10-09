@@ -21,6 +21,7 @@ import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (Action,
                                                        IdeState (shakeExtras),
+                                                       NormalizedOsPath,
                                                        Range (Range), Recorder,
                                                        WithPriority,
                                                        cmapWithPrio)
@@ -43,8 +44,7 @@ import           Language.LSP.Protocol.Message        (Method (Method_TextDocume
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
-                                                       NormalizedFilePath, Null,
-                                                       Position (..),
+                                                       Null, Position (..),
                                                        Range (_start),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
@@ -75,7 +75,7 @@ foldingRangeHandler _ ide _ FoldingRangeParams{..} =
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
+getFoldingRanges :: NormalizedOsPath -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
     codeRange <- useE GetCodeRange file
     pure $ findFoldingRanges codeRange
@@ -93,7 +93,7 @@ selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
     positions = _positions
 
 
-getSelectionRanges :: IdeState -> NormalizedFilePath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
+getSelectionRanges :: IdeState -> NormalizedOsPath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
 getSelectionRanges ide file positions = do
     (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them

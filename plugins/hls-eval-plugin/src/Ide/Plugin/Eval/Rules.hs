@@ -17,7 +17,7 @@ import           Development.IDE                      (GetParsedModuleWithCommen
                                                        IdeState,
                                                        LinkableType (BCOLinkable),
                                                        NeedsCompilation (NeedsCompilation),
-                                                       NormalizedFilePath,
+                                                       NormalizedOsPath,
                                                        RuleBody (RuleNoDiagnostics),
                                                        Rules, defineEarlyCutoff,
                                                        encodeLinkableType,
@@ -48,15 +48,15 @@ rules recorder = do
     isEvaluatingRule recorder
     addIdeGlobal . EvaluatingVar =<< liftIO(newIORef mempty)
 
-newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedFilePath))
+newtype EvaluatingVar = EvaluatingVar (IORef (HashSet NormalizedOsPath))
 instance IsIdeGlobal EvaluatingVar
 
-queueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+queueForEvaluation :: IdeState -> NormalizedOsPath -> IO ()
 queueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     atomicModifyIORef' var (\fs -> (Set.insert nfp fs, ()))
 
-unqueueForEvaluation :: IdeState -> NormalizedFilePath -> IO ()
+unqueueForEvaluation :: IdeState -> NormalizedOsPath -> IO ()
 unqueueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True

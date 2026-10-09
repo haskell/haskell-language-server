@@ -37,7 +37,12 @@ import           Ide.PluginUtils                  (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Protocol.Lens       (HasTabSize (tabSize))
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding
+                                                  (emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 import           Language.LSP.Server              hiding (defaultConfig)
 import           Ormolu
 import           Ormolu.Config

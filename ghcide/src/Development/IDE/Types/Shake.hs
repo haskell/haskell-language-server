@@ -75,16 +75,16 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: Shake.ShakeValue k => k -> NormalizedOsPath -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedOsPath)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedOsPath)
 fromKeyType (Key k)
   | App tc a <- typeOf k
   , Just HRefl <- tc `eqTypeRep` (typeRep @Q)
@@ -95,7 +95,7 @@ fromKeyType (Key k)
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = newKey $ Q (k, emptyFilePath)
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k = Q (k, NormalizedOsPath)
     deriving newtype (Eq, Hashable, NFData)
 
 instance Show k => Show (Q k) where

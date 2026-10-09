@@ -44,12 +44,12 @@ import           Development.IDE.Import.FindImports           (ArtifactsLocation
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location               (NormalizedOsPath)
 import           GHC.Driver.Errors.Types                      (WarningMessages)
 import           GHC.Serialized                               (Serialized)
 import           Ide.Logger                                   (Pretty (..),
                                                                viaShow)
-import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+import           Language.LSP.Protocol.Types                  (Int32)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -127,7 +127,7 @@ instance NFData   GetImportMap
 
 type instance RuleResult GetImportMap = ImportMap
 newtype ImportMap = ImportMap
-  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  { importMap :: M.Map ModuleName NormalizedOsPath -- ^ Where are the modules imported by this file located?
   } deriving stock Show
     deriving newtype NFData
 

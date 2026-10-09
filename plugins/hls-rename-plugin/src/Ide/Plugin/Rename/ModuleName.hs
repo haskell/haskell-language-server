@@ -35,7 +35,8 @@ import qualified Data.Text                            as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        GhcSession (GhcSession),
-                                                       IdeState, Pretty,
+                                                       IdeState,
+                                                       NormalizedOsPath, Pretty,
                                                        Priority (Debug),
                                                        Recorder, WithPriority,
                                                        colon, evalGhcEnv,
@@ -127,7 +128,7 @@ action recorder state uri = do
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedOsPath -> FilePath -> ExceptT PluginError IO [T.Text]
 pathModuleNames recorder state normFilePath filePath
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
@@ -164,7 +165,7 @@ pathModuleNames recorder state normFilePath filePath
         . dropExtension
 
 -- | The module name, as stated in the module
-codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
+codeModuleName :: IdeState -> NormalizedOsPath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm

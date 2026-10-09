@@ -94,7 +94,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
             mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
-            :: NormalizedFilePath
+            :: NormalizedOsPath
             -> VersionedTextDocumentIdentifier
             -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]

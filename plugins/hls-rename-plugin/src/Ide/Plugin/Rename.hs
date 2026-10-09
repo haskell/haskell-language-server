@@ -58,7 +58,12 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types           hiding
+                                                       (emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -147,7 +152,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedOsPath ->
     HashSet Location ->
     [Name] ->
     ExceptT PluginError (HandlerM config) ()
@@ -216,7 +221,7 @@ replaceRefs newName refs = everywhere $
 refsAtName ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedOsPath ->
     Name ->
     ExceptT PluginError m [Location]
 refsAtName state nfp name = do
@@ -245,7 +250,7 @@ nameLocs name (HAR _ _ rm _ _) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
+getNamesAtPos :: MonadIO m => IdeState -> NormalizedOsPath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
     HAR{hieAst} <- handleGetHieAst state nfp
     pure $ getNamesAtPoint' hieAst pos
@@ -253,7 +258,7 @@ getNamesAtPos state nfp pos = do
 handleGetHieAst ::
     MonadIO m =>
     IdeState ->
-    NormalizedFilePath ->
+    NormalizedOsPath ->
     ExceptT PluginError m HieAstResult
 handleGetHieAst state nfp =
     -- We explicitly do not want to allow a stale version here - we only want to rename if
@@ -308,7 +313,7 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedFilePath, Position)
+locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedOsPath, Position)
 locToFilePos (Location uri (Range pos _)) = (,pos) <$> getNormalizedFilePathE uri
 
 replaceModName :: Name -> Maybe ModuleName -> Module

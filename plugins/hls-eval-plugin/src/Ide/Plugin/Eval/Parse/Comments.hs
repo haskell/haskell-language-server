@@ -33,7 +33,12 @@ import           Data.Void                                (Void)
 import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
 import qualified Language.LSP.Protocol.Lens               as L
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types              hiding
+                                                          (emptyNormalizedFilePath,
+                                                           fromNormalizedFilePath,
+                                                           normalizedFilePathToUri,
+                                                           toNormalizedFilePath,
+                                                           uriToNormalizedFilePath)
 
 import qualified Text.Megaparsec                          as P
 import           Text.Megaparsec

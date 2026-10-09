@@ -100,7 +100,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
     rio <- askRunInIO
     let reportEditor :: ReportEditor
         reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
-        expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
+        expandManually :: NormalizedOsPath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
@@ -176,7 +176,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
     res <- liftIO $ runMaybeT $ do
 
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
+            fp <- MaybeT $ pure $ uriToNormalizedOsPath (verTxtDocId ^. J.uri)
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
                         =<< MaybeT
@@ -206,7 +206,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
 setupHscEnv
     :: IdeState
-    -> NormalizedFilePath
+    -> NormalizedOsPath
     -> ParsedModule
     -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
@@ -467,7 +467,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
     verTxtDocId <- liftIO $ runAction "splice.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
+            fp <- MaybeT $ pure $ uriToNormalizedOsPath theUri
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
                     use GetParsedModule fp

@@ -47,12 +47,19 @@ import           Development.IDE.Session              (clearSessionLoaderPending
                                                        setSessionLoaderPendingBarrier)
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
-import           Development.IDE.Types.Location       (fromUri)
+import           Development.IDE.Types.Location       (NormalizedOsPath,
+                                                       fromNormalizedFilePath,
+                                                       fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types          hiding
+                                                      (emptyNormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       normalizedFilePathToUri,
+                                                       toNormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
 import           System.Time.Extra
@@ -163,7 +170,7 @@ getDatabaseKeys field db = do
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
 
-parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
+parseAction :: CI String -> NormalizedOsPath -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
 parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
 parseAction "getmodsummary" fp = Right . isJust <$> use GetModSummary fp
@@ -175,7 +182,7 @@ parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
 parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
-parseActions :: CI String -> [NormalizedFilePath] -> Action (Either Text [Bool])
+parseActions :: CI String -> [NormalizedOsPath] -> Action (Either Text [Bool])
 parseActions "typecheck" fps = Right . fmap isJust <$> uses TypeCheck fps
 parseActions "getLocatedImports" fps = Right . fmap isJust <$> uses GetLocatedImports fps
 parseActions "getmodsummary" fps = Right . fmap isJust <$> uses GetModSummary fps

@@ -1,11 +1,13 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-}
 
 -- | Types and functions for working with source code locations.
+--
+-- The path type 'NormalizedOsPath' and its conversions are defined in
+-- "Ide.Types.Location" (hls-plugin-api) and re-exported here; ghcide and the
+-- plugins all share this single path domain.
 module Development.IDE.Types.Location
     ( Location(..)
-    , noFilePath
     , noRange
     , Position(..)
     , showPosition
@@ -14,22 +16,26 @@ module Development.IDE.Types.Location
     , LSP.NormalizedUri
     , LSP.toNormalizedUri
     , LSP.fromNormalizedUri
-    , LSP.NormalizedFilePath
-    , fromUri
-    , emptyFilePath
-    , emptyPathUri
-    , toNormalizedFilePath'
-    , LSP.fromNormalizedFilePath
-    , filePathToUri'
-    , uriToFilePath'
+    , Ide.Types.Location.NormalizedOsPath(..)
+    , Ide.Types.Location.systemFsEncoding
+    , Ide.Types.Location.encodeOsPath
+    , Ide.Types.Location.decodeOsPath
+    , Ide.Types.Location.toNormalizedFilePath'
+    , Ide.Types.Location.fromNormalizedFilePath
+    , Ide.Types.Location.uriToFilePath'
+    , Ide.Types.Location.uriToNormalizedOsPath
+    , Ide.Types.Location.filePathToUri'
+    , Ide.Types.Location.fromUri
+    , Ide.Types.Location.emptyFilePath
+    , Ide.Types.Location.emptyPathUri
+    , Ide.Types.Location.noFilePath
     , readSrcSpan
     ) where
 
 import           Control.Applicative
 import           Control.Monad
-import           Data.Hashable                (Hashable (hash))
-import           Data.Maybe                   (fromMaybe)
 import           Data.String
+import qualified Ide.Types.Location
 import           Language.LSP.Protocol.Types  (Location (..), Position (..),
                                                Range (..))
 import qualified Language.LSP.Protocol.Types  as LSP
@@ -38,38 +44,6 @@ import           Text.ParserCombinators.ReadP as ReadP
 import           GHC.Data.FastString
 import           GHC.Types.SrcLoc             as GHC
 
-toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath
--- We want to keep empty paths instead of normalising them to "."
-toNormalizedFilePath' "" = emptyFilePath
-toNormalizedFilePath' fp = LSP.toNormalizedFilePath fp
-
-emptyFilePath :: LSP.NormalizedFilePath
-emptyFilePath = LSP.emptyNormalizedFilePath
-
--- | We use an empty string as a filepath when we don’t have a file.
--- However, haskell-lsp doesn’t support that in uriToFilePath and given
--- that it is not a valid filepath it does not make sense to upstream a fix.
--- So we have our own wrapper here that supports empty filepaths.
-uriToFilePath' :: LSP.Uri -> Maybe FilePath
-uriToFilePath' uri
-    | uri == LSP.fromNormalizedUri emptyPathUri = Just ""
-    | otherwise = LSP.uriToFilePath uri
-
-emptyPathUri :: LSP.NormalizedUri
-emptyPathUri =
-    let s = "file://"
-    in LSP.NormalizedUri (hash s) s
-
-filePathToUri' :: LSP.NormalizedFilePath -> LSP.NormalizedUri
-filePathToUri' = LSP.normalizedFilePathToUri
-
-fromUri :: LSP.NormalizedUri -> LSP.NormalizedFilePath
-fromUri = fromMaybe (toNormalizedFilePath' noFilePath) . LSP.uriToNormalizedFilePath
-
-noFilePath :: FilePath
-noFilePath = "<unknown>"
-
--- A dummy range to use when range is unknown
 noRange :: Range
 noRange =  Range (Position 0 0) (Position 1 0)
 
