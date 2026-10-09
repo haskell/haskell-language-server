@@ -714,29 +714,27 @@ computeModulesPaths env_eq = do
           firstWins = foldl'
             (\acc (m, p) -> addToUniqMap_C (\old _ -> old) acc m p) emptyUniqMap
           mkMaps fs =
-            let entries = [ (toModule f, toNormalizedFilePath' f) | f <- fs, accepted f ]
-                (source, normal) = partition
-                  (\(_, p) -> "-boot" `isSuffixOf` fromNormalizedFilePath p) entries
-            in (firstWins normal, firstWins source)
+            let (boot, normal) = partition ("-boot" `isSuffixOf`) (filter accepted fs)
+            in ( firstWins [ (toModule f, toNormalizedFilePath' f) | f <- normal ]
+               , HS.fromList (map toNormalizedFilePath' boot)
+               )
 
       -- A directory that cannot be listed provides no modules
       scanned <- liftIO $ listFilesInside (pure . recurseInto) import_dir
                    `catch` \(_ :: IOException) -> pure []
-      let (scanNormal, scanSource) = mkMaps scanned
-          (knownNormal, knownSource) =
+      let (scanNormal, scanBoot) = mkMaps scanned
+          (knownNormal, knownBoot) =
             mkMaps [ p | (p, comps) <- knownPaths, dirComponents `isPrefixOf` comps ]
       -- Known files win within a directory: they may exist only in the editor
-      pure ( plusUniqMap_C const knownNormal scanNormal
-           , plusUniqMap_C const knownSource scanSource
-           )
+      pure (plusUniqMap_C const knownNormal scanNormal, HS.union knownBoot scanBoot)
     -- The first import dir providing a module wins, matching GHC's -i order
     let combineDirs = foldl' (plusUniqMap_C (\old _ -> old)) emptyUniqMap
-    pure (u, (combineDirs (map fst dir_maps), combineDirs (map snd dir_maps)))
+    pure (u, (combineDirs (map fst dir_maps), HS.unions (map snd dir_maps)))
 
   let providers u = mapUniqMap (\p -> pure (u, p))
-      combineUnits sel = foldl' (plusUniqMap_C (<>)) emptyUniqMap
-        [ providers u (sel m) | (u, m) <- unit_maps ]
-  pure $ mkModuleToFilenames (combineUnits fst) (combineUnits snd)
+      normal = foldl' (plusUniqMap_C (<>)) emptyUniqMap
+        [ providers u m | (u, (m, _)) <- unit_maps ]
+  pure $ mkModuleToFilenames normal (HS.unions [ b | (_, (_, b)) <- unit_maps ])
 
 dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do

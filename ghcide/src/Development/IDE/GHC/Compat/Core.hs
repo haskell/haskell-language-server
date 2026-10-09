@@ -567,17 +567,16 @@ import           GHC.Types.Avail             (greNamePrintableName)
 import           GHC.Hs                      (SrcSpanAnn')
 #endif
 
+-- | Like GHC's, but never adds the boot suffix to the output paths itself.
+-- GHC only started doing that in 9.13, so callers that want it apply
+-- 'addBootSuffixLocnOut' on all versions.
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
 #if MIN_VERSION_ghc(9,13,0)
 mkHomeModLocation df mn f =
   let (basename, ext) = FP.splitExtension f
       osBasename = unsafeEncodeUtf basename
       osExt = unsafeEncodeUtf ext
-      hscSrc = case ext of
-        ".hs-boot" -> HsBootFile
-        ".hsig" -> HsigFile
-        _ -> HsSrcFile
-  in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osBasename osExt hscSrc
+  in pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn osBasename osExt HsSrcFile
 #elif MIN_VERSION_ghc(9,11,0)
 mkHomeModLocation df mn f =
   let osf = unsafeEncodeUtf f
