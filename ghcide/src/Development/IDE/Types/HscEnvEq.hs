@@ -4,23 +4,20 @@ module Development.IDE.Types.HscEnvEq
     hscEnv, newHscEnvEq, envRepresentative,
     updateHscEnvEq,
     envPackageExports,
-    envVisibleModuleNames,
 ) where
 
 
 import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
-import           Control.DeepSeq                 (force, rwhnf)
-import           Control.Exception               (evaluate, mask, throwIO)
+import           Control.DeepSeq                 (rwhnf)
+import           Control.Exception               (mask, throwIO)
 import qualified Control.Exception               as Exc
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
-import           Data.Either                     (fromRight)
 import           Data.IORef
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
 import           Development.IDE.GHC.Compat      hiding (newUnique)
 import qualified Development.IDE.GHC.Compat.Util as Maybes
-import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
@@ -33,15 +30,10 @@ import           OpenTelemetry.Eventlog          (withSpan)
 --   if they are created with the same call to 'newHscEnvEq' or
 --   'updateHscEnvEq'.
 data HscEnvEq = HscEnvEq
-    { envUnique             :: !Unique
-    , hscEnv                :: !HscEnv
-    , envPackageExports     :: IO ExportsMap
-    , envVisibleModuleNames :: IO (Maybe [ModuleName])
-        -- ^ 'listVisibleModuleNames' is a pure function,
-        -- but it could panic due to a ghc bug: https://github.com/haskell/haskell-language-server/issues/1365
-        -- So it's wrapped in IO here for error handling
-        -- If Nothing, 'listVisibleModuleNames' panic
-    , envRepresentative     :: !NormalizedFilePath
+    { envUnique         :: !Unique
+    , hscEnv            :: !HscEnv
+    , envPackageExports :: IO ExportsMap
+    , envRepresentative :: !NormalizedFilePath
         -- ^ See Note [Session representatives]
     }
 
@@ -85,8 +77,6 @@ newHscEnvEq envRepresentative hscEnv' = do
     let hscEnv = hscEnv'
 #endif
 
-    let dflags = hsc_dflags hscEnv
-
     envUnique <- Unique.newUnique
 
     -- it's very important to delay the package exports computation
@@ -115,14 +105,6 @@ newHscEnvEq envRepresentative hscEnv' = do
         modIfaces <- mapMaybeM doOne modules
         return $ createExportsMap modIfaces
 
-    -- similar to envPackageExports, evaluated lazily
-    envVisibleModuleNames <- onceAsync $
-      fromRight Nothing
-        <$> catchSrcErrors
-          dflags
-          "listVisibleModuleNames"
-          (evaluate . force . Just $ listVisibleModuleNames hscEnv)
-
     return HscEnvEq{..}
 
 instance Show HscEnvEq where
@@ -132,8 +114,8 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b _ _ e) =
-      -- deliberately skip the package exports map and visible module names
+  rnf (HscEnvEq a b _ e) =
+      -- deliberately skip the package exports map
       rnf (Unique.hashUnique a) `seq` rwhnf b `seq` rnf e
 
 instance Hashable HscEnvEq where
