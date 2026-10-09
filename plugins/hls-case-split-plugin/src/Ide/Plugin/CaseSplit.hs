@@ -105,7 +105,8 @@ import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, Real
                                                         Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
-                                                        getLoc, showSDocUnsafe)
+                                                        getLoc, showSDocUnsafe,
+                                                        unLoc)
 import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         EpAnnHsCase (EpAnnHsCase),
                                                         GrhsAnn (..),
@@ -140,6 +141,7 @@ import           GHC                                   (AnnList (AnnList),
 import           GHC.Data.EnumSet                      (member)
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
+                                                        GRHSs (grhssGRHSs),
                                                         GhcPs,
                                                         HsRecFields (HsRecFields),
                                                         XCase, XLam, deltaPos,
@@ -373,10 +375,20 @@ graftMissingPatterns ps range missingPs arrowSyntax
              , Just True <- _span `spanContainsRange` range
                -> do -- take note we've found the node,
                      put True
-                     -- extract existing matches
+                     -- extract existing matches and most frequent syntax
                      let existingMatches = _matchGroup _expr
+
+                         dominantSyntax NormalSyntax = NormalSyntax
+                         dominantSyntax UnicodeSyntax
+                           = let preferUnicode :: Int = foldl' (\(!u) syn -> u & case syn of UnicodeSyntax -> (+1)
+                                                                                             NormalSyntax -> subtract 1)
+                                                               0
+                                                               (getSyntax <$> unLoc (mg_alts existingMatches))
+                             in if preferUnicode < 0
+                               then NormalSyntax
+                               else UnicodeSyntax
                      -- make a match out of each missing pattern,
-                     case traverse (makeMatch arrowSyntax) missingPs of
+                     case traverse (makeMatch $ dominantSyntax arrowSyntax) missingPs of
                         -- If this sort of pattern is not supported, we abort,
                         Left unsupportedPat  -> throwError unsupportedPat
                         -- otherwise we continue
@@ -387,6 +399,15 @@ graftMissingPatterns ps range missingPs arrowSyntax
                                              & pure
              -- Anything else, leave the node unchanged.
              | otherwise -> pure node
+
+      getSyntax :: LMatch GhcPs (LHsExpr GhcPs) -> IsUnicodeSyntax
+      getSyntax = (\case GRHS (EpAnn _ (GrhsAnn _ (Right (EpUniTok _ syn))) _) _ _ -> syn
+                         _ -> NormalSyntax)
+                   . unLoc
+                   . NE.head
+                   . grhssGRHSs
+                   . m_grhss
+                   . unLoc
 
 -- | While @HsExpr GhcPs@ can contain any expression, the following refined
 -- type can only contain a @case@ or a @\\case@ expression.
@@ -630,13 +651,13 @@ parseSimpleConMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String SimpleCon
 parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
                               , paca_ids
                               }
-  | let (dataConName, infixed) = case con of
+  | let (conName, infixed) = case con of
                     RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
-                    PatSynCon dataCon   -> (getName dataCon, False)
+                    PatSynCon patSyn    -> (getName patSyn, False)
 
         underscore = WildPat NoExtField
 
-        rdrConName = nameRdrName dataConName
+        rdrConName = nameRdrName conName
 
   , Just (locatedCon, args) <- case (paca_ids, infixed) of
                   -- Prefixed, laid out like @Foo _ _@
