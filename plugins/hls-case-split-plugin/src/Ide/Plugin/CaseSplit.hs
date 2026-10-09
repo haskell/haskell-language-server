@@ -90,11 +90,10 @@ import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE                       (FileDiagnostic (fdStructuredMessage),
                                                         GetParsedModule (GetParsedModule),
-                                                        GhcSessionDeps (GhcSessionDeps),
-                                                        HscEnvEq (hscEnv),
                                                         IdeState (shakeExtras),
                                                         Pretty (pretty), Range,
                                                         Recorder, WithPriority,
+                                                        getExtensionsSet,
                                                         runAction,
                                                         spanContainsRange)
 import           Development.IDE.Core.FileStore        (getVersionedTextDoc)
@@ -103,7 +102,7 @@ import           Development.IDE.Core.PluginUtils      (activeDiagnosticsInRange
 import           Development.IDE.GHC.Compat            (ConLike (PatSynCon, RealDataCon),
                                                         HoleKind (HoleVar),
                                                         HsMatchContext (CaseAlt),
-                                                        HscEnv (hsc_dflags), Id,
+                                                        Id,
                                                         NamedThing (getName),
                                                         Outputable (ppr),
                                                         getLoc, showSDocUnsafe)
@@ -130,7 +129,6 @@ import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDia
                                                         _SomeStructuredMessage)
 import           GHC                                   (AnnList (AnnList),
                                                         AnnListBrackets (ListBraces),
-                                                        DynFlags (extensions),
                                                         EpAnn (EpAnn),
                                                         EpToken (EpTok),
                                                         HasLoc (getHasLoc),
@@ -139,7 +137,7 @@ import           GHC                                   (AnnList (AnnList),
                                                         ParsedSource,
                                                         dataConIsInfix,
                                                         realSrcSpan)
-import           GHC.Driver.DynFlags                   (OnOff (On))
+import           GHC.Data.EnumSet                      (member)
 import           GHC.Hs                                (DeltaPos (deltaColumn),
                                                         EpAnnLam (EpAnnLam),
                                                         GhcPs,
@@ -229,8 +227,9 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 
   let diagAndMissingCtors = getInnermost . extractDiagAndMissingCtors $ fileDiags
 
-  arrowSyntax <- getArrowSyntax state nfp
-  psOld <- getParsedSource state nfp
+  pmOld <- getParsedModule state nfp
+  let arrowSyntax = getArrowSyntax pmOld
+  let psOld = pm_parsed_source pmOld
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
 
@@ -267,19 +266,17 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config VersionedTextDocumentIdentifier
 getVerTxtDocId state textDoc = liftIO $ runAction "CaseSplit.GetVersionedTextDoc" state $ getVersionedTextDoc textDoc
 
--- | Retrieve 'ParsedSource' from the handler.
-getParsedSource :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedSource
-getParsedSource state nfp = pm_parsed_source <$> runActionE "CaseSplit.GetParsedModule"
-                                                            state
-                                                            (useE GetParsedModule nfp)
+-- | Retrieve 'ParsedModule' from the handler.
+getParsedModule :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) ParsedModule
+getParsedModule state nfp = runActionE "CaseSplit.GetParsedModule"
+                                       state
+                                       (useE GetParsedModule nfp)
 
 -- | Retrieve 'IsUnicodeSyntax' from the handler.
-getArrowSyntax :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) IsUnicodeSyntax
-getArrowSyntax state nfp = do
-  (hsc_dflags . hscEnv -> dynFlags) <- runActionE "CaseSplit.GhcSessionDeps" state $ useE GhcSessionDeps nfp
-  pure $ if On Ext.UnicodeSyntax `elem` extensions dynFlags
-    then UnicodeSyntax
-    else NormalSyntax
+getArrowSyntax :: ParsedModule -> IsUnicodeSyntax
+getArrowSyntax pm
+  | Ext.UnicodeSyntax `member` getExtensionsSet pm = UnicodeSyntax
+  | otherwise = NormalSyntax
 
 -- | Obtain a 'WorkspaceEdit' as 'diffText' of 'exactPrint'-ed versions of old
 -- and new 'ParsedSource's.

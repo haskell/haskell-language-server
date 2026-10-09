@@ -7,9 +7,11 @@ module Main
   ) where
 
 import           Control.Lens               (Prism', prism', (^.), (^..), (^?))
-import           Data.Text                  (Text)
+import           Control.Monad              (void)
+import           Data.Text                  (Text, lines, unlines)
 import qualified Ide.Plugin.CaseSplit       as CS
 import qualified Language.LSP.Protocol.Lens as L
+import           Prelude                    hiding (lines, unlines)
 import           System.FilePath
 import           Test.Hls                   hiding (waitForDiagnosticsFrom)
 import qualified Test.Hls.FileSystem        as FS
@@ -162,15 +164,105 @@ codeActionTests = testGroup
       []
 
   -- Support UnicodeSyntax
-  , goldenWithClass "Use → instead of -> when UnicodeSyntax is On" "TUnicodeArrow" $
-      Prelude.flip inspectCodeAction [title]
+  , testGroup "In-file (No)UnicodeSyntax has priority over in-cabal (No)UnicodeSyntax"
+      $ let cabalFile = [
+              "cabal-version:      3.4",
+              "name:               foo",
+              "version:            0.1.0.0",
+              "build-type:         Simple",
+              "common warnings",
+              "    ghc-options: -Wall",
+              "library",
+              "    import:             warnings",
+              "    exposed-modules:    TUnicodeArrow",
+              "    build-depends:      base",
+              "    hs-source-dirs:     .",
+              "    default-language:   GHC2024"
+              ]
 
+            haskellFile = [
+              "{-# LANGUAGE EmptyCase #-}",
+              "{-# OPTIONS_GHC -Wall -fmax-uncovered-patterns=99 #-}",
+              "module T where",
+              "",
+              "data X = A",
+              "       | B",
+              "       | C",
+              "",
+              "foo :: X -> Int",
+              "foo x = case x of"
+              ]
+
+            withExt ext = [ "    default-extensions: " <> ext ]
+
+            withPragma ext = [ "{-# LANGUAGE " <> ext <> " #-}" ]
+
+            insertedLines arrow = [
+              "  A " <> arrow <> " _",
+              "  B " <> arrow <> " _",
+              "  C " <> arrow <> " _"
+              ]
+
+            cabalOpts = [ []
+                         , withExt "NoUnicodeSyntax"
+                         , withExt "UnicodeSyntax"
+                         ]
+
+            pragmas = [ [], withPragma "NoUnicodeSyntax", withPragma "UnicodeSyntax"
+                     ]
+
+            arrow = [ "->", "->", "→"
+                    , "->", "->", "→"
+                    , "→" , "->", "→"
+                    ]
+
+            in zipWith applyPlugin
+                       [ (cabalFile <> cabalOpt, pragma <> haskellFile) | cabalOpt <- cabalOpts
+                                                                        , pragma <- pragmas ]
+                       (insertedLines <$> arrow) -- XXX In theory this can be computed in the context
+                                                 -- of the list comprehension above…, something like this:
+
+            {- in [ applyPlugin (cabalFile <> cabalOpt) (pragma <> haskellFile) arrow
+                  | cabalOpt <- cabalOpts
+                  , pragma <- pragmas
+                  , let arrow = computeArrow cabalOpt pragma ]
+
+               XXX And then `applyPlugin` would have type:
+
+                   ([Text], [Text]) -> [Text] -> TestTree
+               But `computeArrow` would mean that that I have to create a type
+               for `cabalOpt` and `pragma`. It starts sounding not easy to
+               follow for a reader.
+             -}
   -- Some more corner cases
   , expectNoCodeActionAvailable "No action on `Int`" "TInt"
   , expectNoCodeActionAvailable "Cannot see through condition of a single catch-all pattern" "TWithCond"
   , goldenWithClass "Ignore catch-all pattern in presence of non-catch-all pattern" "TWithCondAndPat" $
       Prelude.flip inspectCodeAction [title]
   ]
+
+-- TODO if I keep it, needs a better name.
+applyPlugin :: ([Text], [Text]) -> [Text] -> TestTree
+applyPlugin (cabal, source) inserted =
+  let path = "TUnicodeArrow"
+      findAction = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
+      languageKind = LanguageKind_Haskell
+      config = def
+      plugin = caseSplitPlugin
+      tree = (mkFs $ FS.simpleCabalProject'
+                      $ [FS.file ("foo" <.> "cabal") (FS.sources cabal),
+                         FS.file (path <.> "hs") ((FS.sources source))])
+      act = \doc -> do _ <- waitForDiagnosticsFrom doc
+                       actions <- getAllCodeActions doc
+                       action <- liftIO $ findAction actions
+                       executeCodeAction action
+  in testCase "" $ do
+       newSource <- fmap lines $ runSessionWithServerInTmpDir config plugin tree $ do
+              doc <- createDoc (path <.> "hs") languageKind (unlines source)
+              void waitForBuildQueue
+              act doc
+              documentContents doc
+       newSource @?= source <> inserted
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
