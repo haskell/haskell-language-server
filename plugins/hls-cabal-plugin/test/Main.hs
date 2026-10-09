@@ -33,6 +33,7 @@ import           System.FilePath
 import           Test.Hls
 import           Test.Hls.FileSystem
 import           Utils
+import           Workspace                       (cabalWorkspaceTests)
 
 main :: IO ()
 main = do
@@ -48,6 +49,7 @@ main = do
             , gotoDefinitionTests
             , hoverTests
             , reloadOnCabalChangeTests
+            , cabalWorkspaceTests
             ]
 
 -- ------------------------------------------------------------------------

@@ -215,6 +215,7 @@
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
     - CodeLensTests #Previously part of GHCIDE Main tests
+    - Test.Hls.Util # Used in `willRenameFile`: This function is only here temporarily as we are planning to upstream to lsp-test.
 
   - name: "Data.Map.!"
     within: []
