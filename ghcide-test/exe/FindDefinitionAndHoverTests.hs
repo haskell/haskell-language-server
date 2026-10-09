@@ -9,10 +9,10 @@ import           Data.Maybe
 import qualified Data.Text                  as T
 import           Development.IDE.Test       (expectDiagnostics)
 import           Hover
+import           Ide.Types
 import qualified Language.LSP.Protocol.Lens as L
 import           Language.LSP.Test
 import           System.Info.Extra          (isWindows)
-import           Ide.Types
 import           Test.Hls
 import           Test.Hls.FileSystem        (copyDir)
 
@@ -242,7 +242,6 @@ linkToTests =
         { testPluginDescriptor = dummyPlugin
         , testDirLocation = Right (mkIdeTestFs [copyDir "hover"])
         , testConfigCaps = lspTestCaps
-        , testShiftRoot = True
         , testLspConfig = lspConf
         }
     hoverCheck pos fp expects = do
