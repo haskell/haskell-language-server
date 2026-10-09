@@ -17,7 +17,7 @@ import           Control.Arrow                         (Arrow (first))
 import           Control.Exception                     (SomeException)
 import qualified Control.Foldl                         as L
 import           Control.Lens                          (Identity (..), ix, view,
-                                                        (%~), (<&>), (^.))
+                                                        (%~), (.~), (<&>), (^.))
 import           Control.Monad                         (forM, guard, unless)
 import           Control.Monad.Error.Class             (MonadError (throwError))
 import           Control.Monad.Extra                   (eitherM)
@@ -61,7 +61,8 @@ import           Data.Foldable                         (Foldable (foldl'))
 import           GHC.Data.Bag                          (Bag)
 
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC.Parser.Annotation                 (EpAnn (..), EpToken (..))
+import           GHC.Parser.Annotation                 (EpAnn (..),
+                                                        EpToken (..))
 #elif MIN_VERSION_ghc(9,9,0)
 import           GHC.Parser.Annotation                 (EpAnn (..))
 #else
@@ -237,13 +238,14 @@ setupDynFlagsForGHCiLike env dflags = do
     Loader.initializePlugins (hscSetFlags dflags4 env)
 
 adjustToRange :: Uri -> Range -> WorkspaceEdit -> WorkspaceEdit
-adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
-    WorkspaceEdit (adjustWS <$> mhult) (fmap adjustDoc <$> mlt) x
+adjustToRange uri ran wsEdit@WorkspaceEdit{..} =
+    wsEdit { _changes = adjustWS <$> _changes
+           , _documentChanges = fmap adjustDoc <$> _documentChanges }
     where
         adjustTextEdits :: Traversable f => f TextEdit -> f TextEdit
         adjustTextEdits eds =
-            let minStart =
-                    case L.fold (L.premap (view J.range) L.minimum) eds of
+            let minStart :: Range -- leftmost-starting range or, to break ties, leftmost-ending range
+                 = case L.fold (L.premap (view J.range) L.minimum) eds of
                         Nothing -> error "impossible"
                         Just v  -> v
             in adjustLine minStart <$> eds
@@ -251,12 +253,14 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
         adjustATextEdits :: Traversable f => f (TextEdit |? AnnotatedTextEdit) -> f (TextEdit |? AnnotatedTextEdit)
         adjustATextEdits = fmap $ \case
           InL t -> InL $ runIdentity $ adjustTextEdits (Identity t)
-          InR AnnotatedTextEdit{_range, _newText, _annotationId} ->
-            let oldTE = TextEdit{_range,_newText}
-              in let TextEdit{_range,_newText} = runIdentity $ adjustTextEdits (Identity oldTE)
-                in InR $ AnnotatedTextEdit{_range,_newText,_annotationId}
+          InR ate@AnnotatedTextEdit{ _annotationId } ->
+               InR $ annotate (runIdentity $ adjustTextEdits $ Identity $ unannotate ate) _annotationId
+          where
+            unannotate AnnotatedTextEdit{..} = TextEdit _range _newText
+            annotate TextEdit{..} anno = AnnotatedTextEdit _range _newText anno
 
         adjustWS = ix uri %~ adjustTextEdits
+
         adjustDoc :: DocumentChange -> DocumentChange
         adjustDoc (InR es) = InR es
         adjustDoc (InL es)
@@ -266,8 +270,10 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 
         adjustLine :: Range -> TextEdit -> TextEdit
         adjustLine bad =
-            J.range %~ \r ->
-                if r == bad then ran else bad
+           J.range %~ \r ->
+               if r == bad
+                 then bad & J.start .~ ran ^. J.start
+                 else bad
 
 -- Define a pattern to get hold of a `SrcSpan` from the location part of a
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;

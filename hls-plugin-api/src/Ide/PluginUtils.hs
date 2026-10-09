@@ -13,6 +13,7 @@ module Ide.PluginUtils
     makeDiffTextEditAdditive,
     diffText,
     diffText',
+    diffTextEdit,
     pluginDescToIdePlugins,
     idePluginsToPluginDesc,
     getClientConfig,
@@ -45,8 +46,10 @@ import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Char                   (isPrint, showLitChar)
 import           Data.Functor                (void)
+import           Data.List.Split
 import qualified Data.Map                    as M
 import qualified Data.Text                   as T
+import           Data.Tuple.Extra            (both)
 import           Data.Void                   (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
@@ -119,24 +122,28 @@ makeDiffTextEditAdditive :: T.Text -> T.Text -> [TextEdit]
 makeDiffTextEditAdditive f1 f2 = diffTextEdit f1 f2 SkipDeletions
 
 diffTextEdit :: T.Text -> T.Text -> WithDeletions -> [TextEdit]
-diffTextEdit fText f2Text withDeletions = r
+diffTextEdit fText f2Text withDeletions
+  = map diffOperationToTextEdit diffOps
   where
-    r = map diffOperationToTextEdit diffOps
-    d = getGroupedDiff (lines $ T.unpack fText) (lines $ T.unpack f2Text)
+    -- Lossless versions of lines/unlines (they keep the line breaks)
+    lines = split (dropFinalBlank $ keepDelimsR $ whenElt (== '\n'))
+    unlines = concat
+
+    (linesL, linesR) = both (lines . T.unpack) (fText, f2Text)
 
     diffOps =
       filter
         (\x -> (withDeletions == IncludeDeletions) || not (isDeletion x))
-        (diffToLineRanges d)
-
-    isDeletion (Deletion _ _) = True
-    isDeletion _              = False
+        (diffToLineRanges $ getGroupedDiff linesL linesR)
+      where
+        isDeletion (Deletion _ _) = True
+        isDeletion _              = False
 
     diffOperationToTextEdit :: DiffOperation LineRange -> TextEdit
     diffOperationToTextEdit (Change fm to) = TextEdit range nt
       where
         range = calcRange fm
-        nt = T.pack $ init $ unlines $ lrContents to
+        nt = T.pack $ unlines $ lrContents to
 
     {-
       In order to replace everything including newline characters,
@@ -164,12 +171,16 @@ diffTextEdit fText f2Text withDeletions = r
 
     calcRange fm = Range s e
       where
-        sl = fst $ lrNumbers fm
-        sc = 0
-        s = Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
-        el = snd $ lrNumbers fm
-        ec = fromIntegral $ length $ last $ lrContents fm
-        e = Position (fromIntegral $ el - 1) ec -- Note: zero-based lines
+        (sl, el) = lrNumbers fm
+        -- Note: zero-based lines and offsets
+        s = Position (fromIntegral $ sl - 1) 0
+        e = let lastLine = last $ lrContents fm
+            in case last lastLine of
+                  '\n' -> -- If the text to be substiuted includes the trailing line break,
+                          -- we need to end the 'Range' at the beginning of the next line,
+                          -- as per https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/#range
+                          Position (fromIntegral el) 0
+                  _ -> Position (fromIntegral $ el - 1) (fromIntegral $ length lastLine)
 
 -- | A pure version of 'diffText' for testing
 diffText' :: Bool -> (VersionedTextDocumentIdentifier, T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
