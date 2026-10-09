@@ -3,7 +3,7 @@
 # Test installing HLS bindist and then run
 # every HLS-GHC version on a test module.
 
-set -eux
+set -euxo pipefail
 
 . .github/scripts/env.sh
 . .github/scripts/common.sh

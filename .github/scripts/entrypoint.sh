@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+set -exo pipefail
 
 bash -c "$INSTALL curl bash git tree $TOOLS"
 
