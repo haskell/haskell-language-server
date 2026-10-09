@@ -37,6 +37,8 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
 
+import Ide.Logger(logWith, Priority(Debug))
+
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
 -- Even if we don't have persistent information on disk for these rules, the persistent rule
@@ -55,6 +57,9 @@ getAtPoint file pos = runMaybeT $ do
 
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
   modSummary <- fst <$> useWithStaleFastMT GetModSummary file
+  pm <- useWithStaleFastMT GetParsedModule file
+  liftIO $ logWith (shakeRecorder shakeExtras) Debug $ LogHoverImport (fst $ fst pm)
+
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
   let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
 
