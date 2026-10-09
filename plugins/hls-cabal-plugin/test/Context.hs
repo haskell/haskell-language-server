@@ -12,7 +12,7 @@ import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types           (Context,
-                                                              FieldContext (KeyWord, None),
+                                                              FieldContext (CabalVersion, KeyWord, None),
                                                               StanzaContext (Stanza, TopLevel))
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Test.Hls
@@ -65,7 +65,7 @@ getContextTests =
             -- for a completely empty file, the context needs to
             -- be top level without a specified keyword
             ctx <- callGetContext (Position 0 0) "" ""
-            ctx @?= (TopLevel, None)
+            ctx @?= (TopLevel, CabalVersion)
         , testCase "Cabal version keyword - no value, no space after :" $ do
             -- on a file, where the keyword is already written
             -- the context should still be toplevel but the keyword should be recognized
@@ -87,7 +87,7 @@ getContextTests =
             -- has not been written completely, the keyword context
             -- should still be None
             ctx <- callGetContext (Position 0 5) "cabal" "cabal"
-            ctx @?= (TopLevel, None)
+            ctx @?= (TopLevel, CabalVersion)
         , testCase "Cabal version keyword - value partly written" $ do
             -- in the first line of the file, if the keyword
             -- has not been written completely, the keyword context

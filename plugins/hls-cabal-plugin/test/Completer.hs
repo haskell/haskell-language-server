@@ -77,6 +77,18 @@ basicCompleterTests =
         let complTexts = getTextEditTexts compls
         liftIO $ assertBool "suggests f2" $ "f2.hs" `elem` complTexts
         liftIO $ assertBool "does not suggest" $ "Content.hs" `notElem` complTexts
+    , runCabalTestCaseSession "only suggest cabal-version at start of file" "" $ do
+        doc <- openDoc "empty.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 0)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= ["cabal-version:"]
+        pure ()
+    , runCabalTestCaseSession "only suggest cabal-version at start of file with some input" "" $ do
+        doc <- openDoc "start-cabal-version.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 2)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= ["cabal-version:"]
+        pure ()
     , parameterisedCursorTestM "extensions completion" libraryStanzaData
         [ \_ actual -> assertBool "suggests FieldSelectors" $ "FieldSelectors" `elem` actual
         , \_ actual -> assertBool "suggests OverloadedStrings" $ "OverloadedStrings" `elem` actual
