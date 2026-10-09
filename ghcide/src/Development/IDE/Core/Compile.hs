@@ -30,6 +30,7 @@ module Development.IDE.Core.Compile
   , RecompilationInfo(..)
   , loadModulesHome
   , getDocsBatch
+  , getModuleDocs
   , lookupName
   , mergeEnvs
   , ml_core_file
@@ -1722,6 +1723,25 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
     BCOLinkable    -> fmap (maybe emptyHomeModInfoLinkable justBytecode) <$> generateByteCode t session ms cgi_guts
     ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode t session ms cgi_guts
   pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
+
+-- | Documentation of a module header. Currently a stub returning a fixed string.
+getModuleDocs :: HscEnv -> Maybe Module -> Module -> IO (Maybe (HsDoc GhcRn))
+getModuleDocs env currentMod m
+  | Just m == currentMod = currentModuleDocs
+  | otherwise            = interfaceDocs
+  where
+    -- Placeholder: the interface of the module being edited is stale or missing,
+    -- so this must later read 'hsmodHaddockModHeader' from the parsed module.
+    currentModuleDocs :: IO (Maybe (HsDoc GhcRn))
+    currentModuleDocs =
+      pure $ Just $ WithHsDocIdentifiers (mkGeneratedHsDocString "Current module documentation (placeholder)") []
+
+    -- Home modules and external packages: read the header from the interface.
+    interfaceDocs :: IO (Maybe (HsDoc GhcRn))
+    interfaceDocs =
+      handleAny (\_ -> pure Nothing) $ do
+        iface <- initIfaceLoad env $ loadSysInterface (text "getModuleDocs") m
+        pure $ docs_mod_hdr =<< mi_docs iface
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds

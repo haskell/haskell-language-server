@@ -37,7 +37,7 @@ import           Language.LSP.Protocol.Types          hiding
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
-import           Development.IDE.Core.Compile         (setNonHomeFCHook)
+import           Development.IDE.Core.Compile         (setNonHomeFCHook, getModuleDocs)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
@@ -70,8 +70,9 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
-import           Development.IDE.Core.Shake           (ShakeExtras (..),
+import           Development.IDE.Core.Shake           (Log (..), ShakeExtras (..),
                                                        runIdeAction)
+import           Ide.Logger                           (Priority (Debug), logWith)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
                                                        HieAST (..),
@@ -262,8 +263,9 @@ atPoint
   -> HscEnv
   -> Position
   -> Util.EnumSet Extension
+  -> Module -- ^ the module currently being edited
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions currentMod =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -331,7 +333,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
                 pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
-        prettyName _locationsMap (Left m,_) = packageNameForImportStatement m
+        prettyName _locationsMap (Left m,_) = prettyImportedModule m
 
         prettyPackageName :: Name -> Maybe T.Text
         prettyPackageName n = do
@@ -341,13 +343,18 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
 
         -- Return the module text itself and
         -- the package(with version) this `ModuleName` belongs to.
-        packageNameForImportStatement :: ModuleName -> IO T.Text
-        packageNameForImportStatement mod = do
+        prettyImportedModule :: ModuleName -> IO T.Text
+        prettyImportedModule mod = do
           mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
+          mdoc <- maybe (pure Nothing) (getModuleDocs env (Just currentMod)) mpkg
+          --ToDoFabian Remove the Logs
+          logWith (shakeRecorder shakeExtras) Debug $
+            LogHoverImport $ "Hover on import " <> printOutputable mod <> ", docs found: " <> T.pack (show (isJust mdoc))
           let moduleName = printOutputable mod
+              docs = maybe "" (\d -> "\n\n---\n" <> T.unlines (spanDocToMarkdown (SpanDocString [hsDocString d] (SpanDocUris Nothing Nothing)))) mdoc
           case mpkg >>= packageNameWithVersion of
-            Nothing             -> pure moduleName
-            Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion
+            Nothing             -> pure $ moduleName <> docs
+            Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion <> docs
 
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
