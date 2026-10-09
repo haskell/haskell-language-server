@@ -287,7 +287,7 @@ Plugins that streamline the setup of `haskell-language-server` using Neovim's bu
 
 * [haskell-tools.nvim](https://github.com/MrcJkb/haskell-tools.nvim): A plugin with a focus on Haskell tooling, including `haskell-language-server`.
 * [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig): A collection of quickstart configs for various LSP servers.
-  - Includes a basic [`hls` configuration](https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#hls).
+  - Includes a basic [`hls` configuration](https://github.com/neovim/nvim-lspconfig/blob/master/doc/configs.md#hls).
 
 Neovim is also compatible with the [Vim plugins](#vim).
 
