@@ -66,6 +66,7 @@ import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                                 ((%~), (&), (.~))
 import           Control.Monad.Extra
+import qualified Control.Monad.Extra                          as Extra
 import           Control.Monad.IO.Unlift
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -188,7 +189,9 @@ import qualified Data.HashSet                                 as HS
 import qualified Data.IntMap                                  as IM
 import qualified Data.Map.Strict                              as Map
 import           GHC.Fingerprint
-import           System.Directory.Extra                       (listFilesInside)
+import           System.Directory.Extra                       (canonicalizePath,
+                                                               doesDirectoryExist,
+                                                               listContents)
 import           System.FilePath                              (dropExtension,
                                                                equalFilePath,
                                                                normalise,
@@ -688,6 +691,19 @@ session representative instead (the session representative itself computes
 the map).
 -}
 
+-- | All the files below a directory.
+-- If we cannot list a particular directory, then it doesn't contribute to the search
+-- Also handles cyclic directory structures due to symlinks properly
+listFilesRecursive :: (FilePath -> Bool) -> FilePath -> IO [FilePath]
+listFilesRecursive recurseInto = go []
+  where
+    go ancestors dir = handle (\(_ :: IOException) -> pure []) $ do
+      canonical <- canonicalizePath dir
+      if canonical `elem` ancestors then pure [] else do
+        (dirs, files) <- Extra.partitionM doesDirectoryExist =<< listContents dir
+        below <- traverse (go (canonical : ancestors)) (filter recurseInto dirs)
+        pure $ files ++ concat below
+
 computeModulesPaths :: HscEnvEq -> Action ModuleToFilenames
 computeModulesPaths env_eq = do
   knownTargets <- useNoFile_ GetKnownTargets
@@ -708,7 +724,7 @@ computeModulesPaths env_eq = do
           toModule f = mkModuleName $ intercalate "." $
             drop (length dirComponents) (splitDirectories (dropExtension f))
           accepted f = takeExtension f `elem` acceptedExtensions
-          recurseInto path = equalFilePath path import_dir || case takeFileName path of
+          recurseInto path = case takeFileName path of
             []    -> False
             (x:_) -> isUpper x
           firstWins = foldl'
@@ -719,9 +735,7 @@ computeModulesPaths env_eq = do
                , HS.fromList (map toNormalizedFilePath' boot)
                )
 
-      -- A directory that cannot be listed provides no modules
-      scanned <- liftIO $ listFilesInside (pure . recurseInto) import_dir
-                   `catch` \(_ :: IOException) -> pure []
+      scanned <- liftIO $ listFilesRecursive recurseInto import_dir
       let (scanNormal, scanBoot) = mkMaps scanned
           (knownNormal, knownBoot) =
             mkMaps [ p | (p, comps) <- knownPaths, dirComponents `isPrefixOf` comps ]
