@@ -557,30 +557,25 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                       {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')}
 #endif
 
-  -- Write the core file now
-  core_file <- do
+  -- Write the core file now.
+  core_hash <- do
         let core_fp  = ml_core_file $ ms_location ms
             core_file = codeGutsToCoreFile iface_hash guts
             iface_hash = getModuleHash final_iface
-        core_hash1 <- atomicFileWrite se core_fp $ \fp ->
+        _ <- atomicFileWrite se core_fp $ \fp ->
           writeBinCoreFile (hsc_dflags session) fp core_file
-        -- We want to drop references to guts and read in a serialized, compact version
-        -- of the core file from disk (as it is deserialised lazily)
-        -- This is because we don't want to keep the guts in memory for every file in
-        -- the project as it becomes prohibitively expensive
-        -- The serialized file however is much more compact and only requires a few
-        -- hundred megabytes of memory total even in a large project with 1000s of
-        -- modules
-        (coreFile, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
-        pure $ assert (core_hash1 == core_hash2)
-             $ Just (coreFile, fingerprintToBS core_hash2)
+        -- Only keep around a hash of the file and load in the core file from
+        -- disk when needed.
+        !hash <- readBinCoreFileHash core_fp
+        pure $ Just $! fingerprintToBS hash
 
   -- Verify core file by roundtrip testing and comparison
   IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
-  case core_file of
-    Just (core, _) | optVerifyCoreFile -> do
+  case core_hash of
+    Just _ | optVerifyCoreFile -> do
       let core_fp = ml_core_file $ ms_location ms
       traceIO $ "Verifying " ++ core_fp
+      (core, _) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
       let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = guts
           mod = ms_mod ms
           data_tycons = filter isAlgTyCon tycons
@@ -640,7 +635,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") diffs) -- ++ [ppr binds , ppr binds']))
     _ -> pure ()
 
-  pure ([], Just $! mkHiFileResult ms final_iface details (tmrRuntimeModules tcm) core_file)
+  pure ([], Just $! mkHiFileResult ms final_iface details (tmrRuntimeModules tcm) core_hash)
 
   where
     dflags = hsc_dflags session'
@@ -1620,10 +1615,12 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                Just msg -> do_regenerate msg
                Nothing
                  | isJust linkableNeeded -> handleErrs $ do
-                   (coreFile@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
+                   -- Only cf_iface_hash is forced, so the buffer behind the
+                   -- lazy cf_bindings is dropped when this returns.
+                   (CoreFile{cf_iface_hash}, core_hash) <- liftIO $
                      readBinCoreFile (mkUpdater $ hsc_NC session) core_file
                    if cf_iface_hash == getModuleHash iface
-                   then pure ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (coreFile, fingerprintToBS core_hash)))
+                   then pure ([], Just $ mkHiFileResult ms iface details runtime_deps (Just $! fingerprintToBS core_hash))
                    else do_regenerate (recompBecause "Core file out of date (doesn't match iface hash)")
                  | otherwise -> pure ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
                  where handleErrs = flip catches

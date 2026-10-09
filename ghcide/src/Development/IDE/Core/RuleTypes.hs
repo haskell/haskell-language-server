@@ -17,17 +17,16 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import qualified Control.Exception                            as E
 import           Control.Lens
 import           Data.Aeson.Types                             (Value)
 import           Data.Hashable
 import qualified Data.Map                                     as M
+import           Data.Maybe                                   (fromMaybe)
 import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -195,19 +194,15 @@ data HiFileResult = HiFileResult
     -- ^ Fingerprint for the ModIface
     , hirRuntimeModules :: !(ModuleEnv ByteString)
     -- ^ same as tmrRuntimeModules
-    , hirCoreFp         :: !(Maybe (CoreFile, ByteString))
-    -- ^ If we wrote a core file for this module, then its contents (lazily deserialised)
-    -- along with its hash
+    , hirCoreFp         :: !(Maybe ByteString)
+    -- ^ Hash of the core file, if written.
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> maybe "" snd hirCoreFp
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> fromMaybe "" hirCoreFp
 
-mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe (CoreFile, ByteString) -> HiFileResult
+mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe ByteString -> HiFileResult
 mkHiFileResult hirModSummary hirModIface hirModDetails hirRuntimeModules hirCoreFp =
-    E.assert (case hirCoreFp of
-                   Just (CoreFile{cf_iface_hash}, _) -> getModuleHash hirModIface == cf_iface_hash
-                   _ -> True)
     HiFileResult{..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash $ hirModIface -- will always be two bytes

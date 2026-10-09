@@ -127,6 +127,7 @@ import qualified Development.IDE.GHC.Compat                   as Compat hiding
                                                                         (nest,
                                                                          vcat)
 import qualified Development.IDE.GHC.Compat.Util              as Util
+import           Development.IDE.GHC.CoreFile                 (readBinCoreFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
@@ -959,7 +960,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             { source_version = ver
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
-            , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
+            , get_linkable_hashes = \fs -> map (fromJust . hirCoreFp) <$> uses_ GetModIface fs
             , get_module_graph = useWithSeparateFingerprintRule_ GetModuleGraphTransDepsFingerprints GetModuleGraph f
             , regenerate = regenerateHiFile session f ms
             }
@@ -1242,8 +1243,11 @@ getLinkableRule recorder =
 #endif
     case hirCoreFp of
       Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
-      Just (bin_core, fileHash) -> do
+      Just fileHash -> do
         session <- use_ GhcSessionDeps f
+        -- The fast BCO path below reuses the old bytecode and never forces
+        -- this, so this serialised buffer isn't retained.
+        let readCore = readBinCoreFile (mkUpdater $ hsc_NC $ hscEnv session) core_file
         linkableType <- getLinkableType f >>= \case
           Nothing -> error $ "called GetLinkable for a file which doesn't need compilation: " ++ show f
           Just t -> pure t
@@ -1279,7 +1283,9 @@ getLinkableRule recorder =
             , Just bc <- homeModInfoByteCode (linkableHomeMod old_lr)
             -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justBytecode $ setLinkableTime linkable_fp bc))
           -- Bytecode needs to be regenerated from the core file
-          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
+          BCOLinkable -> liftIO $ do
+            (bin_core, _) <- readCore
+            coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
           -- Object code can be read from the disk
           ObjectLinkable -> do
             -- object file is up to date if it is newer than the core file
@@ -1296,7 +1302,9 @@ getLinkableRule recorder =
             case mobj_time of
               Just obj_t
                 | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (justObjects $ mkLinkable linkable_fp (ms_mod hirModSummary) (dotO obj_file)))
-              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
+              _ -> liftIO $ do
+                (bin_core, _) <- readCore
+                coreFileToLinkable linkableType (hscEnv session) hirModSummary hirModIface hirModDetails bin_core vfp
         -- Record the linkable so we know not to unload it, and unload old versions
         whenJust ((homeModInfoByteCode =<< hmi) <|> (homeModInfoObject =<< hmi))
 #if MIN_VERSION_ghc(9,11,0)
