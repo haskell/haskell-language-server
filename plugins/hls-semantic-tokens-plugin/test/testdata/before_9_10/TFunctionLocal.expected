@@ -1,0 +1,7 @@
+3:1-2 TFunction "f"
+3:6-9 TTypeConstructor "Int"
+3:13-16 TTypeConstructor "Int"
+4:1-2 TFunction "f"
+4:7-8 TFunction "g"
+6:5-6 TFunction "g"
+6:7-8 TVariable "x"

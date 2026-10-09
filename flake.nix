@@ -1,0 +1,157 @@
+{
+  description = "haskell-language-server development flake";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    # For default.nix
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
+  };
+
+  outputs =
+    { nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachSystem
+      [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]
+    (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          config = { allowBroken = true; };
+        };
+
+        pythonWithPackages = pkgs.python3.withPackages (ps:
+          [ ps.docutils
+            ps.myst-parser
+            ps.pip
+            ps.sphinx
+            ps.sphinx-rtd-theme
+          ]);
+
+        docs = pkgs.stdenv.mkDerivation {
+          name = "hls-docs";
+          src = pkgs.lib.sourceFilesBySuffices ./.
+            [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
+          buildInputs = [ pythonWithPackages ];
+          buildPhase = ''
+            cd docs
+            make --makefile=${./docs/Makefile} html BUILDDIR=$out
+            '';
+          dontInstall = true;
+        };
+
+        # Support of GenChangelogs.hs
+        gen-hls-changelogs = hpkgs: with pkgs;
+          let myGHC = hpkgs.ghcWithPackages (p: with p; [ github ]);
+          in pkgs.runCommand "gen-hls-changelogs" {
+            passAsFile = [ "text" ];
+            preferLocalBuild = true;
+            allowSubstitutes = false;
+            buildInputs = [ git myGHC ];
+          } ''
+            dest=$out/bin/gen-hls-changelogs
+            mkdir -p $out/bin
+            echo "#!${runtimeShell}" >> $dest
+            echo "${myGHC}/bin/runghc ${./GenChangelogs.hs}" >> $dest
+            chmod +x $dest
+          '';
+
+        mkDevShell = hpkgs: with pkgs; mkShell {
+          name = "haskell-language-server-dev-ghc${hpkgs.ghc.version}";
+          # For binary Haskell tools, we use the default Nixpkgs GHC version.
+          # This removes a rebuild with a different GHC version. The drawback of
+          # this approach is that our shell may pull two GHC versions in scope.
+          buildInputs = [
+            # Compiler toolchain
+            hpkgs.ghc
+            hpkgs.haskell-language-server
+            pkgs.haskellPackages.cabal-install
+            # Dependencies needed to build some parts of Hackage
+            gmp zlib ncurses
+            # for compatibility of curl with provided gcc
+            curl
+            # for running plugin tests
+            pkgs.haskellPackages.cabal-fmt
+            pkgs.haskellPackages.cabal-gild
+            # Changelog tooling
+            (gen-hls-changelogs hpkgs)
+            # For the documentation
+            pythonWithPackages
+            (pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.lib.dontCheck pkgs.haskellPackages.opentelemetry-extra))
+            capstone
+            stylish-haskell
+            pre-commit
+            ] ++ lib.optionals (!stdenv.isDarwin)
+                   [ # tracy has a build problem on macos.
+                     tracy
+                   ];
+
+          shellHook = ''
+            # @guibou: I'm not sure theses lines are needed
+            export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
+            export PATH=$PATH:$HOME/.local/bin
+
+            # Install pre-commit hook
+            pre-commit install
+          '';
+        };
+
+      in {
+        # Developement shell with only dev tools
+        devShells = {
+          default = mkDevShell pkgs.haskellPackages;
+          shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
+          shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
+          shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
+          shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
+          shell-ghc914 = mkDevShell (pkgs.haskell.packages.ghc914.override {
+            overrides = self: super:
+              let
+              hlib = pkgs.haskell.lib;
+              in
+                {
+              Cabal-syntax_3_14_2_0 = hlib.doJailbreak super.Cabal-syntax_3_14_2_0;
+              Cabal_3_14_2_0 = hlib.disableLibraryProfiling (hlib.overrideCabal
+                super.Cabal_3_14_2_0 (old: {
+                postPatch = (old.postPatch or "") + ''
+                sed -i 's/time\s*>= 1\.4\.0\.1\s*&& < 1\.15/time >=1.4.0.1/' Cabal.cabal
+                sed -i 's/containers\s*>= 0\.5\.8\.0\s*&& < 0\.8/containers >=0.5.8.0/' Cabal.cabal
+                '';
+              }));
+              algebraic-graphs = super.algebraic-graphs_0_8;
+              haskell-language-server = pkgs.lib.pipe super.haskell-language-server [(hlib.compose.disableCabalFlag "hlint")
+                (hlib.compose.overrideCabal (
+                    oldAttrs:{
+                      buildDepends = builtins.filter
+                        (pkg: ! (builtins.elem (pkg.pname or "") ["refact" "apply-refact" "hlint"]) )
+                        (oldAttrs.buildDepends or []);
+                      libraryHaskellDepends = builtins.filter
+                        (pkg: ! (builtins.elem (pkg.pname or "") [ "stan" "ormolu" "fourmolu"]) )
+                        (oldAttrs.libraryHaskellDepends or []);
+                      doCheck=false;
+
+                    }
+                  ))
+                  ];
+            } //
+          (builtins.listToAttrs (map
+            (name:{inherit name; value = hlib.dontCheck(hlib.doJailbreak super.${name});})
+            ["clay" "dec" "ghc-lib-parser" "ghc-trace-events" "hie-compat" "lucid" "singleton-bool" "http-lib-api" "http-api-data" "binary-instances" "lukko" "constraints-extras" "tasty-hspec" "tomland" "string-interpolate" "rebase" "dependent-map" "lsp-types" "lsp" "lsp-test" "ghcide" "HTTP" "relude" "generic-lens" "enummapset" "hiedb"]));
+          });
+        };
+
+
+        packages = { inherit docs; };
+      });
+
+  nixConfig = {
+    extra-substituters = [
+      "https://haskell-language-server.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "haskell-language-server.cachix.org-1:juFfHrwkOxqIOZShtC4YC1uT1bBcq2RSvC7OMKx0Nz8="
+    ];
+  };
+}

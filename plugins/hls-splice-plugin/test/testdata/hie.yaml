@@ -1,0 +1,21 @@
+cradle:
+  direct:
+    arguments:
+    - QQ.hs
+    - TQQExpError.hs
+    - TSimpleExp.hs
+    - TTypeAppExp.hs
+    - TDeclKindError.hs
+    - TQQPat.hs
+    - TSimplePat.hs
+    - TErrorExp.hs
+    - TQQPatError.hs
+    - TSimpleType.hs
+    - TErrorPat.hs
+    - TQQType.hs
+    - TTypeKindError.hs
+    - TQQDecl.hs
+    - TQQTypeTypeError.hs
+    - TTypeTypeError.hs
+    - TQQExp.hs
+    - TSimpleDecl.hs

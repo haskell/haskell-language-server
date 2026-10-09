@@ -1,0 +1,25 @@
+cabal-version: 3.0
+name: autogen-completion
+version: 0.1.0.0
+
+library
+  hs-source-dirs: src
+  autogen-
+
+executable autoexe
+  main-is: Main.hs
+  hs-source-dirs: src
+  autogen-
+
+test-suite autotest
+  type: exitcode-stdio-1.0
+  hs-source-dirs: src
+  autogen-
+
+benchmark autobench
+  type: exitcode-stdio-1.0
+  hs-source-dirs: src
+  autogen-
+
+common defaults
+  autogen-

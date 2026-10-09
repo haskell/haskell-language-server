@@ -1,0 +1,12 @@
+cradle:
+  direct:
+    arguments:
+      - -i
+      - -i.
+      - TExpectedActual
+      - TRigidType
+      - TErrorGivenPartialSignature
+      - TLocalBinding
+      - TLocalBindingShadow1
+      - TLocalBindingShadow2
+      - -Wall

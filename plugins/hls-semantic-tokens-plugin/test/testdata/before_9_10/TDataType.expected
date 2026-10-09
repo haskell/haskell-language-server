@@ -1,0 +1,4 @@
+3:6-9 TTypeConstructor "Foo"
+3:12-15 TDataConstructor "Foo"
+3:16-19 TTypeConstructor "Int"
+3:30-32 TClass "Eq"

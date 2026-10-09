@@ -1,0 +1,21 @@
+description: Container for fedora33
+inputs:
+  stage:
+    description: which stage to build
+    required: true
+  version:
+    description: which GHC version to build/test
+    required: false
+name: action-fedora33
+runs:
+  entrypoint: .github/scripts/entrypoint.sh
+  env:
+    GHC_VERSION: ${{ inputs.version }}
+    INSTALL: dnf install -y
+    STAGE: ${{ inputs.stage }}
+    TOOLS: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs
+      findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs
+      ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which
+      xz zlib-devel patchelf
+  image: fedora:33
+  using: docker

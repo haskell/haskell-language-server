@@ -1,0 +1,14 @@
+cabal-version:      3.4
+name:               simple-reload
+version:            0.1.0.0
+-- copyright:
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall -Wno-unused-imports
+
+executable simple-reload
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:    base
+    default-language: Haskell2010

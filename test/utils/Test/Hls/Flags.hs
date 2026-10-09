@@ -1,0 +1,34 @@
+{-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+-- | Module for disabling tests if their plugins are disabled
+-- DEPRECATED: To be removed when all plugin tests are in their own packages
+module Test.Hls.Flags where
+
+import           Test.Hls (TestTree, ignoreTestBecause)
+
+-- * Plugin dependent tests
+
+-- | Disable test unless the eval flag is set
+requiresEvalPlugin            :: TestTree -> TestTree
+#if hls_eval
+requiresEvalPlugin            = id
+#else
+requiresEvalPlugin            = ignoreTestBecause "Eval plugin disabled"
+#endif
+
+-- * Formatters
+-- | Disable test unless the fourmolu flag is set
+requiresFourmoluPlugin        :: TestTree -> TestTree
+#if hls_fourmolu
+requiresFourmoluPlugin        = id
+#else
+requiresFourmoluPlugin        = ignoreTestBecause "Fourmolu plugin disabled"
+#endif
+
+-- | Disable test unless the ormolu flag is set
+requiresOrmoluPlugin          :: TestTree -> TestTree
+#if hls_ormolu
+requiresOrmoluPlugin          = id
+#else
+requiresOrmoluPlugin          = ignoreTestBecause "Ormolu plugin disabled"
+#endif

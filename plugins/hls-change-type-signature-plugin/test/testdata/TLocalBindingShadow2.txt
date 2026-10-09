@@ -1,0 +1,9 @@
+Probable cause: ‘forM’ is applied to too few arguments
+In the expression: forM
+In an equation for ‘test’: test = forM
+In the expression:
+  let
+    test :: Int -> Int
+    test = forM
+  in test x [GHC-83865]
+

@@ -1,0 +1,48 @@
+dist-newstyle
+.stack-work
+/hie.yaml
+cabal.project.local
+*~
+*.lock
+
+.tasty-rerun-log
+
+# emacs
+/.dir-locals.el
+
+# shake build information
+_build/
+
+# stack 2.1 stack.yaml lock files
+stack*.yaml.lock
+shake.yaml.lock
+
+.vscode
+
+# ignore hie.yaml's for testdata
+test/testdata/**/hie.yaml
+
+# metadata files on macOS
+.DS_Store
+
+# shake build folder (used in benchmark suite)
+.shake/
+
+# direnv
+/.direnv/
+/.envrc
+
+# bench
+*.identifierPosition
+/bench/example
+/bench-results
+
+# nix
+result
+result-doc
+
+out/
+store/
+gh-release-artifacts/
+
+.hls/

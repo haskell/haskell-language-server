@@ -1,0 +1,5 @@
+3:8-17 TModule "System.IO"
+5:1-3 TVariable "go"
+5:7-9 TTypeConstructor "IO"
+6:1-3 TVariable "go"
+6:6-11 TFunction "print"

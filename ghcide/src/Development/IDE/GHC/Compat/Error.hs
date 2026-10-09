@@ -1,0 +1,163 @@
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE TemplateHaskell #-}
+module Development.IDE.GHC.Compat.Error (
+  -- * Top-level error types and lens for easy access
+  MsgEnvelope(..),
+  msgEnvelopeErrorL,
+  GhcMessage(..),
+  -- * Error messages for the typechecking and renamer phase
+  TcRnMessage (..),
+  TcRnMessageDetailed (..),
+  Hole(..),
+  stripTcRnMessageContext,
+  -- * Parsing error message
+  PsMessage(..),
+  -- * Desugaring diagnostic
+  DsMessage (..),
+  -- * Driver error message
+  DriverMessage (..),
+  -- * General Diagnostics
+  Diagnostic(..),
+  -- * GHC Hints
+  GhcHint (SuggestExtension),
+  LanguageExtensionHint (..),
+  -- * Prisms and lenses for error selection
+  _TcRnMessage,
+  _TcRnMessageWithCtx,
+  _GhcPsMessage,
+  _GhcDsMessage,
+  _GhcDriverMessage,
+  _ReportHoleError,
+  _TcRnIllegalWildcardInType,
+  _TcRnPartialTypeSignatures,
+  _TcRnMissingSignature,
+  _TcRnSolverReport,
+  _TcRnUnusedTopBind,
+  _TcRnMessageWithInfo,
+  _TypeHole,
+  _ConstraintHole,
+  reportContextL,
+  reportContentL,
+  _MismatchMessage,
+  _TypeEqMismatchActual,
+  _TypeEqMismatchExpected,
+  _CouldNotDeducePred,
+  ) where
+
+import           Control.Lens
+import qualified Data.List.NonEmpty         as NE
+import           Development.IDE.GHC.Compat (Type)
+import           GHC.Driver.Errors.Types
+import           GHC.HsToCore.Errors.Types
+import           GHC.Tc.Errors.Types
+import           GHC.Tc.Types.Constraint    (Hole (..), HoleSort)
+import           GHC.Types.Error
+
+-- | Some 'TcRnMessage's are nested in other constructors for additional context.
+-- For example, 'TcRnWithHsDocContext' and 'TcRnMessageWithInfo'.
+-- However, in most occasions you don't need the additional context and you just want
+-- the error message. @'_TcRnMessage'@ recursively unwraps these constructors,
+-- until there are no more constructors with additional context.
+--
+-- Use @'_TcRnMessageWithCtx'@ if you need the additional context. You can always
+-- strip it later using @'stripTcRnMessageContext'@.
+--
+_TcRnMessage :: Fold GhcMessage TcRnMessage
+_TcRnMessage = _TcRnMessageWithCtx . to stripTcRnMessageContext
+
+_TcRnMessageWithCtx :: Prism' GhcMessage TcRnMessage
+_TcRnMessageWithCtx = prism' GhcTcRnMessage (\case
+  GhcTcRnMessage tcRnMsg -> Just tcRnMsg
+  _ -> Nothing)
+
+_GhcPsMessage :: Prism' GhcMessage PsMessage
+_GhcPsMessage = prism' GhcPsMessage (\case
+  GhcPsMessage psMsg -> Just psMsg
+  _ -> Nothing)
+
+_GhcDsMessage :: Prism' GhcMessage DsMessage
+_GhcDsMessage = prism' GhcDsMessage (\case
+  GhcDsMessage dsMsg -> Just dsMsg
+  _ -> Nothing)
+
+_GhcDriverMessage :: Prism' GhcMessage DriverMessage
+_GhcDriverMessage = prism' GhcDriverMessage (\case
+  GhcDriverMessage driverMsg -> Just driverMsg
+  _ -> Nothing)
+
+-- | Focus an unused top-level binding warning (@-Wunused-top-binds@). Structured
+-- provenance for this only exists from GHC 9.8 (GHC #20115).
+_TcRnUnusedTopBind :: Fold GhcMessage ()
+#if MIN_VERSION_ghc(9,8,0)
+_TcRnUnusedTopBind = _TcRnMessage . folding (\case
+  TcRnUnusedName _ UnusedNameTopDecl -> Just ()
+  _                                  -> Nothing)
+#else
+_TcRnUnusedTopBind = ignored
+#endif
+
+-- | Some 'TcRnMessage's are nested in other constructors for additional context.
+-- For example, 'TcRnWithHsDocContext' and 'TcRnMessageWithInfo'.
+-- However, in some occasions you don't need the additional context and you just want
+-- the error message. @'stripTcRnMessageContext'@ recursively unwraps these constructors,
+-- until there are no more constructors with additional context.
+--
+stripTcRnMessageContext :: TcRnMessage -> TcRnMessage
+stripTcRnMessageContext = \case
+#if MIN_VERSION_ghc(9, 6, 1)
+  TcRnWithHsDocContext _ tcMsg -> stripTcRnMessageContext tcMsg
+#endif
+  TcRnMessageWithInfo _ (TcRnMessageDetailed _ tcMsg) -> stripTcRnMessageContext tcMsg
+  msg -> msg
+
+msgEnvelopeErrorL :: Lens' (MsgEnvelope e) e
+msgEnvelopeErrorL = lens errMsgDiagnostic (\envelope e -> envelope { errMsgDiagnostic = e } )
+
+makePrisms ''TcRnMessage
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''SolverReportWithCtxt
+
+makePrisms ''TcSolverReportMsg
+
+makePrisms ''HoleSort
+
+-- | Focus 'MismatchMsg' from 'TcSolverReportMsg'. Currently, 'MismatchMsg' can be
+-- extracted from 'CannotUnifyVariable' and 'Mismatch' constructors.
+_MismatchMessage :: Traversal' TcSolverReportMsg MismatchMsg
+_MismatchMessage focus (Mismatch msg t a c) = (\msg' -> Mismatch msg' t a c) <$> focus msg
+_MismatchMessage focus (CannotUnifyVariable msg a) = flip CannotUnifyVariable a <$> focus msg
+_MismatchMessage _ report = pure report
+
+-- | Focus the missing constraint predicate for a @"Could not deduce ..."@ or
+-- @"No instance for ..."@ error.
+_CouldNotDeducePred :: Fold TcSolverReportMsg Type
+_CouldNotDeducePred = folding $ \report -> case report of
+  CannotResolveInstance{cannotResolve_item = i} -> Just (errorItemPred i)
+  UnboundImplicitParams items -> Just (errorItemPred (NE.head items))
+  _ -> case report ^? _MismatchMessage of
+    Just CouldNotDeduce{cnd_wanted = w} -> Just (errorItemPred (NE.head w))
+    _                                   -> Nothing
+
+-- | Focus 'teq_mismatch_expected' from 'TypeEqMismatch'.
+_TypeEqMismatchExpected :: Traversal' MismatchMsg Type
+#if MIN_VERSION_ghc(9,10,2)
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
+#else
+_TypeEqMismatchExpected focus mismatch@(TypeEqMismatch _ _ _ _ expected _ _ _) =
+    (\expected' -> mismatch { teq_mismatch_expected = expected' }) <$> focus expected
+#endif
+_TypeEqMismatchExpected _ mismatch = pure mismatch
+
+-- | Focus 'teq_mismatch_actual' from 'TypeEqMismatch'.
+_TypeEqMismatchActual :: Traversal' MismatchMsg Type
+#if MIN_VERSION_ghc(9,10,2)
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_actual = actual' }) <$> focus actual
+#else
+_TypeEqMismatchActual focus mismatch@(TypeEqMismatch _ _ _ _ _ actual _ _) =
+    (\actual' -> mismatch { teq_mismatch_expected = actual' }) <$> focus actual
+#endif
+_TypeEqMismatchActual _ mismatch = pure mismatch

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -e
+
+root="$(git rev-parse --show-toplevel)/"
+cd "$root/.github/generate-ci/"
+
+cabal run -v0 generate-ci "$root" > ../workflows/release.yaml
+

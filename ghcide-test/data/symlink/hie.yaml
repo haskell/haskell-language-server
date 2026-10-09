@@ -1,0 +1,10 @@
+
+cradle:
+  direct:
+    arguments:
+      - -i
+      - -isrc
+      - -iother_loc/
+      - other_loc/Sym.hs
+      - src/Foo.hs
+      - -Wall

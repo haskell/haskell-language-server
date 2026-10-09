@@ -1,0 +1,15 @@
+dist/
+.stack-work/
+dist-newstyle/
+cabal.project.local
+*~
+*.lock
+/.tasty-rerun-log
+.vscode
+/.hlint-*
+.shake/
+ghcide
+ghcide-bench
+ghcide-preprocessor
+*.gcStats.log
+tags

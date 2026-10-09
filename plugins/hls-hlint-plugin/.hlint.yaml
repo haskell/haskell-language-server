@@ -1,0 +1,2 @@
+# This is here so that the tests in this package don't
+# pick up the configuration from HLS's own .hlint.yaml

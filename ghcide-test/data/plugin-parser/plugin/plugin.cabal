@@ -1,0 +1,9 @@
+cabal-version:  1.18
+name: plugin
+version: 1.0.0
+build-type: Simple
+
+library
+  build-depends: base, ghc, syb
+  exposed-modules: Plugin
+  hs-source-dirs: .

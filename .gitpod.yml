@@ -1,0 +1,76 @@
+image:
+  file: .gitpod.Dockerfile
+# List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
+tasks:
+  - name: Setup
+    before: |
+      # Make sure some folders not in /workspace persist between worksapce restarts.
+      # You may add additional directories to this list.
+      declare -a CACHE_DIRS=(
+        $HOME/.local
+        $HOME/.cabal
+        $HOME/.stack
+        $HOME/.cache/ghcide
+        $HOME/.cache/hie-bios
+        /nix
+      )
+      for DIR in "${CACHE_DIRS[@]}"; do
+        mkdir -p $(dirname /workspace/cache$DIR)
+        mkdir -p $DIR # in case $DIR doesn't already exist
+        # On a fresh start with no prebuilds, we move existing directory
+        # to /workspace. 'sudo mv' fails with 'no permission', I don't know why
+        if [ ! -d /workspace/cache$DIR ]; then
+          sudo cp -rp $DIR /workspace/cache$DIR
+          sudo rm -rf $DIR/*
+        fi
+        mkdir -p /workspace/cache$DIR # make sure it exists even if cp fails
+        # Now /workspace/cache$DIR exists.
+        # Use bind mount to make $DIR backed by /workspace/cache$DIR
+        sudo mount --bind /workspace/cache$DIR $DIR
+      done
+
+      # Install pre-commit hook
+      pre-commit install
+
+      # Configure VSCode to use the locally built version of HLS
+      mkdir -p .vscode
+      if [ ! -f .vscode/settings.json ]; then
+        # Only write to .vscode/settings.json if it doesn't exist.
+        echo '{' > .vscode/settings.json
+        echo '  "haskell.serverExecutablePath": "/home/gitpod/.cabal/bin/haskell-language-server",' >> .vscode/settings.json
+        echo '  "haskell.formattingProvider": "stylish-haskell"' >> .vscode/settings.json
+        echo '}' >> .vscode/settings.json
+      fi
+
+      pip install -r docs/requirements.txt
+    init: |
+      cabal update
+      cabal configure --enable-executable-dynamic
+      cabal build --enable-tests all
+      cabal install exe:haskell-language-server
+
+# List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
+ports: []
+
+github:
+  prebuilds:
+    # enable for the master/default branch (defaults to true)
+    master: true
+    # enable for all branches in this repo (defaults to false)
+    branches: false
+    # enable for pull requests coming from this repo (defaults to true)
+    pullRequests: true
+    # enable for pull requests coming from forks (defaults to false)
+    pullRequestsFromForks: true
+    # add a "Review in Gitpod" button as a comment to pull requests (defaults to true)
+    addComment: false
+    # add a "Review in Gitpod" button to pull requests (defaults to false)
+    addBadge: true
+    # add a label once the prebuild is ready to pull requests (defaults to false)
+    addLabel: false
+
+vscode:
+  extensions:
+    - "haskell.haskell"
+    - "justusadam.language-haskell"
+    - "EditorConfig.EditorConfig"

@@ -1,0 +1,4 @@
+5:6-9 TTypeConstructor "Foo"
+5:12-15 TDataConstructor "Foo"
+5:18-21 TRecordField "boo"
+5:26-32 TTypeSynonym "String"

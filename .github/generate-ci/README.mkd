@@ -1,0 +1,5 @@
+# generate-ci
+
+This is the generator for the release bindist CI.
+
+Edit ./gen_ci.hs to change configuration and run "./generate-jobs" to regenerate

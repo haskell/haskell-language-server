@@ -1,0 +1,26 @@
+cabal-version: 3.0
+name: test
+version: 0.1.0.0
+build-type: Simple
+
+library
+  hs-source-dirs: .
+  exposed-modules:
+  build-depends: base
+  default-language: Haskell2010
+
+executable test
+  main-is: bla
+  build-depends: base
+
+benchmark test1
+  type: exitcode-stdio-1.0
+  main-is: bla
+  build-depends: base
+
+test-suite test2
+  type: exitcode-stdio-1.0
+  main-is: bla
+  build-depends: base
+
+library test3

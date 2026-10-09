@@ -1,0 +1,1 @@
+cradle: {direct: {arguments: ["-Wmissing-signatures", "M0", "M1", "M2"]}}

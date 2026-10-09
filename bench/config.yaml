@@ -1,0 +1,232 @@
+# The number of samples to run per experiment.
+# At least 100 is recommended in order to observe space leaks
+samples: 50
+
+buildTool: cabal
+
+# Output folder for the experiments
+outputFolder: bench-results
+
+# Heap profile interval in seconds (+RTS -i)
+# Comment out to disable heap profiling
+profileInterval: 1
+
+# Number of concurrent benchmark and warmup runs
+parallelism: 1
+
+# Example project used to run the experiments
+# Can either be a Hackage package (name,version)
+# or a local project (path) with a valid `hie.yaml` file
+examples:
+  # Medium-sized project without TH
+  - name: cabal
+    package: Cabal
+    version: 3.16.1.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
+    extra-args: [] # extra HLS command line args
+  # Small-sized project with TH
+  - name: lsp-types
+    package: lsp-types
+    version: 2.4.0.0
+    modules:
+        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
+        - generated/Language/LSP/Protocol/Internal/Types/NotebookDocumentChangeEvent.hs
+
+  - name: MultiLayerModules
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+  - name: MultiLayerModulesNoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+
+  - name: DummyLevel0M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel0M01.hs
+  - name: DummyLevel0M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel0M01.hs
+
+  - name: DummyLevel1M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel1M01.hs
+  - name: DummyLevel1M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel1M01.hs
+
+  # Small but heavily multi-component example
+  # Disabled as it is far to slow. hie-bios >0.7.2 should help
+  # - name: HLS
+  #   path: bench/example/HLS
+  #   modules:
+  #       - hls-plugin-api/src/Ide/Plugin/Config.hs
+  #       - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
+  #       - ghcide/bench/hist/Main.hs
+  #       - ghcide/bench/lib/Experiments/Types.hs
+  #       - ghcide/test/exe/Main.hs
+  #       - exe/Plugins.hs
+
+# The set of experiments to execute
+experiments:
+    - "edit-header"
+    - "edit"
+    - "hover"
+    - "semanticTokens"
+    - "semanticTokens after typing burst"
+    - "hover after edit"
+    - "hover after typing burst"
+    # - "hover after cradle edit"
+    - "getDefinition"
+    - "getDefinition after edit"
+    - "getDefinition after typing burst"
+    - "completions"
+    - "completions after edit"
+    - "completions after typing burst"
+    - "code actions"
+    - "code actions after edit"
+    - "code actions after typing burst"
+    - "code actions after cradle edit"
+    - "documentSymbols after edit"
+    - "documentSymbols after typing burst"
+    - "hole fit suggestions"
+    - "eval execute single-line code lens"
+    - "eval execute multi-line code lens"
+
+# An ordered list of versions to analyze
+versions:
+# A version can be defined briefly:
+# - <tag>
+# - <branch>
+# - <commit hash>
+
+# Or in extended form, where all the fields are optional:
+# - <name>:
+#    git: <tag/branch/commithash>
+#    include: true                   # whether to include in comparison graphs
+#    parent: <tag/branch/commithash> # version to compare with in .diff graphs
+
+
+# - 1.8.0.0
+- upstream: origin/master
+# - HEAD~1
+- HEAD
+
+# A list of plugin configurations to analyze
+# WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
+# will be unable to send plugin configurations to earlier HLS versions. This causes
+# all plugins in those versions to always be enabled.
+# In addition bench proactively disables all plugins it knows about besides the
+# ones in the following list. However because it can only disable plugins it
+# knows about, any plugins that are in old versions but were removed from HLS
+# before the current bench will not be disabled.
+configurations:
+# A configuration contains one or more plugins:
+# - ConfigurationName:
+#   - plugin1
+#   - plugin2
+#
+# There is short-hand notation for defining singleton configurations.
+# Simply give the plugin name top level:
+# - plugin1
+#
+# Some plugins are implicitly included since they are required by the benchmark driver:
+# The implicitly included plugins are:
+# - ghcide-core
+# - ghcide-hover-and-symbols
+
+# Uncomment below sections if needed
+# - None: []
+# - Core:
+#   - callHierarchy
+#   - codeRange
+#   - eval
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+#   - ghcide-completions
+#   - ghcide-type-lenses
+#   - pragmas
+# - Ghcide:
+#   - ghcide-completions
+#   - ghcide-type-lenses
+# - Refactor:
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+- All:
+  - alternateNumberFormat
+  - callHierarchy
+  - changeTypeSignature
+  - class
+  - codeRange
+  - eval
+  - explicitFixity
+  - fourmolu
+  - gadt
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+  - hlint
+  - importLens
+  - moduleName
+  - ormolu
+  - pragmas
+  - qualifyImportedNames
+  - rename
+  - stylish-haskell
+  - semanticTokens
+# - alternateNumberFormat
+# - callHierarchy
+# - changeTypeSignature
+# - class
+# - codeRange
+# - eval
+# - explicitFixity
+# # - fourmolu
+# - gadt
+# - ghcide-code-actions-bindings
+# - ghcide-code-actions-fill-holes
+# - ghcide-code-actions-imports-exports
+# - ghcide-code-actions-type-signatures
+# - ghcide-completions
+# # - ghcide-core                    # implicitly included in all configurations
+# # - ghcide-hover-and-symbols       # implicitly included in all configurations
+# - ghcide-type-lenses
+# - hlint
+# - importLens
+# - moduleName
+# # - ormolu
+# - pragmas
+# - qualifyImportedNames
+# - rename
+# - splice
+# - stan
+# # - stylish-haskell

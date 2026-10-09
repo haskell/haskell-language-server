@@ -1,0 +1,6 @@
+packages: a b c
+
+allow-newer: async:base,
+             hashable:base,
+             hashable:template-haskell,
+             hashable:ghc-bignum,

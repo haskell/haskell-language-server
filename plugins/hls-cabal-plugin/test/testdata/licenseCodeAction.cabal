@@ -1,0 +1,8 @@
+cabal-version:      3.0
+name:               licenseCodeAction
+version:            0.1.0.0
+license:            BSD3
+
+library
+    build-depends:    base
+    default-language: Haskell2010

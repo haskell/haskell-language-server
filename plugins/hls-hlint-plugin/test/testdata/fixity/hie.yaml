@@ -1,0 +1,6 @@
+cradle:
+  direct:
+    arguments:
+      - "FixityDef"
+      - "FixityUse"
+

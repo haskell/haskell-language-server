@@ -1,0 +1,280 @@
+name: Testing
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
+    steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v7
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5.3.2
+        with:
+          cancel_others: false
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , "**/stack*.yaml"
+                         , ".gitlab-ci.yaml"
+                         , ".gitlab/**"
+                         , "CODEOWNERS"
+                         ]'
+      # If we only change ghcide downstream packages we have not test ghcide itself
+      - id: skip_ghcide_check
+        uses: fkirc/skip-duplicate-actions@v5.3.2
+        with:
+          cancel_others: false
+          paths_ignore: '[ "plugins/**"
+                         , "src/**"
+                         , "exe/**"
+                         , "test/**"
+                         , "shake-bench/**"
+                         ]'
+
+  test:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs:
+      - pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # We don't want to fail fast.
+      # We used to fail fast, to avoid caches of failing PRs to overpopulate the CI
+      # caches, evicting known good build caches.
+      # However, PRs do not cache anything any more, and can only use the caches from current master.
+      # See 'caching.yml' for our caching set up.
+      fail-fast: false
+      matrix:
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        test:
+          - true
+          - false
+        include:
+          # 9.10.3 is broken on windows
+          - os: windows-latest
+            test: true
+            ghc: "9.10.2"
+        exclude:
+          # Exclude the test configuration on macos, it's sufficiently similar to other OSs
+          # that it mostly just burns CI time. Buiding is still useful since it catches
+          # solver issues.
+          - os: macOS-latest
+            test: true
+          # Exclude the build-only configurations for windows and ubuntu
+          - os: windows-latest
+            test: false
+          - os: ubuntu-latest
+            test: false
+          # 9.10.3 is broken on windows
+          - os: windows-latest
+            ghc: "9.10"
+    env:
+      # We choose a very short build directory, as we run into long path issues on windows.
+      # See cabal tracking issue https://github.com/haskell/cabal/issues/11395
+      # We can't set the `--builddir` via `v2-configure` as cabal doesn't support this.
+      # https://github.com/haskell/cabal/issues/5271
+      CABAL_ARGS: "--builddir b"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-build
+        with:
+          ghc: ${{ matrix.ghc }}
+          os: ${{ runner.os }}
+
+      - name: Build
+        # --semaphore (GHC -jsem) needs GHC >= 9.8, so skip it on 9.6.
+        run: cabal build --max-backjumps 10000 ${CABAL_ARGS} --jobs ${{ matrix.ghc != '9.6' && '--semaphore' || '' }} all
+
+      - name: Set test options
+        # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
+        # to include 'new' in the filters, since many of our test suites are in the
+        # same package.
+        run: |
+          cabal configure --test-options="--rerun-update --rerun-filter failures,exceptions,new" --max-backjumps 10000
+
+      - if: matrix.test
+        name: Test hls-graph
+        run: cabal test ${CABAL_ARGS} hls-graph
+
+      - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
+        name: Test ghcide
+        # run the tests without parallelism to avoid running out of memory
+        run: cabal test ${CABAL_ARGS} ghcide-tests || cabal test ${CABAL_ARGS} ghcide-tests
+
+      - if: matrix.test
+        name: Test hls-plugin-api
+        run: cabal test ${CABAL_ARGS} hls-plugin-api || cabal test ${CABAL_ARGS} hls-plugin-api
+
+      - if: matrix.test
+        name: Test func-test suite
+        env:
+          HLS_TEST_EXE: hls
+          HLS_WRAPPER_TEST_EXE: hls-wrapper
+        run: cabal test ${CABAL_ARGS} func-test || cabal test ${CABAL_ARGS} func-test
+
+      - if: matrix.test
+        name: Test wrapper-test suite
+        env:
+          HLS_TEST_EXE: hls
+          HLS_WRAPPER_TEST_EXE: hls-wrapper
+        run: cabal test ${CABAL_ARGS} wrapper-test
+
+      - if: matrix.test
+        name: Test hls-refactor-plugin
+        run: cabal test ${CABAL_ARGS} hls-refactor-plugin-tests || cabal test ${CABAL_ARGS} hls-refactor-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-class-plugin
+        run: cabal test ${CABAL_ARGS} hls-class-plugin-tests || cabal test ${CABAL_ARGS} hls-class-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-pragmas-plugin
+        run: cabal test ${CABAL_ARGS} hls-pragmas-plugin-tests || cabal test ${CABAL_ARGS} hls-pragmas-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-eval-plugin
+        run: cabal test ${CABAL_ARGS} hls-eval-plugin-tests || cabal test ${CABAL_ARGS} hls-eval-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-splice-plugin
+        run: cabal test ${CABAL_ARGS} hls-splice-plugin-tests || cabal test ${CABAL_ARGS} hls-splice-plugin-tests
+
+      - if: matrix.test && matrix.ghc != '9.12' && matrix.ghc != '9.14'
+        name: Test hls-stan-plugin
+        run: cabal test ${CABAL_ARGS} hls-stan-plugin-tests || cabal test ${CABAL_ARGS} hls-stan-plugin-tests
+
+      - if: matrix.test && matrix.ghc != '9.14'
+        name: Test hls-stylish-haskell-plugin
+        run: cabal test ${CABAL_ARGS} hls-stylish-haskell-plugin-tests || cabal test ${CABAL_ARGS} hls-stylish-haskell-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-ormolu-plugin
+        run: cabal test ${CABAL_ARGS} hls-ormolu-plugin-tests || cabal test ${CABAL_ARGS} hls-ormolu-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-fourmolu-plugin
+        run: cabal test ${CABAL_ARGS} hls-fourmolu-plugin-tests || cabal test ${CABAL_ARGS} hls-fourmolu-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-explicit-imports-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-explicit-imports-plugin-tests || cabal test ${CABAL_ARGS} hls-explicit-imports-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-call-hierarchy-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-call-hierarchy-plugin-tests || cabal test ${CABAL_ARGS} hls-call-hierarchy-plugin-tests
+
+      - if: matrix.test && matrix.os != 'windows-latest'
+        name: Test hls-rename-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-rename-plugin-tests || cabal test ${CABAL_ARGS} hls-rename-plugin-tests
+
+      # Hlint will never work on GHC 9.10
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
+        name: Test hls-hlint-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-hlint-plugin-tests || cabal test ${CABAL_ARGS} hls-hlint-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-alternate-number-format-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-alternate-number-format-plugin-tests || cabal test ${CABAL_ARGS} hls-alternate-number-format-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-qualify-imported-names-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-qualify-imported-names-plugin-tests || cabal test ${CABAL_ARGS} hls-qualify-imported-names-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-code-range-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-code-range-plugin-tests || cabal test ${CABAL_ARGS} hls-code-range-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-change-type-signature test suite
+        run: cabal test ${CABAL_ARGS} hls-change-type-signature-plugin-tests || cabal test ${CABAL_ARGS} hls-change-type-signature-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-gadt-plugin test suit
+        run: cabal test ${CABAL_ARGS} hls-gadt-plugin-tests || cabal test ${CABAL_ARGS} hls-gadt-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-explicit-fixity-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-explicit-fixity-plugin-tests || cabal test ${CABAL_ARGS} hls-explicit-fixity-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-explicit-record-fields-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-explicit-record-fields-plugin-tests || cabal test ${CABAL_ARGS} hls-explicit-record-fields-plugin-tests
+
+      # versions need to be limited since the tests depend on cabal-fmt which only builds with ghc <9.10
+      - if: matrix.test && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
+        name: Test hls-cabal-fmt-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test ${CABAL_ARGS} hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
+
+      - if: matrix.test && matrix.ghc != '9.12' && matrix.ghc != '9.14'
+        name: Test hls-cabal-gild-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests || cabal test ${CABAL_ARGS} hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests
+
+      - if: matrix.test
+        name: Test hls-cabal-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-cabal-plugin-tests || cabal test ${CABAL_ARGS} hls-cabal-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-overloaded-record-dot-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-overloaded-record-dot-plugin-tests || cabal test ${CABAL_ARGS} hls-overloaded-record-dot-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-semantic-tokens-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-semantic-tokens-plugin-tests || cabal test ${CABAL_ARGS} hls-semantic-tokens-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-notes-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-notes-plugin-tests || cabal test ${CABAL_ARGS} hls-notes-plugin-tests
+
+      # The plugin tutorial is only compatible with 9.6 and 9.8.
+      # No particular reason, just to avoid excessive CPP.
+      - if: matrix.test && matrix.ghc != '9.4' && matrix.ghc != '9.10' && matrix.ghc != '9.12' && matrix.ghc != '9.14' && matrix.ghc != '9.10.2'
+        name: Compile the plugin-tutorial
+        run: cabal build ${CABAL_ARGS} plugin-tutorial
+
+      - if: matrix.test
+        name: Test hls-signature-help-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-signature-help-plugin-tests || cabal test ${CABAL_ARGS} hls-signature-help-plugin-tests
+
+      - if: matrix.test
+        name: Test hls-export-plugin test suite
+        run: cabal test ${CABAL_ARGS} hls-export-plugin-tests || cabal test ${CABAL_ARGS} hls-export-plugin-tests
+
+  test_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, test]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

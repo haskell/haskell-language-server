@@ -1,0 +1,74 @@
+cabal-version: 2.4
+name:          hls-test-utils
+version:       2.14.0.0
+synopsis:      Utilities used in the tests of Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+homepage:      https://github.com/haskell/haskell-language-server#readme
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
+license:       Apache-2.0
+license-file:  LICENSE
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
+build-type:    Simple
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+library
+  exposed-modules:
+    Test.Hls
+    Test.Hls.FileSystem
+    Test.Hls.TestEnv
+    Test.Hls.Util
+    Development.IDE.Test
+    Development.IDE.Test.Diagnostic
+
+  hs-source-dirs:   src
+  build-depends:
+    , aeson
+    , async
+    , base                    >=4.12 && <5
+    , bytestring
+    , containers
+    , data-default
+    , directory
+    , extra
+    , filepath
+    , ghcide                  == 2.14.0.0
+    , hls-plugin-api          == 2.14.0.0
+    , lens
+    , lsp
+    , lsp-test                ^>=0.18
+    , lsp-types               ^>=2.4
+    , primitive
+    , safe-exceptions
+    , string-interpolate      >= 0.3.1
+    , tasty
+    , tasty-expected-failure
+    , tasty-golden
+    , tasty-hunit
+    , tasty-rerun
+    , temporary
+    , text
+    , text-rope
+
+  ghc-options:
+    -Wall
+    -Wunused-packages
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
+
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  default-language: GHC2021

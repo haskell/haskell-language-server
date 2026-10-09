@@ -1,0 +1,1 @@
+{"top.baz":{"default":"baz","markdownDescription":"baz","scope":"resource","type":"string"},"top.parent.boo":{"default":"boo","markdownDescription":"boo","scope":"resource","type":"string"},"top.parent.foo":{"default":"foo","markdownDescription":"foo","scope":"resource","type":"string"}}

@@ -1,0 +1,3 @@
+cradle:
+  cabal:
+    component: "exe:a"

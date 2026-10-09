@@ -1,0 +1,14 @@
+cabal-version: 3.4
+name:          test-hls
+version:       0.1.0.0
+maintainer:    milky
+synopsis:      example cabal file :)
+license:       Apache-2.0
+build-type:    Simple
+
+be
+
+library
+    lib
+
+co

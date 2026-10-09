@@ -1,0 +1,8 @@
+cradle:
+  direct:
+    arguments:
+      - "Clash.XException"
+      - "Clash.XException.Internal"
+      - "Clash.Promoted.Nat"
+      - "Clash.Promoted.Nat.Literals"
+      - "Clash.Promoted.Nat.TH"

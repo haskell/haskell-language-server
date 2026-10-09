@@ -1,0 +1,18 @@
+# Build master commits
+trigger:
+  batch: false
+  branches:
+    include:
+      - master
+      - azure*
+
+# Enable PR triggers that target the master branch
+pr:
+  autoCancel: true # cancel previous builds on push
+  branches:
+    include:
+      - master
+
+jobs:
+  - template: ./.azure/linux-stack.yml
+  - template: ./.azure/windows-stack.yml

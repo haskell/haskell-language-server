@@ -1,0 +1,16 @@
+-this-package-name
+zzz
+-working-dir
+zzz
+-fbuilding-cabal-package
+-O0
+-i
+-i.
+-this-unit-id
+zzz-1.0.0-inplace
+-hide-all-packages
+-Wmissing-home-modules
+-no-user-package-db
+-package
+base
+X

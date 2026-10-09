@@ -1,0 +1,57 @@
+# Core
+/ghcide @wz1000
+/ghcide/session-loader @wz1000 @fendor
+/hls-graph @wz1000
+/hls-plugin-api @michaelpj @fendor
+/hls-test-utils @fendor
+
+# HLS main
+/src @fendor
+/exe @fendor
+/test @fendor
+
+# Plugins
+/plugins/hls-alternate-number-format-plugin @drsooch
+/plugins/hls-cabal-fmt-plugin @VeryMilkyJoe @fendor
+/plugins/hls-cabal-gild-plugin @fendor
+/plugins/hls-cabal-plugin @fendor
+/plugins/hls-call-hierarchy-plugin @July541
+/plugins/hls-change-type-signature-plugin
+/plugins/hls-class-plugin
+/plugins/hls-code-range-plugin @kokobd
+/plugins/hls-eval-plugin
+/plugins/hls-explicit-fixity-plugin
+/plugins/hls-explicit-imports-plugin
+/plugins/hls-explicit-record-fields-plugin @ozkutuk
+/plugins/hls-export-plugin @crtschin
+/plugins/hls-fourmolu-plugin @georgefst
+/plugins/hls-gadt-plugin @July541
+/plugins/hls-hlint-plugin @eddiemundo
+/plugins/hls-notes-plugin @jvanbruegge
+/plugins/hls-ormolu-plugin @georgefst
+/plugins/hls-overloaded-record-dot-plugin @joyfulmantis
+/plugins/hls-pragmas-plugin @eddiemundo
+/plugins/hls-qualify-imported-names-plugin @eddiemundo
+/plugins/hls-refactor-plugin
+/plugins/hls-rename-plugin
+/plugins/hls-semantic-tokens-plugin @soulomoon
+/plugins/hls-signature-help-plugin @jian-lin
+/plugins/hls-splice-plugin @konn
+/plugins/hls-stan-plugin @0rphee
+/plugins/hls-stylish-haskell-plugin @michaelpj
+
+# Benchmarking
+/shake-bench
+/bench
+
+# Docs
+/docs @michaelpj
+
+# CI
+/.github @michaelpj @fendor
+
+# Build
+*.nix @berberman @michaelpj @guibou
+*.project @michaelpj
+*.stack* @michaelpj
+.gitpod.* @kokobd

@@ -1,0 +1,15 @@
+version: 2
+
+sphinx:
+  builder: "html"
+  configuration: docs/conf.py
+
+build:
+  os: "ubuntu-22.04"
+  tools:
+    # this means the latest python 3
+    python: "3"
+
+python:
+  install:
+    - requirements: docs/requirements.txt

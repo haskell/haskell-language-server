@@ -1,0 +1,1 @@
+cradle: {direct: {arguments: ["-XTemplateHaskell","-Wmissing-signatures","A", "B", "C"]}}

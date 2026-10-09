@@ -1,0 +1,5 @@
+In the expression: go . head . reverse
+Relevant bindings include
+  test :: a -> Int
+    (bound at /home/sgillespie/dev/haskell/haskell-language-server/plugins/hls-change-type-signature-plugin/test/testdata/TRigidType.hs:4:1) [GHC-25897]
+

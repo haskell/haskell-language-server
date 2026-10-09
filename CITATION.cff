@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you need to cite Haskell Language Server, this metadata is the paper that introduces the current design."
+repository-code: "https://github.com/haskell/haskell-language-server"
+title: Haskell Language Server
+preferred-citation:
+  type: article
+  authors: 
+  - family-names: Mitchell
+    given-names: Neil
+    orcid: "https://orcid.org/0000-0001-5171-9726"
+  - family-names: Kiefer
+    given-names: Moritz
+  - family-names: Iborra
+    given-names: Pepe
+  - family-names: Lau
+    given-names: Luke
+  - family-names: Duggal
+    given-names: Zubin
+  - family-names: Siebenhandl
+    given-names: Hannes
+  - family-names: Sanchez
+    given-names: Javier Neira
+  - family-names: Pickering
+    given-names: Matthew
+  - family-names: Zimmerman
+    given-names: Alan
+  doi: "10.1145/3462172"
+  journal: "IFL 2020: Proceedings of the 32nd Symposium on Implementation and Application of Functional Languages"
+  month: 9
+  day: 2
+  isbn: 978-1-4503-8963-1
+  publisher: ACM
+  title: "Building an Integrated Development Environment (IDE) on top of a Build System"
+  year: 2020
+  url: https://ndmitchell.com/downloads/paper-building_an_ide_on_top_of_a_build_system_revised-04_sep_2020.pdf
+  abstract: "When developing a Haskell IDE we hit upon an idea - why not base an IDE on an build system? In this paper we'll explain how to go from that idea to a usable IDE, including the difficulties imposed by reusing a build system, and those imposed by technical details specific to Haskell. Our design has been successful, and hopefully provides a blue-print for others writing IDEs."

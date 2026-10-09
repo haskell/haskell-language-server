@@ -1,0 +1,94 @@
+packages:
+         ./
+         ./shake-bench
+         ./hls-graph
+         ./ghcide
+         ./hls-plugin-api
+         ./hls-test-utils
+
+index-state: 2026-07-30T14:41:11Z
+
+tests: True
+test-show-details: direct
+
+benchmarks: True
+
+write-ghc-environment-files: never
+
+-- Many of our tests only work single-threaded, and the only way to
+-- ensure tasty runs everything purely single-threaded is to pass
+-- this at the top-level
+test-options: -j1
+
+-- Make sure dependencies are build with haddock so we get
+-- haddock shown on hover
+package *
+  ghc-options: -haddock
+
+constraints:
+  -- C++ is hard to distribute, especially on older GHCs
+  -- See https://github.com/haskell/haskell-language-server/issues/3822
+  text -simdutf,
+  ghc-check -ghc-check-use-package-abis,
+  ghc-lib-parser-ex -auto,
+  -- This is only present in some versions, and it's on by default since
+  -- 0.14.5.0, but there are some versions we allow that need this
+  -- setting
+  stylish-haskell +ghc-lib,
+  -- Centos 7 comes with an old gcc version that doesn't know about
+  -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
+  -- We want to be able to benefit from the performance optimisations
+  -- in the future, thus: TODO: remove this flag.
+  bitvec -simd,
+  monad-control >=1.0.3,
+
+
+-- Some of the formatters need the latest Cabal-syntax version,
+-- but 'cabal-install-parsers-0.6.2' only has Cabal-syntax (>=3.12.0.0 && <3.13).
+-- So, we relax the upper bounds here.
+-- fourmolu-0.18.0 and ormolu-0.8 depend on Cabal-syntax == 3.14.*, while
+-- cabal-add depends on cabal-install-parsers.
+allow-newer:
+  cabal-install-parsers:Cabal-syntax,
+
+
+-- See https://gitlab.haskell.org/ghc/ghc/-/work_items/26609
+-- https://github.com/digital-asset/ghc-lib/issues/620
+if impl(ghc >= 9.10) && impl(ghc < 9.11)
+  constraints: ghc-lib-parser ^>=9.10
+
+if impl(ghc >= 9.13)
+  allow-newer:
+    cabal-install-parsers:base,
+    cabal-install-parsers:time,
+
+if impl(ghc >= 9.14)
+  allow-newer:
+    aeson:containers,
+    aeson:template-haskell,
+    aeson:time,
+    binary-instances:base,
+    binary-instances:tagged,
+    binary-orphans:base,
+    boring:base,
+    cabal-install-parsers:containers,
+    constraints-extras:template-haskell,
+    dependent-map:containers,
+    ghc-trace-events:base,
+    hie-compat:base,
+    indexed-traversable:base,
+    indexed-traversable:containers,
+    indexed-traversable-instances:base,
+    lukko:base,
+    quickcheck-instances:base,
+    quickcheck-instances:containers,
+    semialign:base,
+    semialign:containers,
+    string-interpolate:template-haskell,
+    tasty-hspec:base,
+    text-iso8601:time,
+    these:base,
+    time-compat:base,
+    time-compat:time,
+    uuid-types:template-haskell,
+    websockets:containers,

@@ -1,0 +1,10 @@
+cradle:
+    direct:
+        arguments:
+        - -Wall
+        - AVec.hs
+        - BVec.hs
+        - CVec.hs
+        - DVec.hs
+        - EVec.hs
+        - FVec.hs

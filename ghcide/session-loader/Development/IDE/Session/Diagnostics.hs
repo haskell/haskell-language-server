@@ -1,0 +1,133 @@
+{-# LANGUAGE DeriveAnyClass #-}
+
+module Development.IDE.Session.Diagnostics where
+import           Control.Applicative
+import           Control.Lens
+import           Control.Monad
+import qualified Data.Aeson                        as Aeson
+import           Data.List
+import           Data.List.Extra                   (split)
+import           Data.Maybe
+import qualified Data.Text                         as T
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
+import           GHC.Generics
+import qualified HIE.Bios.Cradle                   as HieBios
+import           HIE.Bios.Types                    hiding (Log)
+import           System.FilePath
+
+data CradleErrorDetails =
+  CradleErrorDetails
+    { cradleDependencies    :: [FilePath]
+    -- ^ files related to the cradle error
+    -- i.e. .cabal, cabal.project, etc.
+    , structuredCradleError :: Maybe StructuredCradleError
+    -- ^ structured information about the cradle error
+    -- i.e. unknownModules error
+    } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
+
+data StructuredCradleError
+  = UnknownModuleError UnknownModuleDetails
+  deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
+
+data UnknownModuleDetails =
+  UnknownModuleDetails
+    { moduleFilePath      :: FilePath
+    , suggestedModuleName :: String
+    } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
+
+{- | Takes a cradle error, the corresponding cradle and the file path where
+  the cradle error occurred (of the file we attempted to load).
+  Depicts the cradle error in a user-friendly way.
+-}
+renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
+renderCradleError cradleError cradle nfp =
+  let noDetails =
+        ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines $ map T.pack userFriendlyMessage) Nothing
+  in
+  if HieBios.isCabalCradle cradle
+     then noDetails & fdLspDiagnosticL %~ \diag -> diag
+            { _data_ = Just $ Aeson.toJSON CradleErrorDetails
+                { cradleDependencies = absDeps
+                , structuredCradleError = fmap UnknownModuleError mkUnknownModuleDetails
+                }
+            }
+     else noDetails
+  where
+    ms = cradleErrorStderr cradleError
+
+    absDeps = fmap (cradleRootDir cradle </>) (cradleErrorDependencies cradleError)
+    userFriendlyMessage :: [String]
+    userFriendlyMessage
+      | HieBios.isCabalCradle cradle = fromMaybe ms $ fileMissingMessage <|> (unknownModuleMessage (fromNormalizedFilePath nfp) <$ mkUnknownModuleDetails)
+      | otherwise = ms
+
+    -- Produce structured details when unknown module error is detected
+    mkUnknownModuleDetails :: Maybe UnknownModuleDetails
+    mkUnknownModuleDetails
+      | any (isInfixOf "Failed extracting script block:") ms =
+          let fp = fromNormalizedFilePath nfp
+          in Just UnknownModuleDetails
+               { moduleFilePath   = fp
+               , suggestedModuleName = dropExtension (takeFileName fp)
+               }
+      | otherwise = Nothing
+
+    fileMissingMessage :: Maybe [String]
+    fileMissingMessage =
+      multiCradleErrMessage <$> parseMultiCradleErr ms
+
+-- | Information included in Multi Cradle error messages
+data MultiCradleErr = MultiCradleErr
+  { mcPwd      :: FilePath
+  , mcFilePath :: FilePath
+  , mcPrefixes :: [(FilePath, String)]
+  } deriving (Show)
+
+-- | Attempt to parse a multi-cradle message
+parseMultiCradleErr :: [String] -> Maybe MultiCradleErr
+parseMultiCradleErr ms = do
+  _  <- lineAfter "Multi Cradle: "
+  wd <- lineAfter "pwd: "
+  fp <- lineAfter "filepath: "
+  ps <- prefixes
+  pure $ MultiCradleErr wd fp ps
+
+  where
+    lineAfter :: String -> Maybe String
+    lineAfter pre = listToMaybe $ mapMaybe (stripPrefix pre) ms
+
+    prefixes :: Maybe [(FilePath, String)]
+    prefixes = do
+      pure $ mapMaybe tuple ms
+
+    tuple :: String -> Maybe (String, String)
+    tuple line = do
+      line' <- surround '(' line ')'
+      [f, s] <- pure $ split (==',') line'
+      pure (f, s)
+
+    -- extracts the string surrounded by required characters
+    surround :: Char -> String -> Char -> Maybe String
+    surround start s end = do
+      guard (listToMaybe s == Just start)
+      guard (listToMaybe (reverse s) == Just end)
+      pure $ drop 1 $ take (length s - 1) s
+
+multiCradleErrMessage :: MultiCradleErr -> [String]
+multiCradleErrMessage e =
+    unknownModuleMessage (mcFilePath e)
+    <> [""]
+    <> map prefix (mcPrefixes e)
+  where
+    prefix (f, r) = f <> " - " <> r
+
+unknownModuleMessage :: String -> [String]
+unknownModuleMessage moduleFileName =
+  [ "Loading the module '" <> moduleFileName <> "' failed."
+  , ""
+  , "It may not be listed in your .cabal file!"
+  , "Perhaps you need to add `"<> dropExtension (takeFileName moduleFileName) <> "` to other-modules or exposed-modules."
+  , ""
+  , "For more information, visit: https://cabal.readthedocs.io/en/3.4/developing-packages.html#modules-included-in-the-package"
+  ]

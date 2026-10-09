@@ -1,0 +1,2 @@
+  build-depends:
+    base                         >=4.16     && <5
