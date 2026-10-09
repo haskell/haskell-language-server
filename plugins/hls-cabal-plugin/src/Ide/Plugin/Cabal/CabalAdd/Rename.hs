@@ -3,6 +3,10 @@
 
 module Ide.Plugin.Cabal.CabalAdd.Rename (
   renameHandler,
+  resolveFileTargetE,
+  resolveBuildInfoE,
+  toRelativeModulePathE,
+  resolveTargetFieldForComponentE,
   Log,
 )
 where
