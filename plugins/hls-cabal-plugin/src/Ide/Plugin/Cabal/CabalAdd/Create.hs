@@ -32,7 +32,10 @@ import           Distribution.PackageDescription
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Parsec.Position                  (Position)
 import           Ide.Logger
-import           Ide.Plugin.Cabal.CabalAdd.CodeAction          (buildInfoToHsSourceDirs, mkModuleInsertionConfig, mkStanzaItems)
+import           Ide.Plugin.Cabal.CabalAdd.CodeAction          (buildInfoToHsSourceDirs,
+                                                                mkModuleInsertionConfig,
+                                                                mkStanzaItems,
+                                                                getBuildTargets)
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
                                                                 ParseCabalFile (..))
 import           Ide.Plugin.Error
@@ -108,9 +111,7 @@ createHandler recorder _ caps newHaskellFilePath cabalFilePath ideState = do
 
 Adds the module name corresponding to the new file path in the given cabal file.
 Fails if the cabal file cannot be parsed or the file path cannot be parsed to module
-names.
-
-TODO: check for occurrence of the module in the cabal file.
+names. Returns an empty workspace edit if a module is already present in the cabal file.
 -}
 applyModuleAddToCabalFile ::
   forall m.
@@ -129,15 +130,19 @@ applyModuleAddToCabalFile ::
   ExceptT PluginError m WorkspaceEdit
 applyModuleAddToCabalFile recorder (caps, verTxtDocId) newHaskellFilePath cabalFilePath cnfOrigContents fields gpd = do
   let pd = flattenPackageDescription gpd
-  compName <- guessComponentName verTxtDocId gpd cabalFilePath newHaskellFilePath
-  buildInfo <- resolveBuildInfoE pd compName
-  newModulePath <- toRelativeModulePathE (buildInfoToHsSourceDirs buildInfo) cabalFilePath newHaskellFilePath
-  newContents <-
-    maybeToExceptT PluginStaleResolve $
-      hoistMaybe $
-        executeAddConfig (Add.validateChanges gpd) (addConfig (Right $ compName) (guessTargetField compName) newModulePath)
-  logWith recorder Info $ CabalCreateLog newModulePath
-  pure $ diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) IncludeDeletions
+  isModuleDeclared <- isModuleDeclaredE pd cabalFilePath newHaskellFilePath
+  if isModuleDeclared then
+    pure $ mempty -- if a module is present there is nothing to edit
+  else do
+    compName <- guessComponentNameE verTxtDocId gpd cabalFilePath newHaskellFilePath
+    buildInfo <- resolveBuildInfoE pd compName
+    newModulePath <- toRelativeModulePathE (buildInfoToHsSourceDirs buildInfo) cabalFilePath newHaskellFilePath
+    newContents <-
+      maybeToExceptT PluginStaleResolve $
+        hoistMaybe $
+          executeAddConfig (Add.validateChanges gpd) (addConfig (Right $ compName) (guessTargetField compName) newModulePath)
+    logWith recorder Info $ CabalCreateLog newModulePath
+    pure $ diffText caps (verTxtDocId, T.decodeUtf8 cnfOrigContents) (T.decodeUtf8 newContents) IncludeDeletions
  where
   -- define addConfig to pass to cabal-add
   addConfig compName targetField additions =
@@ -163,7 +168,7 @@ guessTargetField = \case
   CFLibName _              -> Add.OtherModules
 
 {- | Tries to guess the best fitting cabal component name based on the file location. -}
-guessComponentName ::
+guessComponentNameE ::
   Applicative m => VersionedTextDocumentIdentifier ->
   GenericPackageDescription ->
   -- | the path to the cabal file, responsible for the create module
@@ -171,7 +176,7 @@ guessComponentName ::
   -- | the new file path after the create
   FilePath ->
   ExceptT PluginError m ComponentName
-guessComponentName verTxtDocId gpd cabalFilePath newHaskellFilePath = do
+guessComponentNameE verTxtDocId gpd cabalFilePath newHaskellFilePath = do
   maybeToExceptT
     (PluginInvalidUserState "unable to guess a component type")
     $ hoistMaybe
@@ -181,3 +186,15 @@ guessComponentName verTxtDocId gpd cabalFilePath newHaskellFilePath = do
         , ModuleInsertionConfig{insertionStanza} <-
             mkModuleInsertionConfig verTxtDocId cabalFilePath newHaskellFilePath stanzaItem
         ]
+
+{- | Predicate to check if the module is already present in the cabal file. -}
+isModuleDeclaredE ::
+  (MonadIO m) => PackageDescription ->
+  -- | the path to the cabal file, responsible for the create module
+  FilePath ->
+  -- | the new file path after the create
+  FilePath ->
+  ExceptT PluginError m Bool
+isModuleDeclaredE pd cabalFilePath fileTarget = do
+  buildTargets <- liftIO (getBuildTargets pd cabalFilePath fileTarget)
+  pure $ not (null buildTargets)
