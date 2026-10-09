@@ -29,6 +29,7 @@ module Ide.PluginUtils
     installSigUsr1Handler,
     subRange,
     rangesOverlap,
+    asPosition,
     positionInRange,
     usePropertyLsp,
     -- * Escape
@@ -279,8 +280,11 @@ subRange :: Range -> Range -> Bool
 subRange = isSubrangeOf
 
 
--- | Check whether the two 'Range's overlap in any way.
+-- | Check whether the two 'Range's overlap in any way, taking into account
+-- that, as per the LSP spec, 'Range's are right-open half-open intervals.
 --
+-- >>> rangesOverlap (mkRange 1 0 1 2) (mkRange 1 4 1 6)
+-- False
 -- >>> rangesOverlap (mkRange 1 0 1 4) (mkRange 1 2 1 5)
 -- True
 -- >>> rangesOverlap (mkRange 1 2 1 5) (mkRange 1 0 1 4)
@@ -289,9 +293,22 @@ subRange = isSubrangeOf
 -- True
 -- >>> rangesOverlap (mkRange 1 2 1 4) (mkRange 1 0 1 6)
 -- True
+-- >>> rangesOverlap (mkRange 1 2 1 4) (mkRange 1 4 1 6)
+-- False
 rangesOverlap :: Range -> Range -> Bool
 rangesOverlap r1 r2 =
-  r1 ^. L.start <= r2 ^. L.end && r2 ^. L.start <= r1 ^. L.end
+  r1 ^. L.start < r2 ^. L.end && r2 ^. L.start < r1 ^. L.end
+
+-- | As per the LSP spec, the client's requests come with a 'Range', not a
+-- 'Position'. This function attempts to interpret a zero-length 'Range'
+-- as position.
+--
+-- In practice, it's useful for distinguishing whether the client sent
+-- us a cursor position or a selection.
+asPosition :: Range -> Maybe Position
+asPosition (Range b e)
+  | b == e = Just b
+  | otherwise = Nothing
 
 -- ---------------------------------------------------------------------
 

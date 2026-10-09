@@ -56,7 +56,7 @@ import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
-import           Ide.PluginUtils                      (rangesOverlap)
+import           Ide.PluginUtils                      (asPosition, rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
@@ -215,10 +215,22 @@ activeDiagnosticsInRangeMT ide nfp range = do
         case mDiags of
             Nothing -> pure Nothing
             Just fileDiags -> do
-                pure $ Just $ filter diagRangeOverlaps fileDiags
+                pure $ Just $ filter (diagRangeOverlaps range) fileDiags
     where
-        diagRangeOverlaps = \fileDiag ->
-            rangesOverlap range (fileDiag ^. fdLspDiagnosticL . LSP.range)
+        -- The rationale of how to decide whether a 'Range' overlap with the
+        -- 'Range' of a diagnostic is explained at
+        -- https://github.com/haskell/haskell-language-server/pull/5047
+        diagRangeOverlaps range fileDiag
+          | Just c <- asPosition range
+            -- The client sent us the cursor position, so we check if it
+            -- overlaps with the **closed** 'Range' of the diagnostic.
+            = LSP.positionInRange c diagRange || c == diagEnd
+          | otherwise
+            -- The client sent us a selection 'Range', so we check if it
+            -- overlaps with the 'Range' of the diagnostic.
+            = rangesOverlap range diagRange
+          where
+            diagRange@(LSP.Range _ diagEnd) = fileDiag ^. fdLspDiagnosticL . LSP.range
 
 -- | Just like 'activeDiagnosticsInRangeMT'. See the docs of 'activeDiagnosticsInRangeMT' for details.
 activeDiagnosticsInRange :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> m [FileDiagnostic]
