@@ -12,6 +12,7 @@ import           Config                          (Expect (..), assertDefsFile,
                                                   testWithDummyPluginEmpty')
 import           Control.Applicative.Combinators
 import           Control.Lens                    ((^.))
+import           Control.Monad                   (when)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Proxy                      (Proxy (..))
@@ -19,7 +20,8 @@ import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult (..))
-import           Development.IDE.Test            (expectDiagnostics,
+import           Development.IDE.Test            (expectCurrentDiagnostics,
+                                                  expectDiagnostics,
                                                   expectDiagnosticsWithTags,
                                                   expectNoMoreDiagnostics,
                                                   isReferenceReady,
@@ -68,6 +70,7 @@ tests = testGroup "cradle"
     , testGroup "sub-directory" [simpleSubDirectoryTest wholeProjectConf]
     , testGroup "multi-unit-rexport" [multiRexportTest wholeProjectConf]
     , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests wholeProjectConf)
+    , testGroup "undeclared-module" (undeclaredModuleTests wholeProjectConf)
     ]
   , testGroup "default"
     [ testGroup "dependencies" [sessionDepsArePickedUp defComponentLoadingConf]
@@ -80,6 +83,7 @@ tests = testGroup "cradle"
     , testGroup "sub-directory" [simpleSubDirectoryTest defComponentLoadingConf]
     , testGroup "multi-unit-rexport" [multiRexportTest defComponentLoadingConf]
     , testGroup "multi-unit-import-resolution" (multiUnitImportResolutionTests defComponentLoadingConf)
+    , testGroup "undeclared-module" (undeclaredModuleTests defComponentLoadingConf)
     ]
   ]
 
@@ -362,6 +366,49 @@ batchLoadRegressionTests conf =
   , testCase "s2-no-stale-outcomes-across-restart-paths" $
       runWithExtraFilesMultiComponent conf "multi" regressionNoStaleOutcomesOnRestartNotHealthyInBetween
   ]
+
+-- | A module the user has written but not added to the cabal file yet is the
+-- normal state of code under development, so it has to work: it lies under an
+-- import path of a component, which is where GHC's own finder would look for
+-- it, so it is compiled as part of that component and only warned about.
+undeclaredModuleTests :: SessionLoadingPreferenceConfig -> [TestTree]
+undeclaredModuleTests conf =
+  [ testCase "a module missing from the cabal file still loads" $
+      withUndeclared $ \_dir -> do
+        udoc <- openDoc ("a" </> "Undeclared.hs") "haskell"
+        assertTypeCheckSuccess udoc "the undeclared module should typecheck"
+        diags <- getCurrentDiagnostics udoc
+        -- Only the whole project load knows the file is missing from the cabal
+        -- file. Loading one component at a time asks the build tool about this
+        -- very file, and it answers with the options of the component it lies
+        -- in, so nothing distinguishes it from a module that is listed.
+        when (conf == wholeProjectConf) $ liftIO $ assertBool
+          ("expected a warning about the cabal file, got: " <> show diags)
+          (any isMissingFromCabalWarning diags)
+  , testCase "importing a module missing from the cabal file still loads" $
+      withUndeclared $ \dir -> do
+        liftIO $ atomicFileWriteString (dir </> "a" </> "A.hs") $ unlines
+          [ "module A where"
+          , "import Undeclared"
+          , "foo :: Int"
+          , "foo = u"
+          ]
+        adoc <- openDoc ("a" </> "A.hs") "haskell"
+        assertTypeCheckSuccess adoc "the importing module should typecheck"
+        expectCurrentDiagnostics adoc []
+  ]
+  where
+    withUndeclared act = runWithExtraFilesMultiComponent conf "multi" $ \dir -> do
+      -- Undeclared.hs is under a's hs-source-dirs but is in no cabal field
+      liftIO $ atomicFileWriteString (dir </> "a" </> "Undeclared.hs") $ unlines
+        [ "module Undeclared where"
+        , "u :: Int"
+        , "u = 1"
+        ]
+      act dir
+    isMissingFromCabalWarning d =
+         d ^. L.severity == Just DiagnosticSeverity_Warning
+      && "cabal" `T.isInfixOf` (d ^. L.message)
 
 expectBrokenWithWholeProjectLoading :: SessionLoadingPreferenceConfig -> TestTree -> TestTree
 expectBrokenWithWholeProjectLoading conf =

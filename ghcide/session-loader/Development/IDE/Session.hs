@@ -56,7 +56,7 @@ import           Development.IDE.Graph               (Action, Key)
 import qualified Development.IDE.Session.Implicit    as GhcIde
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq      (HscEnvEq)
+import           Development.IDE.Types.HscEnvEq      (HscEnvEq, hscEnv)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified HIE.Bios                            as HieBios
@@ -962,6 +962,19 @@ packageSetup recorder sessionState newEmptyHscEnv (hieYaml, cfp, opts) = do
   liftIO $ modifyVar (hscEnvs sessionState) $
     addComponentInfo (cmapWithPrio LogSessionGhc recorder) getCacheDirs dep_info newTargetDfs (hieYaml, cfp, opts)
 
+{- Note [Modules the build tool has not been told about]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Writing a module and adding it to the cabal file are two steps, so we
+constantly see files that exist and are already imported but are not a target
+of any component. If we refuse to load such a file it gets no session at all,
+and the modules importing it fail to typecheck without reporting anything.
+
+We treat a file below an import path of a component as a module of that
+component, because that is what GHC does: its finder searches the -i
+directories and never the target list, and a module missing from the targets is
+a warning (-Wmissing-home-modules), not an error. A file below no import path
+is still an error, we have no options to compile it with.
+-}
 addErrorTargetIfUnknown :: Foldable t => t [TargetDetails] -> Maybe FilePath -> NormalizedFilePath -> IO ([TargetDetails], HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
 addErrorTargetIfUnknown all_target_details hieYaml cfp = do
   let flags_map' = HM.fromList (concatMap toFlagsMap all_targets')
@@ -971,16 +984,60 @@ addErrorTargetIfUnknown all_target_details hieYaml cfp = do
         Just _ -> (all_targets', flags_map')
         Nothing -> (this_target_details : all_targets', HM.insert cfp this_flags flags_map')
           where
-                this_target_details = TargetDetails (TargetFile cfp) this_error_env this_dep_info [cfp]
-                this_flags = (this_error_env, this_dep_info)
-                this_error_env = ([this_error], Nothing)
-                this_error = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp
-                                (T.unlines
-                                  [ "No cradle target found. Is this file listed in the targets of your cradle?"
-                                  , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
-                                  ])
-                                Nothing
+                this_target_details = TargetDetails (TargetFile cfp) this_env this_dep_info [cfp]
+                this_flags = (this_env, this_dep_info)
+                -- See Note [Modules the build tool has not been told about]
+                this_env = case owningComponent all_targets' cfp of
+                  Just env -> (missingHomeModuleWarning env cfp, Just env)
+                  Nothing  -> ([noTargetError], Nothing)
+                noTargetError =
+                  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp
+                    (T.unlines
+                      [ "No cradle target found. Is this file listed in the targets of your cradle?"
+                      , "If you are using a .cabal file, please ensure that this module is listed in either the exposed-modules or other-modules section"
+                      ])
+                    Nothing
   pure (all_targets, this_flags_map)
+
+-- | -Wmissing-home-modules. GHC only emits it from the driver, which we do not
+-- use, so we emit it ourselves.
+missingHomeModuleWarning :: HscEnvEq -> NormalizedFilePath -> [FileDiagnostic]
+missingHomeModuleWarning env cfp
+  | not (wopt Opt_WarnMissingHomeModules dflags) = []
+  | otherwise =
+      [ ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) cfp
+          (T.unlines [message, "It is being compiled with the options of that component."])
+          Nothing
+      ]
+  where
+    dflags = hsc_dflags $ hscEnv env
+    unit = T.pack $ unitIdString $ homeUnitId_ dflags
+    message
+      | gopt Opt_BuildingCabalPackage dflags =
+          "This module is needed for compilation but not listed in your .cabal file's \
+          \other-modules or exposed-modules for '" <> unit <> "'."
+      | otherwise =
+          "This module is not listed in the options for '" <> unit
+            <> "' but needed for compilation."
+
+-- | The component with an import path the file is below. If several match we
+-- take the most specific one, the one giving the shortest relative path.
+-- See Note [Modules the build tool has not been told about]
+owningComponent :: [TargetDetails] -> NormalizedFilePath -> Maybe HscEnvEq
+owningComponent targets cfp =
+  listToMaybe [ env | (_, env) <- sortOn (length . splitDirectories . fst) candidates ]
+  where
+    file = fromNormalizedFilePath cfp
+    -- makeRelative gives back the file unchanged if it is not below the
+    -- directory. Both paths are absolute, so this is unambiguous.
+    candidates =
+      [ (rel, env)
+      | td <- targets
+      , Just env <- [snd (targetEnv td)]
+      , importPath <- importPaths $ hsc_dflags $ hscEnv env
+      , let rel = makeRelative (normalise importPath) file
+      , rel /= file
+      ]
 
 -- | Populate the knownTargetsVar with all the
 -- files in the project so that `knownFiles` can learn about them and
