@@ -183,7 +183,8 @@ instance NFData TcModuleResult where
 tmrModSummary :: TcModuleResult -> ModSummary
 tmrModSummary = pm_mod_summary . tmrParsed
 
-data HiFileResult = HiFileResult
+-- | Everything a module contributes to its dependents' typechecking.
+data ModIfaceResult = ModIfaceResult
     { hirModSummary     :: !ModSummary
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
@@ -194,24 +195,38 @@ data HiFileResult = HiFileResult
     -- ^ Fingerprint for the ModIface
     , hirRuntimeModules :: !(ModuleEnv ByteString)
     -- ^ same as tmrRuntimeModules
-    , hirCoreFp         :: !(Maybe ByteString)
+    }
+
+data HiFileResult = HiFileResult
+    { hirIface  :: !ModIfaceResult
+    , hirCoreFp :: !(Maybe ByteString)
     -- ^ Hash of the core file, if written.
     }
 
+-- | Content-address for a compiled module. This covers both
+-- - the module's ABI, see 'hirIfaceFp'
+-- - the serialized corefile for linkables, see 'hirCoreFp'
+-- Changing either implies dependents of the module need to be updated.
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> fromMaybe "" hirCoreFp
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp hirIface <> fromMaybe "" hirCoreFp
 
 mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe ByteString -> HiFileResult
 mkHiFileResult hirModSummary hirModIface hirModDetails hirRuntimeModules hirCoreFp =
-    HiFileResult{..}
+    HiFileResult{hirIface = ModIfaceResult{..}, ..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash $ hirModIface -- will always be two bytes
+
+instance NFData ModIfaceResult where
+    rnf = rwhnf
+
+instance Show ModIfaceResult where
+    show = show . hirModSummary
 
 instance NFData HiFileResult where
     rnf = rwhnf
 
 instance Show HiFileResult where
-    show = show . hirModSummary
+    show = show . hirIface
 
 -- | Save the uncompressed AST here, we compress it just before writing to disk
 data HieAstResult
@@ -289,8 +304,14 @@ type instance RuleResult GetModIfaceFromDisk = HiFileResult
 --   This is an internal rule, use 'GetModIface' instead.
 type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
 
--- | Get a module interface details, either from an interface file or a typechecked module
-type instance RuleResult GetModIface = HiFileResult
+-- | Get a module interface details, either from an interface file or a typechecked module.
+type instance RuleResult GetModIface = ModIfaceResult
+
+-- | Get a compiled module's interface and the core file hash.
+type instance RuleResult GetModArtefacts = HiFileResult
+
+-- | Get a module's core file. Depend on this when you need generated code.
+type instance RuleResult GetCoreFileHash = ByteString
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
@@ -439,6 +460,16 @@ data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Generic)
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
+
+data GetModArtefacts = GetModArtefacts
+    deriving (Eq, Show, Generic)
+instance Hashable GetModArtefacts
+instance NFData   GetModArtefacts
+
+data GetCoreFileHash = GetCoreFileHash
+    deriving (Eq, Show, Generic)
+instance Hashable GetCoreFileHash
+instance NFData   GetCoreFileHash
 
 data GetModuleGraphTransDepsFingerprints = GetModuleGraphTransDepsFingerprints
     deriving (Eq, Show, Generic)
