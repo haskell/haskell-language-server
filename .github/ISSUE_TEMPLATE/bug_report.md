@@ -45,3 +45,7 @@ Have you configured HLS in any way (especially: a `hie.yaml` file)?
 ### Debug information
 
 <!-- Include any useful debug information, such as relevant log snippets. -->
+<!-- In vscode server logs can be found in output `Haskell ($your_project)`. -->
+<!-- You can enable more detailed logs, via `--debug` flag in `haskell.serverExtraArgs`. -->
+<!-- Or you can procure logs via manual execution of `haskell-language-server --debug` in your project directory. -->
+
