@@ -175,6 +175,7 @@ envVars arch os = object $
          AArch64 -> "ARM64")
      , "ADD_CABAL_ARGS" .= str (case (os,arch) of
         (Linux _, Amd64) -> "--enable-split-sections"
+        (Windows, _)     -> "--max-backjumps 10000"
         _                -> "")
      , "ARTIFACT" .= artifactName arch os
      ]
