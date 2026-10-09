@@ -46,6 +46,10 @@ import           Control.Concurrent.STM.Stats                 hiding (orElse)
 import qualified Control.DeepSeq                              as DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
+import           Ide.Logger                                   (Priority (Debug),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               logWith)
 import           Control.Lens                                 hiding (List, pre,
                                                                (<.>))
 import           Control.Monad.Extra
@@ -1725,18 +1729,27 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
   pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
 
 -- | Documentation of a module header. Currently a stub returning a fixed string.
-getModuleDocs :: HscEnv -> Maybe Module -> Module -> IO (Maybe (HsDoc GhcRn))
-getModuleDocs env currentMod m
-  | Just m == currentMod = currentModuleDocs
-  | otherwise            = interfaceDocs
+-- ToDoFabian Clean up Logs
+getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe Module -> Module -> IO (Maybe (HsDoc GhcRn))
+getModuleDocs recorder env currentMod m
+  | Just m == currentMod = logBranch "current module" >> currentModuleDocs
+  | otherwise            = logBranch "interface (home or external module)" >> currentModuleDocs
   where
+    logBranch :: T.Text -> IO ()
+    logBranch branch = logWith recorder Debug $
+      LogHoverImport $ "getModuleDocs for " <> printOutputable m <> ": " <> branch
+
     -- Placeholder: the interface of the module being edited is stale or missing,
     -- so this must later read 'hsmodHaddockModHeader' from the parsed module.
+
+    -- Get the currentModuleDocs logic from Documentation.hs
+    -- but there is a cycle of imports.
     currentModuleDocs :: IO (Maybe (HsDoc GhcRn))
     currentModuleDocs =
       pure $ Just $ WithHsDocIdentifiers (mkGeneratedHsDocString "Current module documentation (placeholder)") []
 
     -- Home modules and external packages: read the header from the interface.
+    -- Only for External Modules
     interfaceDocs :: IO (Maybe (HsDoc GhcRn))
     interfaceDocs =
       handleAny (\_ -> pure Nothing) $ do

@@ -345,8 +345,19 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- the package(with version) this `ModuleName` belongs to.
         prettyImportedModule :: ModuleName -> IO T.Text
         prettyImportedModule mod = do
+
+          logWith (shakeRecorder shakeExtras) Debug $ LogHoverImport $ "Hover on import Start"
+
+          -- Note: mpkg is Nothing for local modules 
           mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
-          mdoc <- maybe (pure Nothing) (getModuleDocs env (Just currentMod)) mpkg
+
+          logWith (shakeRecorder shakeExtras) Debug $ LogHoverImport $ "Hover on import - Found mpkg: " <> T.pack (show (isJust mpkg))
+          mdoc <- maybe (pure Nothing) (getModuleDocs (shakeRecorder shakeExtras) env (Just currentMod)) mpkg
+
+          -- Assume we have a normalized file path
+          let nfp = "123"
+
+
           --ToDoFabian Remove the Logs
           logWith (shakeRecorder shakeExtras) Debug $
             LogHoverImport $ "Hover on import " <> printOutputable mod <> ", docs found: " <> T.pack (show (isJust mdoc))
