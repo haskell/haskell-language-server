@@ -16,6 +16,7 @@
 /plugins/hls-cabal-gild-plugin @fendor
 /plugins/hls-cabal-plugin @fendor
 /plugins/hls-call-hierarchy-plugin @July541
+/plugins/hls-case-split-plugin @Aster89 @fendor
 /plugins/hls-change-type-signature-plugin
 /plugins/hls-class-plugin
 /plugins/hls-code-range-plugin @kokobd
