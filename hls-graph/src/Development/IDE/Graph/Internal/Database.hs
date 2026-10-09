@@ -13,7 +13,6 @@ module Development.IDE.Graph.Internal.Database (compute, newDatabase, incDatabas
 import           Prelude                              hiding (unzip)
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
@@ -126,11 +125,7 @@ build
     => Database -> Stack -> f key -> IO (f Key, f value)
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
-    built <- runAIO $ do
-        built <- builder db stack (fmap newKey keys)
-        case built of
-          Left clean  -> return clean
-          Right dirty -> liftIO dirty
+    built <- runAIO $ builder db stack (fmap newKey keys)
     let (ids, vs) = unzip built
     pure (ids, fmap (asV . resultValue) vs)
     where
@@ -138,13 +133,11 @@ build db stack keys = do
         asV (Value x) = unwrapDynamic x
 
 -- | Build a list of keys and return their results.
---  If none of the keys are dirty, we can return the results immediately.
---  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 --  See Note [Invalidation, Step Counter, and Stale Running States]
 builder
-    :: Traversable f => Database -> Stack -> f Key -> AIO (Either (f (Key, Result)) (IO (f (Key, Result))))
+    :: Traversable f => Database -> Stack -> f Key -> AIO (f (Key, Result))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
-builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
+builder db@Database{..} stack keys = do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
@@ -162,21 +155,16 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                     modifyTVar' toForce (Wait force :)
                     pure val
                 Dirty s -> do
-                    let act = run (refresh db stack id s)
-                        (force, val) = splitIO act
+                    -- See Note [Rule computations own their scope].
+                    let (force, val) = splitIO (runAIO (refresh db stack id s))
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
                     modifyTVar' toForce (Spawn force:)
                     pure val
 
             pure (id, val)
 
-    toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ waitConcurrently_ toForceList
-    case toForceList of
-        [] -> return $ Left results
-        _ -> return $ Right $ do
-                waitAll
-                pure results
+    waitConcurrently_ =<< liftIO (readTVarIO toForce)
+    pure results
 
 
 -- | isDirty
@@ -199,17 +187,11 @@ refreshDeps visited db stack key result = \case
     (dep:deps) -> do
         let newVisited = dep <> visited
         res <- builder db stack (toListKeySet (dep `differenceKeySet` visited))
-        case res of
-            Left res ->  if isDirty result res
-                -- restart the computation if any of the deps are dirty
-                then liftIO $ compute db stack key RunDependenciesChanged (Just result)
-                -- else kick the rest of the deps
-                else refreshDeps newVisited db stack key result deps
-            Right iores -> do
-                res <- liftIO iores
-                if isDirty result res
-                    then liftIO $ compute db stack key RunDependenciesChanged (Just result)
-                    else refreshDeps newVisited db stack key result deps
+        if isDirty result res
+            -- restart the computation if any of the deps are dirty
+            then liftIO $ compute db stack key RunDependenciesChanged (Just result)
+            -- else kick the rest of the deps
+            else refreshDeps newVisited db stack key result deps
 
 -- | Refresh a key in the existing force runner, which already owns its lifetime.
 refresh :: Database -> Stack -> Key -> Maybe Result -> AIO Result
@@ -341,7 +323,7 @@ transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
 
 -- | A simple monad to implement cancellation on top of 'Async',
 --   generalizing 'withAsync' to monadic scopes.
-newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
+newtype AIO a = AIO (ReaderT (IORef [Async ()]) IO a)
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
 -- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
@@ -350,12 +332,45 @@ runAIO (AIO act) = do
     asyncs <- newIORef []
     runReaderT act asyncs `onException` cleanupAsync asyncs
 
-newtype RunInIO = RunInIO (forall a. AIO a -> IO a)
+{- Note [Rule computations own their scope]
 
-withRunInIO :: (RunInIO -> AIO b) -> AIO b
-withRunInIO k = do
-    st <- AIO ask
-    k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
+A scope is the list of threads prompted by the computation of a key. If
+computing a key throws, 'runAIO' cancels those threads. As we store key statuses
+in the database, these scopes must not escape. If they do, we might race between
+edits and store outdated values.
+
+  See https://github.com/haskell/haskell-language-server/issues/4985.
+
+A 'Running' rule status captures this state. Its value is a memoized 'splitIO'
+thunk. Any thread that waits on the key can force the thunk later in the same
+step. This example could leak threads. Both builds run at step S:
+
+    build 1, thread A                  build 2, thread B
+    -----------------                  -----------------
+    insert 'Running S' for some key
+    throw, closing scope 1
+      (cancels nothing)
+                                       see 'Running S' for the key
+                                       force the thunk
+                                       start its dependencies in scope 1
+                                       (scope 1 is already closed)
+
+The first build throws before it forces the thunk, so closing its scope doesn't
+do anything. The entry stays in the database. If the thunk kept the scope of
+the first build, the second build would start its dependencies in that closed
+scope, orphaned.
+
+The solution is to keep scopes on the demand-side instead of capture-side. When
+a thread forces a thunk, the thunk opens its own scope with 'runAIO':
+
+    build 2, thread B
+    -----------------
+    force the thunk
+      open scope 2 with 'runAIO'
+      start its dependencies in scope 2
+      on an exception: close scope 2, cancelling the dependencies
+
+-}
 
 cleanupAsync :: IORef [Async a] -> IO ()
 -- mask to make sure we interrupt all the asyncs
