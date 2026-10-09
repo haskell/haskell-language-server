@@ -8,13 +8,14 @@ module Main
 
 import           Control.Lens               (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad              (void)
-import           Data.Text                  (Text, lines, unlines)
+import           Data.Text                  (Text, pack, unpack, lines, unlines)
 import qualified Ide.Plugin.CaseSplit       as CS
 import qualified Language.LSP.Protocol.Lens as L
 import           Prelude                    hiding (lines, unlines)
 import           System.FilePath
 import           Test.Hls                   hiding (waitForDiagnosticsFrom)
 import qualified Test.Hls.FileSystem        as FS
+import Data.Maybe (maybeToList)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -169,7 +170,7 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , goldenWithClass "As many → as ->" "TAsManyUnicodeAsNot" $
       Prelude.flip inspectCodeAction [title]
-  , testGroup "In-file (No)UnicodeSyntax has priority over in-cabal (No)UnicodeSyntax"
+  , testGroup "In-cabal (No)UnicodeSyntax(?) × in-file (No)UnicodeSyntax(?)"
       $ let cabalFile = [
               "cabal-version:      3.4",
               "name:               foo",
@@ -198,9 +199,9 @@ codeActionTests = testGroup
               "foo x = case x of"
               ]
 
-            withExt ext = [ "    default-extensions: " <> ext ]
+            mkExt ext = "    default-extensions: " <> ext
 
-            withPragma ext = [ "{-# LANGUAGE " <> ext <> " #-}" ]
+            mkPragma ext = "{-# LANGUAGE " <> ext <> " #-}"
 
             insertedLines arrow = [
               "  A " <> arrow <> " _",
@@ -208,37 +209,28 @@ codeActionTests = testGroup
               "  C " <> arrow <> " _"
               ]
 
-            cabalOpts = [ []
-                         , withExt "NoUnicodeSyntax"
-                         , withExt "UnicodeSyntax"
-                         ]
-
-            pragmas = [ [], withPragma "NoUnicodeSyntax", withPragma "UnicodeSyntax"
-                     ]
+            alts = [ Nothing , Just "NoUnicodeSyntax" , Just "UnicodeSyntax" ]
 
             arrow = [ "->", "->", "→"
                     , "->", "->", "→"
                     , "→" , "->", "→"
                     ]
 
-            in zipWith applyPlugin
-                       [ (cabalFile <> cabalOpt, pragma <> haskellFile) | cabalOpt <- cabalOpts
-                                                                        , pragma <- pragmas ]
-                       (insertedLines <$> arrow) -- XXX In theory this can be computed in the context
-                                                 -- of the list comprehension above…, something like this:
+            toYesNo :: Maybe Text -> Text
+            toYesNo Nothing = "-"
+            toYesNo (Just s)
+              | s == "UnicodeSyntax" = "Y"
+              | otherwise = "N"
 
-            {- in [ applyPlugin (cabalFile <> cabalOpt) (pragma <> haskellFile) arrow
-                  | cabalOpt <- cabalOpts
-                  , pragma <- pragmas
-                  , let arrow = computeArrow cabalOpt pragma ]
+            in zipWith3 applyPlugin
+                        [ toYesNo inCabal <> " × " <> toYesNo inPragma
+                          | inCabal <- alts
+                          , inPragma <- alts ]
+                        [ (cabalFile <> cabalOpt, pragma <> haskellFile)
+                          | cabalOpt <- maybeToList . fmap mkExt <$> alts
+                          , pragma <- maybeToList . fmap mkPragma <$> alts ]
+                        (insertedLines <$> arrow)
 
-               XXX And then `applyPlugin` would have type:
-
-                   ([Text], [Text]) -> [Text] -> TestTree
-               But `computeArrow` would mean that that I have to create a type
-               for `cabalOpt` and `pragma`. It starts sounding not easy to
-               follow for a reader.
-             -}
   -- Some more corner cases
   , expectNoCodeActionAvailable "No action on `Int`" "TInt"
   , expectNoCodeActionAvailable "Cannot see through condition of a single catch-all pattern" "TWithCond"
@@ -246,9 +238,8 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   ]
 
--- TODO if I keep it, needs a better name.
-applyPlugin :: ([Text], [Text]) -> [Text] -> TestTree
-applyPlugin (cabal, source) inserted =
+applyPlugin :: Text -> ([Text], [Text]) -> [Text] -> TestTree
+applyPlugin name (cabal, source) inserted =
   let path = "TUnicodeArrow"
       findAction = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
       languageKind = LanguageKind_Haskell
@@ -261,7 +252,7 @@ applyPlugin (cabal, source) inserted =
                        actions <- getAllCodeActions doc
                        action <- liftIO $ findAction actions
                        executeCodeAction action
-  in testCase "" $ do
+  in testCase (unpack name) $ do
        newSource <- fmap lines $ runSessionWithServerInTmpDir config plugin tree $ do
               doc <- createDoc (path <.> "hs") languageKind (unlines source)
               void waitForBuildQueue
