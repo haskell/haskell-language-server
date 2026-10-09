@@ -123,6 +123,7 @@ import           Development.IDE.GHC.Compat.Error      (DsMessage (DsNonExhausti
                                                         msgEnvelopeErrorL)
 import           Development.IDE.GHC.Compat.ExactPrint (d0, d1, exactPrint,
                                                         getEntryDP,
+                                                        noAnnSrcSpanDP0,
                                                         noAnnSrcSpanDP1,
                                                         setEntryDP)
 import           Development.IDE.Types.Diagnostics     (FileDiagnostic (fdLspDiagnostic),
@@ -136,6 +137,7 @@ import           GHC                                   (AnnList (AnnList),
                                                         LMatch,
                                                         ParsedModule (pm_parsed_source),
                                                         ParsedSource,
+                                                        dataConIsInfix,
                                                         realSrcSpan)
 import           GHC.Driver.DynFlags                   (OnOff (On))
 import           GHC.Hs                                (DeltaPos (deltaColumn),
@@ -174,7 +176,7 @@ import           Ide.Types                             (Config, HandlerM,
                                                         defaultPluginDescriptor,
                                                         mkPluginHandler,
                                                         pluginGetClientCapabilities)
-import           Language.Haskell.Syntax               (HsConDetails (PrefixCon, RecCon),
+import           Language.Haskell.Syntax               (HsConDetails (InfixCon, PrefixCon, RecCon),
                                                         HsLocalBindsLR (EmptyLocalBinds),
                                                         LHsExpr,
                                                         MatchGroup (MG, mg_alts),
@@ -407,7 +409,7 @@ data CaseLike = CaseLike { _expr   :: CaseLikeExpr
                          }
 
 -- | Parse an @HsCase _ _ mg@ or @HsLam _ LamCase mg@ out of a @HsExpr GhcPs@
--- into the refined type 'ConLike'.
+-- into the refined type 'CaseLike'.
 parseCaseLikeExpr :: HsExpr GhcPs -> Maybe CaseLike
 
 parseCaseLikeExpr (HsCase ext scrut matchGroup)
@@ -631,26 +633,41 @@ parseSimpleConMatch :: IsUnicodeSyntax -> PmAltConApp -> Either String SimpleCon
 parseSimpleConMatch arrow PACA{ paca_con = PmAltConLike con
                               , paca_ids
                               }
-  = let dataCon = case con of
-                    RealDataCon dataCon -> getName dataCon
-                    PatSynCon dataCon   -> getName dataCon
+  | let (dataConName, infixed) = case con of
+                    RealDataCon dataCon -> (getName dataCon, dataConIsInfix dataCon)
+                    PatSynCon dataCon   -> (getName dataCon, False)
 
-        locatedCon = L noSrcSpanA $ nameRdrName dataCon
+        underscore = WildPat NoExtField
 
-        conPat = if length paca_ids <= maxUnderscores def -- for low number of arguments
+        rdrConName = nameRdrName dataConName
+
+  , Just (locatedCon, args) <- case (paca_ids, infixed) of
+                  -- Prefixed, laid out like @Foo _ _@
+                  (_, False) -> Just  (-- leave no space before the constructor
+                                        L noSrcSpanA $ rdrConName,
+                                        -- leave one space before each argument
+                                        PrefixCon $ map (const $ L noAnnSrcSpanDP1 underscore) paca_ids)
+                  -- Infixed (only allowed if binary), laid out like @_ : _@
+                  ([_, _], True) -> Just (-- leave one space before the constructor
+                                          L noAnnSrcSpanDP1 $ rdrConName,
+                                          -- leave no space before the first argument, but one after the second
+                                          InfixCon (L noAnnSrcSpanDP0 underscore) (L noAnnSrcSpanDP1 underscore))
+                  _ -> Nothing
+
+  , let conPat = if length paca_ids <= maxUnderscores def -- for low number of arguments
                      -- create as many underscores as needed
                    then ConPat { pat_con_ext = (Nothing, Nothing)
                                , pat_con = locatedCon
-                               , pat_args = PrefixCon $ map (const $ L noAnnSrcSpanDP1 $ WildPat NoExtField) paca_ids
+                               , pat_args = args
                                }
                      -- otherwise use braces.
                    else ConPat { pat_con_ext = (Just (EpTok d1), Just (EpTok d0))
                                , pat_con = locatedCon
                                , pat_args = RecCon (HsRecFields NoExtField [] Nothing)
                                }
-    in Right
-     $ SimpleConMatch { _arrow = arrow
-                      , _conPat = conPat }
+  = Right
+  $ SimpleConMatch { _arrow = arrow
+                   , _conPat = conPat }
 
 parseSimpleConMatch _ paca = Left $ showSDocUnsafe $ ppr paca
 
