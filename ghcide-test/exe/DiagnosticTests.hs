@@ -195,22 +195,18 @@ tests = testGroup "diagnostics"
     runSessionWithTestConfig def
         { testPluginDescriptor = dummyPlugin
         , testConfigCaps = lspTestCapsNoFileWatches
-        , testDirLocation = Right (mkIdeTestFs [])
+        , testDirLocation =
+            Right (mkIdeTestFs
+              [ directCradle ["ModuleA", "ModuleB"]
+              , file "ModuleA.hs" (text "module ModuleA where\n")
+              , file "ModuleB.hs" (text "module ModuleB where\nimport {-# SOURCE #-} ModuleA ()\n")
+              ])
         }
     $ \dir -> do
       -- ModuleA.hs-boot is a candidate location of the declared target
       -- ModuleA, so opening it later reuses the cached session instead of
       -- consulting the cradle again. Resolving the import must not depend on
       -- that reload happening.
-      liftIO $ do
-        atomicFileWriteString (dir </> "hie.yaml")
-          "cradle: {direct: {arguments: [\"ModuleA\", \"ModuleB\"]}}"
-        atomicFileWriteString (dir </> "ModuleA.hs")
-          "module ModuleA where"
-        atomicFileWriteString (dir </> "ModuleB.hs") $ unlines
-          [ "module ModuleB where"
-          , "import {-# SOURCE #-} ModuleA ()"
-          ]
       _ <- openDoc (dir </> "ModuleB.hs") "haskell"
       expectDiagnostics [(dir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 22), "Could not find module", Nothing)])]
       _ <- createDoc (dir </> "ModuleA.hs-boot") "haskell" "module ModuleA where"
@@ -219,11 +215,9 @@ tests = testGroup "diagnostics"
     runSessionWithTestConfig def
         { testPluginDescriptor = dummyPlugin
         , testConfigCaps = lspTestCapsNoFileWatches
-        , testDirLocation = Right (mkIdeTestFs [])
+        , testDirLocation = Right (mkIdeTestFs [directCradle ["ModuleA", "ModuleB"]])
         }
     $ \dir -> do
-      liftIO $ atomicFileWriteString (dir </> "hie.yaml")
-        "cradle: {direct: {arguments: [\"ModuleA\", \"ModuleB\"]}}"
       adoc <- createDoc (dir </> "ModuleA.hs") "haskell" "module ModuleA where"
       bdoc <- createDoc (dir </> "ModuleB.hs") "haskell" $ T.unlines
         [ "module ModuleB where"
@@ -237,50 +231,59 @@ tests = testGroup "diagnostics"
       diags <- waitForDiagnosticsSource "not found"
       liftIO $ assertBool ("expected ModuleA to be unresolvable, got: " <> show diags)
         (any (T.isInfixOf "ModuleA" . (^. L.message)) diags)
-  , testWithDummyPluginEmpty' "import path order determines module file" $ \dir -> do
-      -- GHC searches import paths in order: with -isrcA -isrcB, a module
-      -- present in both directories must resolve to the file in srcA.
-      liftIO $ do
-        atomicFileWriteString (dir </> "hie.yaml")
-          "cradle: {direct: {arguments: [\"-isrcA\", \"-isrcB\", \"T\", \"C\"]}}"
-        createDirectoryIfMissing True (dir </> "srcA")
-        createDirectoryIfMissing True (dir </> "srcB")
-        atomicFileWriteString (dir </> "srcA" </> "C.hs") $ unlines
-          [ "module C where"
-          , "cA :: ()"
-          , "cA = ()"
+  , testWithDummyPlugin "import path order determines module file"
+        (mkIdeTestFs
+          [ -- GHC searches import paths in order: with -isrcA -isrcB, a module
+            -- present in both directories must resolve to the file in srcA.
+            directCradle ["-isrcA", "-isrcB", "T", "C"]
+          , directory "srcA"
+            [ file "C.hs" $ sources
+              [ "module C where"
+              , "cA :: ()"
+              , "cA = ()"
+              ]
+            , file "T.hs" $ sources
+              [ "module T where"
+              , "import C"
+              , "t :: ()"
+              , "t = cA"
+              ]
+            ]
+          , directory "srcB"
+            [ file "C.hs" $ sources
+              [ "module C where"
+              , "cB :: ()"
+              , "cB = ()"
+              ]
+            ]
           ]
-        atomicFileWriteString (dir </> "srcB" </> "C.hs") $ unlines
-          [ "module C where"
-          , "cB :: ()"
-          , "cB = ()"
-          ]
-        atomicFileWriteString (dir </> "srcA" </> "T.hs") $ unlines
-          [ "module T where"
-          , "import C"
-          , "t :: ()"
-          , "t = cA"
-          ]
+        ) $ do
       tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
       liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
-      assertDefsFile (dir </> "srcA" </> "C.hs") locs
-  , testWithDummyPluginEmpty' "unlistable directory hides only itself" $ \dir -> do
+      assertDefsFile ("srcA" </> "C.hs") locs
+  , testWithDummyPlugin' "unlistable directory hides only itself"
+        (mkIdeTestFs
+          [ directCradle ["-isrc", "B"]
+          , directory "src"
+            [ file "B.hs" $ sources
+              [ "module B where"
+              , "import A ()"
+              ]
+            , file "A.hs" $ sources
+              [ "module A where"
+              ]
+            , directory "Locked" []
+            ]
+          ]
+        ) $ \ dir -> do
       -- A directory we cannot list must not take the modules next to it down
       -- with it. On Windows the directory stays listable and the test passes
       -- trivially.
       let locked = dir </> "src" </> "Locked"
       liftIO $ do
-        createDirectoryIfMissing True locked
-        atomicFileWriteString (dir </> "hie.yaml")
-          "cradle: {direct: {arguments: [\"-isrc\", \"B\"]}}"
-        atomicFileWriteString (dir </> "src" </> "A.hs") "module A where"
-        atomicFileWriteString (dir </> "src" </> "B.hs") $ unlines
-          [ "module B where"
-          , "import A ()"
-          ]
         setPermissions locked emptyPermissions
       bdoc <- openDoc ("src" </> "B.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" bdoc
