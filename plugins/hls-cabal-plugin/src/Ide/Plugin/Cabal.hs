@@ -39,6 +39,7 @@ import qualified Distribution.Parsec.Position                  as Syntax
 import qualified Ide.Plugin.Cabal.CabalAdd.CodeAction          as CabalAdd
 import qualified Ide.Plugin.Cabal.CabalAdd.Command             as CabalAdd
 import qualified Ide.Plugin.Cabal.CabalAdd.Rename              as Rename
+import qualified Ide.Plugin.Cabal.CabalAdd.Create              as Create
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions
@@ -77,10 +78,12 @@ data Log
   | LogCompletions Types.Log
   | LogCabalAdd CabalAdd.Log
   | LogDidRename Rename.Log
+  | LogDidCreate Create.Log
   | LogShake Shake.Log
   | LogSessionRestart
   | LogNoCabalFile FilePath
   | LogCabalRenameFailed T.Text PluginError
+  | LogCabalCreateFailed T.Text PluginError
 
 instance Pretty Log where
   pretty = \case
@@ -106,10 +109,12 @@ instance Pretty Log where
     LogCompletions logs -> pretty logs
     LogCabalAdd logs -> pretty logs
     LogDidRename logs -> pretty logs
+    LogDidCreate logs -> pretty logs
     LogSessionRestart -> "Restarting shake session globally"
     LogShake logs -> pretty logs
     LogNoCabalFile file -> "Cannot find responsible cabal file for" <+> pretty file
     LogCabalRenameFailed file err -> "Rename of file" <+> pretty file <+> "failed with error:" <+> pretty err
+    LogCabalCreateFailed file err -> "Create of file" <+> pretty file <+> "failed with error:" <+> pretty err
 
 {- | Some actions in cabal files can be triggered from haskell files.
 This descriptor allows us to hook into the diagnostics of haskell source files and
@@ -144,6 +149,7 @@ descriptor recorder plId =
           , mkPluginHandler LSP.SMethod_TextDocumentDefinition gotoDefinition
           , mkPluginHandler LSP.SMethod_TextDocumentHover hover
           , mkPluginHandler LSP.SMethod_WorkspaceWillRenameFiles $ renameModulesHandler recorder
+          , mkPluginHandler LSP.SMethod_WorkspaceWillCreateFiles $ createModulesHandler recorder
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -343,6 +349,36 @@ renameModuleHelper recorder ideState (FileRename oldUri newUri) = do
     case renameResult of
       Left err -> do
         logWith recorder Debug $ LogCabalRenameFailed oldUri err
+        pure mempty
+      Right edit -> do
+        pure edit
+
+createModulesHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState LSP.Method_WorkspaceWillCreateFiles
+createModulesHandler recorder ideState _plId (CreateFilesParams names) = do
+  addEdits <- traverse (createModulesHelper recorder ideState) names
+  pure $ InL $ List.foldl' combineTextEdits (WorkspaceEdit mempty mempty mempty) addEdits
+
+createModulesHelper :: Recorder (WithPriority Log) -> IdeState -> FileCreate -> ExceptT PluginError (HandlerM Config) WorkspaceEdit
+createModulesHelper recorder ideState (FileCreate newUri) = do
+    caps <- lift pluginGetClientCapabilities
+    renameResult <- runExceptT $ do
+      newHaskellFilePath <- uriToFilePathE $ Uri newUri
+      mbCabalFile <- liftIO $ CabalAdd.findResponsibleCabalFile newHaskellFilePath
+      case mbCabalFile of
+          Nothing -> do
+            logWith recorder Debug $ LogNoCabalFile newHaskellFilePath
+            pure mempty
+          Just cabalFilePath ->
+            Create.createHandler
+              (cmapWithPrio LogDidCreate recorder)
+              ideState
+              caps
+              newHaskellFilePath
+              cabalFilePath
+              ideState
+    case renameResult of
+      Left err -> do
+        logWith recorder Debug $ LogCabalCreateFailed newUri err
         pure mempty
       Right edit -> do
         pure edit
