@@ -2104,7 +2104,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
               , "import ModuleA"
               , "import ModuleB"
               , ""
-              , "bla :: a -> a ->a"
+              , "bla :: a -> a -> a"
               , "bla x y = x `op` y"
               ]
         docC <- createDoc "Main.hs" "haskell" contentC
@@ -2117,7 +2117,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
               , "import ModuleA"
               , "import ModuleB"
               , ""
-              , "bla :: a -> a ->a"
+              , "bla :: a -> a -> a"
               , "bla x y = x `ModuleA.op` y"
               ]
         liftIO $ expectedContentAfterAction @=? contentAfterAction
