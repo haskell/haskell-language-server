@@ -13,8 +13,7 @@ import           Data.Maybe                        (isJust)
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types       hiding
-                                                   (SemanticTokensEdit (_start),
-                                                    mkRange)
+                                                   (NormalizedFilePath, SemanticTokensEdit (_start), mkRange)
 import           Language.LSP.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit

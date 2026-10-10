@@ -22,11 +22,7 @@ import           Data.Text                      (isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Language.LSP.Protocol.Types    hiding (emptyNormalizedFilePath,
-                                                 fromNormalizedFilePath,
-                                                 normalizedFilePathToUri,
-                                                 toNormalizedFilePath,
-                                                 uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           System.FilePath                (isRelative)
 
 -- | Lsp client relevant configuration details
@@ -80,7 +76,7 @@ modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
   void $ modifyVar' var f
 
-isWorkspaceFile :: NormalizedOsPath -> Action Bool
+isWorkspaceFile :: NormalizedFilePath -> Action Bool
 isWorkspaceFile file =
   if isRelative (fromNormalizedFilePath file)
     then return True

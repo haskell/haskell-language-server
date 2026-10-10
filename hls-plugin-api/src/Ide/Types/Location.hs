@@ -7,16 +7,16 @@
 -- | The OsPath-backed path type shared by HLS and its plugins.
 --
 -- This lives in hls-plugin-api (not ghcide) because ghcide depends on
--- hls-plugin-api; plugins receive 'NormalizedOsPath' through both.
+-- hls-plugin-api; plugins receive 'NormalizedFilePath' through both.
 module Ide.Types.Location
-    ( NormalizedOsPath(..)
+    ( NormalizedFilePath(..)
     , systemFsEncoding
     , encodeOsPath
     , decodeOsPath
     , toNormalizedFilePath'
     , fromNormalizedFilePath
     , uriToFilePath'
-    , uriToNormalizedOsPath
+    , uriToNormalizedFilePath
     , filePathToUri'
     , fromUri
     , emptyFilePath
@@ -47,7 +47,7 @@ import           GHC.IO.Encoding             (TextEncoding,
 -- | A file path in the platform's native representation (ShortByteString),
 -- paired with its cached 'LSP.NormalizedUri'. Performance-critical: hashed via
 -- the cached Uri; do not modify without profiling.
-data NormalizedOsPath = NormalizedOsPath !LSP.NormalizedUri {-# UNPACK #-} !OsPath
+data NormalizedFilePath = NormalizedFilePath !LSP.NormalizedUri {-# UNPACK #-} !OsPath
   deriving stock (Eq, Ord)
 
 -- | The filesystem encoding (PEP-383 surrogates on POSIX, UTF-16 on Windows).
@@ -87,19 +87,19 @@ encodingError :: String -> EncodingException -> a
 encodingError what e = error (what ++ ": " ++ show e)
 {-# NOINLINE encodingError #-}
 
-toNormalizedFilePath' :: FilePath -> NormalizedOsPath
+toNormalizedFilePath' :: FilePath -> NormalizedFilePath
 -- We want to keep empty paths instead of normalising them to "."
 toNormalizedFilePath' "" = emptyFilePath
 toNormalizedFilePath' fp =
   let s = normalise fp
       nuri = LSP.toNormalizedUri (LSP.filePathToUri s)
       osp = either (encodingError "toNormalizedFilePath'") id (encodeOsPath s)
-  in NormalizedOsPath nuri osp
+  in NormalizedFilePath nuri osp
 
-fromNormalizedFilePath :: NormalizedOsPath -> FilePath
--- Invariant: every 'NormalizedOsPath' roundtrips through the filesystem
+fromNormalizedFilePath :: NormalizedFilePath -> FilePath
+-- Invariant: every 'NormalizedFilePath' roundtrips through the filesystem
 -- encoding (POSIX PEP-383 is byte-exact), so the error is unreachable.
-fromNormalizedFilePath (NormalizedOsPath _ osp) =
+fromNormalizedFilePath (NormalizedFilePath _ osp) =
   either (encodingError "fromNormalizedFilePath") id (decodeOsPath osp)
 
 -- | We use an empty string as a filepath when we don’t have a file.
@@ -114,19 +114,19 @@ uriToFilePath' uri
 -- | 'fromUri' but 'Nothing' when the Uri does not denote a file path or the
 -- decoded path cannot be represented in the filesystem encoding (e.g. a
 -- non-ASCII path under a LANG=C locale). Total on client-supplied input.
-uriToNormalizedOsPath :: LSP.Uri -> Maybe NormalizedOsPath
-uriToNormalizedOsPath uri = do
+uriToNormalizedFilePath :: LSP.Uri -> Maybe NormalizedFilePath
+uriToNormalizedFilePath uri = do
   fp <- LSP.uriToFilePath uri
   let s = normalise fp
   osp <- either (const Nothing) Just (encodeOsPath s)
   let nuri = LSP.toNormalizedUri (LSP.filePathToUri s)
-  pure (NormalizedOsPath nuri osp)
+  pure (NormalizedFilePath nuri osp)
 
 -- | O(1): the Uri is cached in the path.
-filePathToUri' :: NormalizedOsPath -> LSP.NormalizedUri
-filePathToUri' (NormalizedOsPath uri _) = uri
+filePathToUri' :: NormalizedFilePath -> LSP.NormalizedUri
+filePathToUri' (NormalizedFilePath uri _) = uri
 
-fromUri :: LSP.NormalizedUri -> NormalizedOsPath
+fromUri :: LSP.NormalizedUri -> NormalizedFilePath
 fromUri nuri = fromMaybe (toNormalizedFilePath' noFilePath)
              $ LSP.uriToNormalizedFilePath nuri <&> toNormalizedFilePath' . LSP.fromNormalizedFilePath
 
@@ -135,26 +135,26 @@ emptyPathUri =
     let s = "file://"
     in LSP.NormalizedUri (hash s) s
 
-emptyFilePath :: NormalizedOsPath
-emptyFilePath = NormalizedOsPath emptyPathUri mempty
+emptyFilePath :: NormalizedFilePath
+emptyFilePath = NormalizedFilePath emptyPathUri mempty
 
 noFilePath :: FilePath
 noFilePath = "<unknown>"
 
 -- Hashing uses the cached Uri: identical behaviour to lsp's Text-backed type.
-instance Hashable NormalizedOsPath where
-  hash (NormalizedOsPath uri _) = hash uri
-  hashWithSalt s (NormalizedOsPath uri _) = hashWithSalt s uri
+instance Hashable NormalizedFilePath where
+  hash (NormalizedFilePath uri _) = hash uri
+  hashWithSalt s (NormalizedFilePath uri _) = hashWithSalt s uri
 
-instance NFData NormalizedOsPath where
-  rnf (NormalizedOsPath uri fp) = rnf uri `seq` fp `seq` ()
+instance NFData NormalizedFilePath where
+  rnf (NormalizedFilePath uri fp) = rnf uri `seq` fp `seq` ()
 
-instance Show NormalizedOsPath where
+instance Show NormalizedFilePath where
   show p = "NormalizedFilePath " ++ show (fromNormalizedFilePath p)
 
-instance IsString NormalizedOsPath where
+instance IsString NormalizedFilePath where
   fromString = toNormalizedFilePath'
 
-instance Binary NormalizedOsPath where
+instance Binary NormalizedFilePath where
   put = Bin.put . fromNormalizedFilePath
   get = toNormalizedFilePath' <$> Bin.get

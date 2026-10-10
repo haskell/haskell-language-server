@@ -59,25 +59,21 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types                   hiding
-                                                               (emptyNormalizedFilePath,
-                                                                fromNormalizedFilePath,
-                                                                normalizedFilePathToUri,
-                                                                toNormalizedFilePath,
-                                                                uriToNormalizedFilePath)
+                                                               (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import qualified Language.LSP.VFS                              as VFS
 import qualified Text.Fuzzy.Levenshtein                        as Fuzzy
 import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
 
 data Log
-  = LogModificationTime NormalizedOsPath FileVersion
+  = LogModificationTime NormalizedFilePath FileVersion
   | LogRule Rules.Log
   | LogOfInterest OfInterest.Log
   | LogDocOpened Uri
   | LogDocModified Uri
   | LogDocSaved Uri
   | LogDocClosed Uri
-  | LogFOI (HashMap NormalizedOsPath FileOfInterestStatus)
+  | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
   | LogCabalAdd CabalAdd.Log
@@ -186,7 +182,7 @@ descriptor recorder plId =
   log' = logWith recorder
   ruleRecorder = cmapWithPrio LogRule recorder
   ofInterestRecorder = cmapWithPrio LogOfInterest recorder
-  whenUriFile :: Uri -> (NormalizedOsPath -> IO ()) -> IO ()
+  whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
   whenUriFile uri act = whenJust (uriToFilePath uri) $ act . toNormalizedFilePath'
 
 {- | Helper function to restart the shake session, specifically for modifying .cabal files.
@@ -198,7 +194,7 @@ needs to be re-parsed. That's what we do when we record the dirty key that our p
 rule depends on.
 Then we restart the shake session, so that changes to our virtual files are actually picked up.
 -}
-restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedOsPath -> String -> IO [Key] -> IO ()
+restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = do
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
@@ -207,7 +203,7 @@ restartCabalShakeSession shakeExtras vfs file actionMsg actionBetweenSession = d
 -- | Just like 'restartCabalShakeSession', but records that the 'file' has been changed on disk.
 -- So, any action that can only work with on-disk modifications may depend on the 'GetPhysicalModificationTime'
 -- rule to get re-run if the file changes on disk.
-restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedOsPath -> String -> IO [Key] -> IO ()
+restartCabalShakeSessionPhysical :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO [Key] -> IO ()
 restartCabalShakeSessionPhysical shakeExtras vfs file actionMsg actionBetweenSession = do
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession

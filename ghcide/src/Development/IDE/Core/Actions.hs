@@ -43,7 +43,7 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
 -- block waiting for the rule to be properly computed.
 
 -- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedOsPath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
 getAtPoint file pos = runMaybeT $ do
   ide <- ask
   opts <- liftIO $ getIdeOptionsIO ide
@@ -65,7 +65,7 @@ getAtPoint file pos = runMaybeT $ do
 -- taking into account changes that may have occurred due to edits.
 toCurrentLocation
   :: PositionMapping
-  -> NormalizedOsPath
+  -> NormalizedFilePath
   -> Location
   -> IdeAction (Maybe Location)
 toCurrentLocation mapping file (Location uri range) =
@@ -81,7 +81,7 @@ toCurrentLocation mapping file (Location uri range) =
   -- PositionMapping and use that instead.
   else do
     otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
-      otherLocationFile <- MaybeT $ pure $ uriToNormalizedOsPath uri
+      otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath uri
       useWithStaleFastMT GetHieAst otherLocationFile
     pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
   where
@@ -89,7 +89,7 @@ toCurrentLocation mapping file (Location uri range) =
     nUri = toNormalizedUri uri
 
 -- | Goto Definition.
-getDefinition :: NormalizedOsPath -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
@@ -103,7 +103,7 @@ getDefinition file pos = runMaybeT $ do
       ) locationsWithIdentifier
 
 
-getTypeDefinition :: NormalizedOsPath -> Position -> IdeAction (Maybe [(Location, Identifier)])
+getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, Identifier)])
 getTypeDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
@@ -115,7 +115,7 @@ getTypeDefinition file pos = runMaybeT $ do
       pure $ Just (fixedLocation, identifier)
       ) locationsWithIdentifier
 
-getImplementationDefinition :: NormalizedOsPath -> Position -> IdeAction (Maybe [Location])
+getImplementationDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getImplementationDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
@@ -124,7 +124,7 @@ getImplementationDefinition file pos = runMaybeT $ do
     locs <- AtPoint.gotoImplementation withHieDb (lookupMod hiedbWriter) opts hf pos'
     traverse (MaybeT . toCurrentLocation mapping file) locs
 
-highlightAtPoint :: NormalizedOsPath -> Position -> IdeAction (Maybe [DocumentHighlight])
+highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
     (HAR _ hf rf _ _,mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
@@ -132,7 +132,7 @@ highlightAtPoint file pos = runMaybeT $ do
     mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
 
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedOsPath -> Position -> Action [Location]
+refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked

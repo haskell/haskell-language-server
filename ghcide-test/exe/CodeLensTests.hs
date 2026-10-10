@@ -13,10 +13,7 @@ import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (..),
-                                                  SemanticTokenRelative (..),
-                                                  SemanticTokensEdit (..),
-                                                  mkRange)
+                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           Test.Hls                        (mkRange, waitForProgressDone)
 import           Test.Tasty

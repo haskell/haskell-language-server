@@ -26,7 +26,7 @@ import           Ide.Types
 import qualified Ide.Types                        as Ide
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (..), SMethod (..))
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -70,7 +70,7 @@ quickCodeActionHandlers state _plId (CodeActionParams _ _ doc range _) = do
     _ -> pure (InL [])
 
 -- | The LSP diagnostics for names GHC reports as unused top-level definitions.
-unusedTopBindDiagnostics :: IdeState -> NormalizedOsPath -> IO [Diagnostic]
+unusedTopBindDiagnostics :: IdeState -> NormalizedFilePath -> IO [Diagnostic]
 unusedTopBindDiagnostics state nfp = do
   diags <- atomically $ getDiagnostics state
   pure [ fdLspDiagnostic d | d <- diags, fdFilePath d == nfp, isUnusedTopBind d ]

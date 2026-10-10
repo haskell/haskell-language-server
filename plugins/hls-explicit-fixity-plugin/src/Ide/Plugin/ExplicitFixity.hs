@@ -30,7 +30,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
-import Language.LSP.Protocol.Types hiding (toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides fixity information in hovers")

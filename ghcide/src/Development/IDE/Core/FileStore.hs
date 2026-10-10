@@ -78,8 +78,8 @@ import           System.IO.Error
 import           System.IO.Unsafe
 
 data Log
-  = LogCouldNotIdentifyReverseDeps !NormalizedOsPath
-  | LogTypeCheckingReverseDeps !NormalizedOsPath !(Maybe [NormalizedOsPath])
+  = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
+  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
   | LogShake Shake.Log
   deriving Show
 
@@ -94,7 +94,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedOsPath -> Action Bool) -> Rules ()
+addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
@@ -113,9 +113,9 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedOsPath
+  -> NormalizedFilePath
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl missingFileDiags file@(NormalizedOsPath _ osp) = do
+getModificationTimeImpl missingFileDiags file@(NormalizedFilePath _ osp) = do
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
     case mbVf of
@@ -151,9 +151,9 @@ getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogSh
     getPhysicalModificationTimeImpl file
 
 getPhysicalModificationTimeImpl
-  :: NormalizedOsPath
+  :: NormalizedFilePath
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getPhysicalModificationTimeImpl file@(NormalizedOsPath _ osp) = do
+getPhysicalModificationTimeImpl file@(NormalizedFilePath _ osp) = do
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
 
     alwaysRerun
@@ -171,17 +171,17 @@ getPhysicalModificationTimeImpl file@(NormalizedOsPath _ osp) = do
 -- | Interface files cannot be watched, since they live outside the workspace.
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
-isInterface :: NormalizedOsPath -> Bool
+isInterface :: NormalizedFilePath -> Bool
 isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedOsPath -> STM [Key]
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedOsPath, LSP.FileChangeType)] -> IO [Key]
+resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
@@ -207,7 +207,7 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedOsPath
+    :: NormalizedFilePath
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
@@ -219,7 +219,7 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileModTimeContents :: NormalizedOsPath -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
 getFileModTimeContents f = do
     (fv, contents) <- use_ GetFileContents f
     modTime <- case modificationTime fv of
@@ -229,16 +229,16 @@ getFileModTimeContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- let NormalizedOsPath _ osp = f in getModTime osp
+            posix <- let NormalizedFilePath _ osp = f in getModTime osp
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
-getFileContents :: NormalizedOsPath -> Action (Maybe Rope)
+getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
 getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
 getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedOsPath (LSP.fromNormalizedUri uri))
+    join <$> traverse getFileContents (uriToNormalizedFilePath (LSP.fromNormalizedUri uri))
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -249,13 +249,13 @@ getVersionedTextDoc doc = do
   let uri = doc ^. L.uri
   mvf <-
     maybe (pure Nothing) getVirtualFile $
-        uriToNormalizedOsPath uri
+        uriToNormalizedFilePath uri
   let ver = case mvf of
         Just (VirtualFile lspver _ _ _) -> lspver
         Nothing                         -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedOsPath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
     getPhysicalModificationTimeRule recorder
@@ -268,7 +268,7 @@ setFileModified :: Recorder (WithPriority Log)
                 -> VFSModified
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
-                -> NormalizedOsPath
+                -> NormalizedFilePath
                 -> IO [Key]
                 -> IO ()
 setFileModified recorder vfs state saved nfp actionBefore = do
@@ -284,11 +284,11 @@ setFileModified recorder vfs state saved nfp actionBefore = do
     when checkParents $
       typecheckParents recorder state nfp
 
-typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedOsPath -> IO ()
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
 typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
   where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
-typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedOsPath -> Action ()
+typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useWithSeparateFingerprintRule_ GetModuleGraphTransReverseDepsFingerprints GetModuleGraph nfp
     case revs of

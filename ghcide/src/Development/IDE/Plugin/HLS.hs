@@ -45,7 +45,7 @@ import           Ide.PluginUtils                  (getClientConfig)
 import           Ide.Types                        as HLS
 import qualified Language.LSP.Protocol.Lens       as JL
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 import qualified Language.LSP.Server              as LSP
 import           Language.LSP.VFS
 import           Prettyprinter.Render.String      (renderString)

@@ -16,7 +16,7 @@ import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic)
 import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
                                                     ideErrorWithSource)
-import           Development.IDE.Types.Location    (NormalizedOsPath,
+import           Development.IDE.Types.Location    (NormalizedFilePath,
                                                     fromNormalizedFilePath)
 import           Distribution.Fields               (showPError, showPWarning)
 import qualified Distribution.Parsec               as Syntax
@@ -28,19 +28,19 @@ import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     Range (Range))
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
-fatalParseErrorDiagnostic :: NormalizedOsPath -> T.Text -> FileDiagnostic
+fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic
 fatalParseErrorDiagnostic fp msg =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine Syntax.zeroPos) msg
 
 -- | Produce a diagnostic from a Cabal parser error
-errorDiagnostic :: NormalizedOsPath -> Syntax.PError -> FileDiagnostic
+errorDiagnostic :: NormalizedFilePath -> Syntax.PError -> FileDiagnostic
 errorDiagnostic fp err@(Syntax.PError pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
-warningDiagnostic :: NormalizedOsPath -> Syntax.PWarning -> FileDiagnostic
+warningDiagnostic :: NormalizedFilePath -> Syntax.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Syntax.PWarning _ pos _) =
   mkDiag fp "cabal" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg
   where
@@ -72,7 +72,7 @@ positionFromCabalPosition (Syntax.Position line column) = Position (fromIntegral
 
 -- | Create a 'FileDiagnostic'
 mkDiag
-  :: NormalizedOsPath
+  :: NormalizedFilePath
   -- ^ Cabal file path
   -> T.Text
   -- ^ Where does the diagnostic come from?

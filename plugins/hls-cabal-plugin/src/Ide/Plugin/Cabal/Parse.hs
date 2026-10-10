@@ -27,7 +27,7 @@ parseCabalFileContents bs =
   runParseResult (parseGenericPackageDescription bs)
 
 readCabalFields ::
-  NormalizedOsPath ->
+  NormalizedFilePath ->
   BS.ByteString ->
   Either FileDiagnostic [Syntax.Field Syntax.Position]
 readCabalFields file contents  = do

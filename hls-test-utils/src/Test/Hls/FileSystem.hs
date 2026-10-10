@@ -39,7 +39,7 @@ import           Control.Exception    (onException)
 import           Data.Foldable        (traverse_)
 import qualified Data.Text            as T
 import qualified Data.Text.IO         as T
-import           Development.IDE      (NormalizedOsPath, toNormalizedFilePath')
+import           Development.IDE      (NormalizedFilePath, toNormalizedFilePath')
 import           System.Directory
 import           System.FilePath      as FP
 import           System.IO.Extra      (newTempFileWithin, writeFileUTF8)
@@ -150,7 +150,7 @@ mkVirtualFileTree testDataDir tree =
 toAbsFp :: FileSystem -> FilePath -> FilePath
 toAbsFp fs fp = fsRoot fs </> FP.normalise fp
 
-toNfp :: FileSystem -> FilePath -> NormalizedOsPath
+toNfp :: FileSystem -> FilePath -> NormalizedFilePath
 toNfp fs fp =
   toNormalizedFilePath' $ toAbsFp fs fp
 

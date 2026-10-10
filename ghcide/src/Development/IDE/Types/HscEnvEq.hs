@@ -21,7 +21,7 @@ import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
-import           Development.IDE.Types.Location  (NormalizedOsPath)
+import           Development.IDE.Types.Location  (NormalizedFilePath)
 import           GHC.Driver.Env                  (hsc_all_home_unit_ids)
 import           OpenTelemetry.Eventlog          (withSpan)
 
@@ -33,7 +33,7 @@ data HscEnvEq = HscEnvEq
     { envUnique         :: !Unique
     , hscEnv            :: !HscEnv
     , envPackageExports :: IO ExportsMap
-    , envRepresentative :: !NormalizedOsPath
+    , envRepresentative :: !NormalizedFilePath
         -- ^ See Note [Session representatives]
     }
 
@@ -43,7 +43,7 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: NormalizedOsPath -> HscEnv -> IO HscEnvEq
+newHscEnvEq :: NormalizedFilePath -> HscEnv -> IO HscEnvEq
 newHscEnvEq envRepresentative hscEnv' = do
 
     mod_cache <- newIORef emptyInstalledModuleEnv

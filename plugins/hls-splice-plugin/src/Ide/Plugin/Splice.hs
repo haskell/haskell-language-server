@@ -52,7 +52,7 @@ import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as J
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 
 #if !MIN_VERSION_base(4,20,0)
 import           Data.Foldable                         (Foldable (foldl'))
@@ -100,7 +100,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
     rio <- askRunInIO
     let reportEditor :: ReportEditor
         reportEditor msgTy msgs = liftIO $ rio $ pluginSendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
-        expandManually :: NormalizedOsPath -> ExceptT PluginError IO WorkspaceEdit
+        expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
@@ -176,7 +176,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
     res <- liftIO $ runMaybeT $ do
 
-            fp <- MaybeT $ pure $ uriToNormalizedOsPath (verTxtDocId ^. J.uri)
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath (verTxtDocId ^. J.uri)
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
                         =<< MaybeT
@@ -206,7 +206,7 @@ expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
 
 setupHscEnv
     :: IdeState
-    -> NormalizedOsPath
+    -> NormalizedFilePath
     -> ParsedModule
     -> ExceptT PluginError IO (ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
@@ -467,7 +467,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = do
     verTxtDocId <- liftIO $ runAction "splice.codeAction.getVersionedTextDoc" state $ getVersionedTextDoc docId
     liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
-            fp <- MaybeT $ pure $ uriToNormalizedOsPath theUri
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath theUri
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
                     use GetParsedModule fp

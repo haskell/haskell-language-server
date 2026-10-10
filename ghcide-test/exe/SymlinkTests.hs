@@ -3,9 +3,7 @@ module SymlinkTests (tests) where
 
 import           Control.Monad.IO.Class      (liftIO)
 import           Development.IDE.Test        (expectDiagnosticsWithTags)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
-                                              SemanticTokenRelative (..),
-                                              SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath

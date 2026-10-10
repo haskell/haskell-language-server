@@ -21,7 +21,7 @@ import           Data.Text                         (Text)
 import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic,
                                                     IdeState (..),
-                                                    NormalizedOsPath,
+                                                    NormalizedFilePath,
                                                     Pretty (..), Priority (..),
                                                     Recorder, WithPriority,
                                                     fdLspDiagnosticL,
@@ -57,7 +57,7 @@ import           Ide.Types                         (Config, HandlerM,
                                                     defaultPluginDescriptor,
                                                     mkPluginHandler)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 import           Text.Regex.TDFA                   ((=~))
 
 data Log
@@ -97,7 +97,7 @@ codeActionHandler recorder plId ideState _ CodeActionParams{_textDocument, _rang
     actions <- lift $ mapM (generateAction recorder plId uri decls) fileDiags
     pure $ InL $ catMaybes actions
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedOsPath -> ExceptT PluginError m [LHsDecl GhcPs]
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . fmap (hsmodDecls . unLoc . pm_parsed_source)

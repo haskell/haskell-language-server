@@ -3,7 +3,7 @@
 
 -- | Types and functions for working with source code locations.
 --
--- The path type 'NormalizedOsPath' and its conversions are defined in
+-- The path type 'NormalizedFilePath' and its conversions are defined in
 -- "Ide.Types.Location" (hls-plugin-api) and re-exported here; ghcide and the
 -- plugins all share this single path domain.
 module Development.IDE.Types.Location
@@ -16,14 +16,14 @@ module Development.IDE.Types.Location
     , LSP.NormalizedUri
     , LSP.toNormalizedUri
     , LSP.fromNormalizedUri
-    , Ide.Types.Location.NormalizedOsPath(..)
+    , Ide.Types.Location.NormalizedFilePath(..)
     , Ide.Types.Location.systemFsEncoding
     , Ide.Types.Location.encodeOsPath
     , Ide.Types.Location.decodeOsPath
     , Ide.Types.Location.toNormalizedFilePath'
     , Ide.Types.Location.fromNormalizedFilePath
     , Ide.Types.Location.uriToFilePath'
-    , Ide.Types.Location.uriToNormalizedOsPath
+    , Ide.Types.Location.uriToNormalizedFilePath
     , Ide.Types.Location.filePathToUri'
     , Ide.Types.Location.fromUri
     , Ide.Types.Location.emptyFilePath

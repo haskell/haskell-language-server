@@ -22,11 +22,7 @@ import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.LSP.Protocol.Types               hiding
-                                                           (emptyNormalizedFilePath,
-                                                            fromNormalizedFilePath,
-                                                            normalizedFilePathToUri,
-                                                            toNormalizedFilePath,
-                                                            uriToNormalizedFilePath)
+                                                           (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 

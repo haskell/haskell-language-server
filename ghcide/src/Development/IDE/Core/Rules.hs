@@ -202,11 +202,11 @@ import           System.FilePath                              (dropExtension,
 
 data Log
   = LogShake Shake.Log
-  | LogReindexingHieFile !NormalizedOsPath
-  | LogLoadingHieFile !NormalizedOsPath
+  | LogReindexingHieFile !NormalizedFilePath
+  | LogLoadingHieFile !NormalizedFilePath
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
-  | LogTypecheckedFOI !NormalizedOsPath
+  | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
 instance Pretty Log where
@@ -247,7 +247,7 @@ toIdeResult = either (, Nothing) (([],) . Just)
 
 -- TODO: rename
 -- TODO: return text --> return rope
-getSourceFileSource :: NormalizedOsPath -> Action BS.ByteString
+getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     msource <- getFileContents nfp
     case msource of
@@ -255,12 +255,12 @@ getSourceFileSource nfp = do
         Just source -> pure $ T.encodeUtf8 $ Rope.toText source
 
 -- | Parse the contents of a haskell file.
-getParsedModule :: NormalizedOsPath -> Action (Maybe ParsedModule)
+getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
 getParsedModule = use GetParsedModule
 
 -- | Parse the contents of a haskell file,
 -- ensuring comments are preserved in annotations
-getParsedModuleWithComments :: NormalizedOsPath -> Action (Maybe ParsedModule)
+getParsedModuleWithComments :: NormalizedFilePath -> Action (Maybe ParsedModule)
 getParsedModuleWithComments = use GetParsedModuleWithComments
 
 ------------------------------------------------------------
@@ -325,7 +325,7 @@ getModifyDynFlags f = do
 getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
-    -> NormalizedOsPath
+    -> NormalizedFilePath
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
@@ -391,7 +391,7 @@ execRawDepM act =
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [NormalizedOsPath] -> Action (RawDependencyInformation, BootIdMap)
+rawDependencyInformation :: [NormalizedFilePath] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
     (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
@@ -401,7 +401,7 @@ rawDependencyInformation fs = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
         zipWithM go ff mss
 
-    go :: NormalizedOsPath -- ^ Current module being processed
+    go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
     go f mbModSum = do
@@ -445,7 +445,7 @@ rawDependencyInformation fs = do
               return fId
 
 
-    checkAlreadyProcessed :: NormalizedOsPath -> RawDepM FilePathId -> RawDepM FilePathId
+    checkAlreadyProcessed :: NormalizedFilePath -> RawDepM FilePathId -> RawDepM FilePathId
     checkAlreadyProcessed nfp k = do
       (rawDepInfo, _) <- get
       maybe k return (lookupPathToId (rawPathIdMap rawDepInfo) nfp)
@@ -537,7 +537,7 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
-getHieAstRuleDefinition :: NormalizedOsPath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
+getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
 getHieAstRuleDefinition f hsc tmr = do
   (diags, masts') <- liftIO $ generateHieAsts hsc tmr
 #if MIN_VERSION_ghc(9,11,0)
@@ -600,7 +600,7 @@ getDocMapRule recorder =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedOsPath -> MaybeT IdeAction Compat.HieFile
+readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk recorder file = do
   ShakeExtras{withHieDb} <- ask
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
@@ -754,7 +754,7 @@ computeModulesPaths env_eq = do
         [ providers u m | (u, (m, _)) <- unit_maps ]
   pure $ mkModuleToFilenames normal (HS.unions [ b | (_, (_, b)) <- unit_maps ])
 
-dependencyInfoForFiles :: [NormalizedOsPath] -> Action (BS.ByteString, DependencyInformation)
+dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
   (rawDepInfo, bm) <- rawDependencyInformation fs
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
@@ -789,7 +789,7 @@ dependencyInfoForFiles fs = do
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
-    -> NormalizedOsPath
+    -> NormalizedFilePath
     -> Action (IdeResult TcModuleResult)
 typeCheckRuleDefinition hsc pm fp = do
   IdeOptions { optDefer = defer } <- getIdeOptions
@@ -886,7 +886,7 @@ instance Default GhcSessionDepsConfig where
 ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
-        GhcSessionDepsConfig -> HscEnvEq -> NormalizedOsPath -> Action (Maybe HscEnvEq)
+        GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
 ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} hscEnvEq file = do
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
@@ -1064,7 +1064,7 @@ getModSummaryRule displayTHWarning recorder = do
                 return (Just fp, Just res{msrModSummary = ms})
             Nothing -> return (Nothing, Nothing)
 
-generateCore :: RunSimplifier -> NormalizedOsPath -> Action (IdeResult ModGuts)
+generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
 generateCore runSimplifier file = do
     packageState <- hscEnv <$> use_ GhcSessionDeps file
     hsc' <- setFileCacheHook packageState
@@ -1137,7 +1137,7 @@ setFileCacheHook old_hsc_env = do
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
 -- `.hie` and `.o` file (if needed) were also successfully written
-regenerateHiFile :: HscEnvEq -> NormalizedOsPath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
 regenerateHiFile sess f ms compNeeded = do
     hsc <- setFileCacheHook (hscEnv sess)
     opt <- getIdeOptions
@@ -1349,10 +1349,10 @@ getLinkableRule recorder =
         return (versionBS <$ hmi, (warns, LinkableResult <$> hmi <*> pure fileHash <*> pure versionBS))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
-getLinkableType :: NormalizedOsPath -> Action (Maybe LinkableType)
+getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
-needsCompilationRule :: NormalizedOsPath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
+needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file
   | "boot" `isSuffixOf` fromNormalizedFilePath file =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
@@ -1484,8 +1484,8 @@ mainRule recorder RulesConfig{..} = do
         return (fingerprintToBS <$> finger, ([], finger))
 
 
--- | Get HieFile for haskell file on NormalizedOsPath
-getHieFile :: NormalizedOsPath -> Action (Maybe HieFile)
+-- | Get HieFile for haskell file on NormalizedFilePath
+getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
 getHieFile nfp = runMaybeT $ do
   HAR {hieAst} <- MaybeT $ use GetHieAst nfp
   tmr <- MaybeT $ use TypeCheck nfp

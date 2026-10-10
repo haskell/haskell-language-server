@@ -33,12 +33,7 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
-                                                      (SemanticTokenAbsolute (..),
-                                                       emptyNormalizedFilePath,
-                                                       fromNormalizedFilePath,
-                                                       normalizedFilePathToUri,
-                                                       toNormalizedFilePath,
-                                                       uriToNormalizedFilePath)
+                                                      (NormalizedFilePath, SemanticTokenAbsolute (..), emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
@@ -103,7 +98,7 @@ import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
 
 -- | HieFileResult for files of interest, along with the position mappings
-newtype FOIReferences = FOIReferences (HM.HashMap NormalizedOsPath (HieAstResult, PositionMapping))
+newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
 
 computeTypeReferences :: Foldable f => f (HieAST Type) -> M.Map Name [Span]
 computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
@@ -120,7 +115,7 @@ computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
 -- | Given a file and position, return the names at a point, the references for
 -- those names in the FOIs, and a list of file paths we already searched through
 foiReferencesAtPoint
-  :: NormalizedOsPath
+  :: NormalizedFilePath
   -> Position
   -> FOIReferences
   -> ([Name],[Location],[FilePath])
@@ -151,7 +146,7 @@ toCurrentLocation mapping (Location uri range) =
 referencesAtPoint
   :: MonadIO m
   => WithHieDb
-  -> NormalizedOsPath -- ^ The file the cursor is in
+  -> NormalizedFilePath -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
   -> m [Location]
@@ -238,7 +233,7 @@ gotoDefinition
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedOsPath
+  -> M.Map ModuleName NormalizedFilePath
   -> HieAstResult
   -> Position
   -> MaybeT m [(Location, Identifier)]
@@ -572,7 +567,7 @@ locationsAtPoint
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
-  -> M.Map ModuleName NormalizedOsPath
+  -> M.Map ModuleName NormalizedFilePath
   -> Position
   -> HieAstResult
   -> m [(Location, Identifier)]

@@ -107,7 +107,7 @@ data RawComponentInfo = RawComponentInfo
   -- | All targets of this components.
   , rawComponentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , rawComponentFP             :: NormalizedOsPath
+  , rawComponentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
   , rawComponentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -126,7 +126,7 @@ data ComponentInfo = ComponentInfo
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , componentFP             :: NormalizedOsPath
+  , componentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
   , componentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
@@ -151,7 +151,7 @@ addUnit unit_str = liftEwM $ do
 newComponentCache
          :: Recorder (WithPriority Log)
          -> [String]           -- ^ File extensions to consider
-         -> NormalizedOsPath -- ^ Path to file that caused the creation of this component
+         -> NormalizedFilePath -- ^ Path to file that caused the creation of this component
          -> HscEnv             -- ^ An empty HscEnv
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
@@ -234,7 +234,7 @@ newComponentCache recorder exts cfp hsc_env old_cis new_cis = do
 -- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m
     => OptHaddockParse
-    -> NormalizedOsPath
+    -> NormalizedFilePath
     -> ComponentOptions
     -> DynFlags
     -> FilePath -- ^ root dir, see Note [Root Directory]
@@ -329,7 +329,7 @@ addComponentInfo ::
   [String] ->
   DependencyInfo ->
   NonEmpty HomeUnitConfig->
-  (Maybe FilePath, NormalizedOsPath, ComponentOptions) ->
+  (Maybe FilePath, NormalizedFilePath, ComponentOptions) ->
   Map.Map (Maybe FilePath) [RawComponentInfo] ->
   m (Map.Map (Maybe FilePath) [RawComponentInfo], ([ComponentInfo], [ComponentInfo]))
 addComponentInfo recorder getCacheDirs cacheDirOpts dep_info newDynFlags (hieYaml, cfp, opts) m = do
@@ -554,14 +554,14 @@ data TargetDetails = TargetDetails
       targetTarget    :: !Target,
       targetEnv       :: !(IdeResult HscEnvEq),
       targetDepends   :: !DependencyInfo,
-      targetLocations :: ![NormalizedOsPath]
+      targetLocations :: ![NormalizedFilePath]
   }
 
 -- | Candidate locations of a target, in search order.
 targetIdLocations :: [FilePath]     -- ^ import paths
                   -> [String]       -- ^ extensions to consider
                   -> TargetId
-                  -> [NormalizedOsPath]
+                  -> [NormalizedFilePath]
 -- For a target module we consider all the import paths
 targetIdLocations is exts (GHC.TargetModule modName) =
     [ toNormalizedFilePath' (i </> moduleNameSlashes modName -<.> ext <> boot)

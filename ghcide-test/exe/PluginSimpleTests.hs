@@ -3,9 +3,7 @@ module PluginSimpleTests (tests) where
 
 import           Config
 import           Development.IDE.Test        (expectDiagnostics)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
-                                              SemanticTokenRelative (..),
-                                              SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls.FileSystem

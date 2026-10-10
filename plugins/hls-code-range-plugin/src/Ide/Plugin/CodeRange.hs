@@ -21,7 +21,7 @@ import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (Action,
                                                        IdeState (shakeExtras),
-                                                       NormalizedOsPath,
+                                                       NormalizedFilePath,
                                                        Range (Range), Recorder,
                                                        WithPriority,
                                                        cmapWithPrio)
@@ -75,7 +75,7 @@ foldingRangeHandler _ ide _ FoldingRangeParams{..} =
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedOsPath -> ExceptT PluginError Action [FoldingRange]
+getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
     codeRange <- useE GetCodeRange file
     pure $ findFoldingRanges codeRange
@@ -93,7 +93,7 @@ selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
     positions = _positions
 
 
-getSelectionRanges :: IdeState -> NormalizedOsPath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
+getSelectionRanges :: IdeState -> NormalizedFilePath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
 getSelectionRanges ide file positions = do
     (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them

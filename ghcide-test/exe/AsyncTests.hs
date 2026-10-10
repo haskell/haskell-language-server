@@ -9,10 +9,7 @@ import           Data.Proxy
 import qualified Data.Text                     as T
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (..),
-                                                SemanticTokenRelative (..),
-                                                SemanticTokensEdit (..),
-                                                mkRange)
+                                               (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
 import           Config

@@ -29,17 +29,13 @@ import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding (emptyNormalizedFilePath,
-                                                 fromNormalizedFilePath,
-                                                 normalizedFilePathToUri,
-                                                 toNormalizedFilePath,
-                                                 uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           System.OsPath                  (OsPath)
 
 
 data Log
   = LogWorkspaceSymbolRequest !T.Text
-  | LogRequest !T.Text !Position !NormalizedOsPath
+  | LogRequest !T.Text !Position !NormalizedFilePath
   deriving (Show)
 
 instance Pretty Log where
@@ -78,7 +74,7 @@ foundHover (mbRange, contents) =
 -- | Respond to and log a hover or go-to-definition request
 request
   :: T.Text
-  -> (NormalizedOsPath -> Position -> IdeAction (Maybe a))
+  -> (NormalizedFilePath -> Position -> IdeAction (Maybe a))
   -> b
   -> (a -> b)
   -> Recorder (WithPriority Log)
@@ -91,7 +87,7 @@ request label getResults notFound found recorder ide (TextDocumentPositionParams
         Nothing   -> pure Nothing
     pure $ maybe notFound found mbResult
 
-logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedOsPath -> Position -> IdeAction b) -> IdeState -> Position -> OsPath -> IO b
+logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> OsPath -> IO b
 logAndRunRequest recorder label getResults ide pos path = do
   let filePath = either (error . show) toNormalizedFilePath' (decodeOsPath path)
   logWith recorder Debug $ LogRequest label pos filePath

@@ -16,7 +16,7 @@ import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 import           Text.Regex.TDFA.Text                ()
 
 data Log

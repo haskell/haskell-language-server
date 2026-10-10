@@ -25,7 +25,7 @@ import           Development.IDE.Graph             (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
                                                     showDiagnostics)
-import           Development.IDE.Types.Location    (NormalizedOsPath, Uri (..),
+import           Development.IDE.Types.Location    (NormalizedFilePath, Uri (..),
                                                     fromNormalizedFilePath)
 import           Ide.Logger
 import           Ide.Types                         (PluginId (..))
@@ -91,7 +91,7 @@ otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
 otTracedAction
     :: Show k
     => k -- ^ The Action's Key
-    -> NormalizedOsPath -- ^ Path to the file the action was run for
+    -> NormalizedFilePath -- ^ Path to the file the action was run for
     -> RunMode
     -> (a -> String)
     -> (([FileDiagnostic] -> Action ()) -> Action (RunResult a)) -- ^ The action

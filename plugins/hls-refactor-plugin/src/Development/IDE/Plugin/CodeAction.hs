@@ -249,7 +249,7 @@ extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
       void $ pluginSendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
-extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedOsPath, WorkspaceEdit)
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}
   | Just fp <- uriToFilePath doc,
     nfp <- toNormalizedFilePath' fp =

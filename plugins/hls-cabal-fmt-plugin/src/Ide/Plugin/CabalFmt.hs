@@ -17,11 +17,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Types      hiding
-                                                  (emptyNormalizedFilePath,
-                                                   fromNormalizedFilePath,
-                                                   normalizedFilePathToUri,
-                                                   toNormalizedFilePath,
-                                                   uriToNormalizedFilePath)
+                                                  (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           Prelude                          hiding (log)
 import           System.Directory
 import           System.Exit

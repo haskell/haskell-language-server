@@ -41,7 +41,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
@@ -94,7 +94,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
             mapMaybe (\d -> (d,) <$> isClassMethodWarning (d ^. fdStructuredMessageL)) fileDiags
 
         mkActions
-            :: NormalizedOsPath
+            :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
             -> (FileDiagnostic, ClassMinimalDef)
             -> ExceptT PluginError (HandlerM Ide.Plugin.Config.Config) [Command |? CodeAction]

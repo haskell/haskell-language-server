@@ -23,12 +23,12 @@ import           GHC.Generics
 
 -- | What HLS knows about the files of the workspace
 data KnownTargets = KnownTargets
-  { targetMap  :: !(HashMap Target (HashSet NormalizedOsPath))
+  { targetMap  :: !(HashMap Target (HashSet NormalizedFilePath))
     -- ^ What the session loader discovered: the modules the project is made of
-  , knownExtra :: !(HashSet NormalizedOsPath)
+  , knownExtra :: !(HashSet NormalizedFilePath)
     -- ^ Files reported present by the client that no target declares. See
     -- Note [Files that are not targets]
-  , knownGone  :: !(HashSet NormalizedOsPath)
+  , knownGone  :: !(HashSet NormalizedFilePath)
     -- ^ Files reported gone by the client. See Note [Tombstones]
   }
   deriving Show
@@ -70,17 +70,17 @@ unionKnownTargets :: KnownTargets -> KnownTargets -> KnownTargets
 unionKnownTargets (KnownTargets tm extra gone) (KnownTargets tm' extra' gone') =
   KnownTargets (HMap.unionWith (<>) tm tm') (extra <> extra') (gone <> gone')
 
-mkKnownTargets :: [(Target, HashSet NormalizedOsPath)] -> KnownTargets
+mkKnownTargets :: [(Target, HashSet NormalizedFilePath)] -> KnownTargets
 mkKnownTargets vs = KnownTargets (HMap.fromList vs) HSet.empty HSet.empty
 
 -- | See Note [Files that are not targets]
-mkExtraKnownFiles :: HashSet NormalizedOsPath -> KnownTargets
+mkExtraKnownFiles :: HashSet NormalizedFilePath -> KnownTargets
 mkExtraKnownFiles fs = KnownTargets HMap.empty fs HSet.empty
 
 -- | Record files as gone, and files that came back as present again.
 tombstoneKnownFiles
-  :: HashSet NormalizedOsPath -- ^ gone
-  -> HashSet NormalizedOsPath -- ^ back
+  :: HashSet NormalizedFilePath -- ^ gone
+  -> HashSet NormalizedFilePath -- ^ back
   -> KnownTargets -> KnownTargets
 tombstoneKnownFiles gone back kt =
   kt { knownGone = (knownGone kt `HSet.union` gone) `HSet.difference` back }
@@ -100,17 +100,17 @@ instance Hashable KnownTargets where
 emptyKnownTargets :: KnownTargets
 emptyKnownTargets = KnownTargets HMap.empty HSet.empty HSet.empty
 
-data Target = TargetModule ModuleName | TargetFile NormalizedOsPath
+data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
   deriving ( Eq, Ord, Generic, Show )
   deriving anyclass (Hashable, NFData)
 
 -- | Every file that is there, as far as we have been told.
-toKnownFiles :: KnownTargets -> HashSet NormalizedOsPath
+toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath
 toKnownFiles kt = (targets `HSet.union` knownExtra kt) `HSet.difference` knownGone kt
   where targets = HSet.unions (HMap.elems (targetMap kt))
 
 -- | The files of the project, as declared by the session loader.
 -- See Note [Files that are not targets]
-toTargetFiles :: KnownTargets -> HashSet NormalizedOsPath
+toTargetFiles :: KnownTargets -> HashSet NormalizedFilePath
 toTargetFiles kt =
   HSet.unions (HMap.elems (targetMap kt)) `HSet.difference` knownGone kt

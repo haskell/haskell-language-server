@@ -3,9 +3,7 @@ module PreprocessorTests (tests) where
 
 import qualified Data.Text                   as T
 import           Development.IDE.Test        (expectDiagnostics)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
-                                              SemanticTokenRelative (..),
-                                              SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
 import           Config

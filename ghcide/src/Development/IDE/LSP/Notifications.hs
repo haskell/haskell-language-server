@@ -13,11 +13,7 @@ module Development.IDE.LSP.Notifications
 
 import qualified Language.LSP.Protocol.Message         as LSP
 import           Language.LSP.Protocol.Types           hiding
-                                                       (emptyNormalizedFilePath,
-                                                        fromNormalizedFilePath,
-                                                        normalizedFilePathToUri,
-                                                        toNormalizedFilePath,
-                                                        uriToNormalizedFilePath)
+                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types           as LSP
 
 import           Control.Concurrent.STM.Stats          (atomically)
@@ -68,8 +64,8 @@ instance Pretty Log where
     LogWatchedFileEvents msg -> "Watched file events:" <+> pretty msg
     LogWarnNoWatchedFilesSupport -> "Client does not support watched files. Falling back to OS polling"
 
-whenUriFile :: Uri -> (NormalizedOsPath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (uriToNormalizedOsPath uri) act
+whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (uriToNormalizedFilePath uri) act
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
@@ -107,7 +103,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
               let msg = "Closed text document: " <> getUri _uri
               -- A file that was only ever open in the editor stops existing
               -- when it is closed
-              onDisk <- liftIO $ let NormalizedOsPath _ osp = file
+              onDisk <- liftIO $ let NormalizedFilePath _ osp = file
                                  in Dir.doesFileExist osp
               setSomethingModified (VFSModified vfs) ide (Text.unpack msg) $ do
                 scheduleGarbageCollection ide
@@ -124,7 +120,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
                 [ (nfp, event) | (FileEvent uri event) <- fileEvents
-                , Just nfp <- [uriToNormalizedOsPath uri]
+                , Just nfp <- [uriToNormalizedFilePath uri]
                 , not $ HM.member nfp filesOfInterest
                 ]
         unless (null fileEvents') $ do

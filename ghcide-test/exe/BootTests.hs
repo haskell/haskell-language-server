@@ -11,10 +11,7 @@ import           Development.IDE.Test            (expectNoMoreDiagnostics,
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (..),
-                                                  SemanticTokenRelative (..),
-                                                  SemanticTokensEdit (..),
-                                                  mkRange)
+                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath                 ((</>))
 import           Test.Tasty

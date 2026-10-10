@@ -165,9 +165,9 @@ rules recorder plId = do
     files <- getFilesOfInterestUntracked
     void $ uses GetStanDiagnostics $ HM.keys files
   where
-    analysisToDiagnostics :: NormalizedOsPath -> Analysis -> [FileDiagnostic]
+    analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations
-    observationToDianostic :: NormalizedOsPath -> Observation -> Maybe FileDiagnostic
+    observationToDianostic :: NormalizedFilePath -> Observation -> Maybe FileDiagnostic
     observationToDianostic file Observation {observationSrcSpan, observationInspectionId} =
       do
         inspection <- HM.lookup observationInspectionId inspectionsMap

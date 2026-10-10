@@ -207,7 +207,7 @@ computePackageDeps env pkg = do
 
 data TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables   :: [NormalizedOsPath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  { getLinkables   :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   , getModuleGraph :: IO DependencyInformation
   }
 
@@ -867,7 +867,7 @@ tagDiag (w@(Just (WarningWithFlag warning)), fd)
 -- other diagnostics are left unaffected
 tagDiag t = t
 
-addRelativeImport :: NormalizedOsPath -> ModuleName -> DynFlags -> DynFlags
+addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
     {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
 
@@ -956,7 +956,7 @@ spliceExpressions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedOsPath -> Util.Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
  atomically $ do
   pending <- readTVar indexPending
@@ -1003,7 +1003,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust mdone $ \_ -> progressUpdate indexProgressReporting ProgressCompleted
 
 writeAndIndexHieFile
-  :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedOsPath -> [GHC.AvailInfo]
+  :: HscEnv -> ShakeExtras -> ModSummary -> NormalizedFilePath -> [GHC.AvailInfo]
 #if MIN_VERSION_ghc(9,11,0)
   -> (HieASTs Type, NameEntityInfo)
 #else
@@ -1532,8 +1532,8 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedOsPath -> m (Maybe FileVersion)
-  , get_linkable_hashes :: [NormalizedOsPath] -> m [BS.ByteString]
+  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
+  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
   , get_module_graph :: m DependencyInformation
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
@@ -1649,7 +1649,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => ([NormalizedOsPath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> m DependencyInformation -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
 checkLinkableDependencies get_linkable_hashes get_module_graph runtime_deps = do
   graph <- get_module_graph
   let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph

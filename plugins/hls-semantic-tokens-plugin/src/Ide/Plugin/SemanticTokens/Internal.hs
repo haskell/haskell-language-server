@@ -29,7 +29,7 @@ import           Development.IDE                          (Action,
                                                            GetHieAst (GetHieAst),
                                                            HieAstResult (HAR, hieAst, hieModule, refMap),
                                                            IdeResult, IdeState,
-                                                           NormalizedOsPath,
+                                                           NormalizedFilePath,
                                                            Priority (..),
                                                            Recorder, Rules,
                                                            WithPriority,
@@ -75,7 +75,7 @@ $mkSemanticConfigFunctions
 ---- the api
 -----------------------
 
-computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedOsPath -> ExceptT PluginError Action SemanticTokens
+computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
@@ -100,7 +100,7 @@ semanticTokensFullDelta recorder state pid param = do
   let previousVersionFromParam = param ^. L.previousResultId
   runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp
   where
-    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedOsPath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
     computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
       semanticTokens <- computeSemanticTokens recorder pid state nfp
       previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nfp
@@ -166,8 +166,8 @@ getAndIncreaseSemanticTokensId = do
     i <- stateTVar semanticTokensId (\val -> (val, val+1))
     return $ T.pack $ show i
 
-getPreviousSemanticTokens :: NormalizedOsPath -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
 getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
 
-setSemanticTokens :: NormalizedOsPath -> SemanticTokens -> Action ()
+setSemanticTokens :: NormalizedFilePath -> SemanticTokens -> Action ()
 setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache

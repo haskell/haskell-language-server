@@ -32,7 +32,7 @@ import           Development.IDE.Spans.Common
 import           GHC.Exts                               (IsList (fromList))
 import           GHC.Stack                              (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
-import           Language.LSP.Protocol.Types hiding ( toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath )
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath)
 
 import           Control.Lens                           (_head, _last, over)
 import           Data.Bifunctor                         (first)

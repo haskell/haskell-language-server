@@ -37,11 +37,7 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding (emptyNormalizedFilePath,
-                                                 fromNormalizedFilePath,
-                                                 normalizedFilePathToUri,
-                                                 toNormalizedFilePath,
-                                                 uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types    as LSP
 import           Prelude                        hiding (mod, span)
 import           Text.Read                      (readMaybe)
@@ -55,12 +51,12 @@ prepareCallHierarchy state _ param = do
         $ prepareCallHierarchyItem nfp (param ^. L.position)
     pure $ InL items
 
-prepareCallHierarchyItem :: NormalizedOsPath -> Position -> Action [CallHierarchyItem]
+prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
 prepareCallHierarchyItem nfp pos = use GetHieAst nfp <&> \case
     Nothing               -> mempty
     Just (HAR _ hf _ _ _) -> prepareByAst hf pos nfp
 
-prepareByAst :: HieASTs a -> Position -> NormalizedOsPath -> [CallHierarchyItem]
+prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
 prepareByAst hf pos nfp =
     case listToMaybe $ pointCommand hf pos extract of
         Nothing    -> mempty
@@ -82,7 +78,7 @@ patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
 tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
 matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
-construct :: NormalizedOsPath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
+construct :: NormalizedFilePath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
     | isInternalIdentifier ident = Nothing
 
@@ -140,7 +136,7 @@ construct nfp hf (ident, contexts, ssp)
                 Nothing -> Nothing
                 Just sp -> listToMaybe $ prepareByAst hf (realSrcSpanToRange sp ^. L.start) nfp
 
-mkCallHierarchyItem :: NormalizedOsPath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
+mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
     CallHierarchyItem
         (T.pack $ optimizeDisplay $ identifierName ident)
@@ -257,7 +253,7 @@ queryCalls ::
     -> ([a] -> [a])
     -> Action [a]
 queryCalls item queryFunc makeFunc merge
-    | Just nfp <- uriToNormalizedOsPath uri = do
+    | Just nfp <- uriToNormalizedFilePath uri = do
         ShakeExtras{withHieDb} <- getShakeExtras
         maySymbol <- getSymbol nfp
         case maySymbol of
@@ -277,7 +273,7 @@ queryCalls item queryFunc makeFunc merge
                 A.Error _ -> getSymbolFromAst nfp pos
             Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
-        getSymbolFromAst :: NormalizedOsPath -> Position -> Action (Maybe Symbol)
+        getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
         getSymbolFromAst nfp pos_ = use GetHieAst nfp <&> \case
             Nothing -> Nothing
             Just (HAR _ hf _ _ _) -> do

@@ -14,10 +14,7 @@ import qualified Data.Set                        as Set
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (..),
-                                                  SemanticTokenRelative (..),
-                                                  SemanticTokensEdit (..),
-                                                  mkRange)
+                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.Directory
 -- import Test.QuickCheck.Instances ()

@@ -19,7 +19,7 @@ import qualified Language.LSP.Protocol.Lens    as J
 import qualified Language.LSP.Protocol.Lens    as JL
 import           Language.LSP.Protocol.Message (SomeMethod (..))
 import qualified Language.LSP.Protocol.Message as LSP
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
 import           Language.LSP.Test             hiding (resolveCompletion)
 import           Test.Hls                      (IdeState, SMethod (..), liftIO,
                                                 mkPluginTestDescriptor,

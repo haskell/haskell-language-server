@@ -28,11 +28,7 @@ import           Ide.Types                             (HandlerM,
                                                         pluginSendRequest)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types           hiding
-                                                       (emptyNormalizedFilePath,
-                                                        fromNormalizedFilePath,
-                                                        normalizedFilePathToUri,
-                                                        toNormalizedFilePath,
-                                                        uriToNormalizedFilePath)
+                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           System.FilePath                       (takeExtension)
 import qualified System.Time.Extra                     as Extra
 import           System.Time.Extra                     (duration)

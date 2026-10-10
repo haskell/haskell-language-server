@@ -34,11 +34,7 @@ import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
-import           Language.LSP.Protocol.Types    hiding (emptyNormalizedFilePath,
-                                                 fromNormalizedFilePath,
-                                                 normalizedFilePathToUri,
-                                                 toNormalizedFilePath,
-                                                 uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           Language.LSP.Server            (ProgressAmount (..),
                                                  ProgressCancellable (..),
                                                  withProgress)
@@ -60,7 +56,7 @@ data ProgressReporting = ProgressReporting
 
 data PerFileProgressReporting = PerFileProgressReporting
   {
-    inProgress             :: forall a. NormalizedOsPath -> IO a -> IO a,
+    inProgress             :: forall a. NormalizedFilePath -> IO a -> IO a,
     -- ^ see Note [ProgressReporting API and InProgressState]
     progressReportingInner :: ProgressReporting
   }
@@ -131,13 +127,13 @@ data InProgressState
         todoVar    :: TVar Int,
         -- | Number of files done
         doneVar    :: TVar Int,
-        currentVar :: STM.Map NormalizedOsPath Int
+        currentVar :: STM.Map NormalizedFilePath Int
       }
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
-recordProgress :: InProgressState -> NormalizedOsPath -> (Int -> Int) -> IO ()
+recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
 recordProgress InProgressState {..} file shift = do
   (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
   atomicallyNamed "recordProgress2" $ case (prev, new) of
@@ -188,7 +184,7 @@ progressReporting (Just lspEnv) title optProgressStyle = do
   progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just lspEnv) title optProgressStyle
   let
-    inProgress :: NormalizedOsPath -> IO a -> IO a
+    inProgress :: NormalizedFilePath -> IO a -> IO a
     inProgress = updateStateForFile inProgressState
   return PerFileProgressReporting {..}
   where

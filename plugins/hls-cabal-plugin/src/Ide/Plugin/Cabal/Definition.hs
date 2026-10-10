@@ -40,11 +40,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types                   hiding
-                                                               (emptyNormalizedFilePath,
-                                                                fromNormalizedFilePath,
-                                                                normalizedFilePathToUri,
-                                                                toNormalizedFilePath,
-                                                                uriToNormalizedFilePath)
+                                                               (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           System.Directory                              (doesFileExist)
 import           System.FilePath                               (joinPath,
                                                                 takeDirectory,
@@ -118,7 +114,7 @@ gotoCommonSectionDefinition uri commonSections cursor fieldsOfInterest = do
 --
 -- See resolving @Config@ module in tests.
 gotoModulesDefinition
-  :: NormalizedOsPath -- ^ Normalized FilePath to the cabal file
+  :: NormalizedFilePath -- ^ Normalized FilePath to the cabal file
   -> GenericPackageDescription
   -> Syntax.Position -- ^ Cursor position
   -> [Syntax.Field Syntax.Position] -- ^ Trimmed cabal AST on a cursor

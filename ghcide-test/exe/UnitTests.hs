@@ -31,10 +31,7 @@ import           Ide.PluginUtils                              (pluginDescToIdePl
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                  hiding
-                                                              (SemanticTokenAbsolute (..),
-                                                               SemanticTokenRelative (..),
-                                                               SemanticTokensEdit (..),
-                                                               mkRange)
+                                                              (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           Network.URI
 import qualified Progress
@@ -115,7 +112,7 @@ tests = do
          -- Chain: 0 imported by 1, 1 imported by 2, 2 imported by 3.
          -- transitiveReverseDependencies of node 0 must contain {1, 2, 3},
          -- not just the immediate reverse-dep {1}.
-         let path :: Int -> NormalizedOsPath
+         let path :: Int -> NormalizedFilePath
              path i = toNormalizedFilePath' ("/M" ++ show i ++ ".hs")
              loc :: Int -> ArtifactsLocation
              loc i = ArtifactsLocation (path i) Nothing True Nothing

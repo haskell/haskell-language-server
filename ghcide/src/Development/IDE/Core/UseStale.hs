@@ -28,7 +28,7 @@ import           Data.Functor.Identity                (Identity (Identity))
 import           Data.Kind                            (Type)
 import           Data.String                          (fromString)
 import           Development.IDE                      (Action, IdeRule,
-                                                       NormalizedOsPath, Range,
+                                                       NormalizedFilePath, Range,
                                                        rangeToRealSrcSpan,
                                                        realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P
@@ -143,7 +143,7 @@ unsafeCopyAge _ = coerce
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
-    => k -> NormalizedOsPath -> Action (Maybe (TrackedStale v))
+    => k -> NormalizedFilePath -> Action (Maybe (TrackedStale v))
 useWithStale key file = do
   x <- IDE.useWithStale key file
   pure $ x <&> \(v, pm) ->
@@ -152,7 +152,7 @@ useWithStale key file = do
 -- | Request a Rule result, it not available return the last computed result which may be stale.
 --   Errors out if none available.
 useWithStale_ :: IdeRule k v
-    => k -> NormalizedOsPath -> Action (TrackedStale v)
+    => k -> NormalizedFilePath -> Action (TrackedStale v)
 useWithStale_ key file = do
   (v, pm) <- IDE.useWithStale_ key file
   pure $ TrackedStale (coerce v) (coerce pm)

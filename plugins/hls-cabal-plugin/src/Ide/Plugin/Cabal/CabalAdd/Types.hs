@@ -17,11 +17,7 @@ import           Distribution.PackageDescription
 import           Ide.Logger
 import           Ide.Plugin.Cabal.Orphans        ()
 import           Language.LSP.Protocol.Types     hiding
-                                                 (emptyNormalizedFilePath,
-                                                  fromNormalizedFilePath,
-                                                  normalizedFilePathToUri,
-                                                  toNormalizedFilePath,
-                                                  uriToNormalizedFilePath)
+                                                 (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 
 data Log
   = LogFoundResponsibleCabalFile FilePath

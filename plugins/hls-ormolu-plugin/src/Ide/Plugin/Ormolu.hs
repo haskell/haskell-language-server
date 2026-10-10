@@ -34,11 +34,7 @@ import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
 import qualified Ide.Types                        as Types
 import           Language.LSP.Protocol.Types      hiding
-                                                  (emptyNormalizedFilePath,
-                                                   fromNormalizedFilePath,
-                                                   normalizedFilePathToUri,
-                                                   toNormalizedFilePath,
-                                                   uriToNormalizedFilePath)
+                                                  (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
 import           Language.LSP.Server              hiding (defaultConfig)
 import           Ormolu
 import           System.Exit

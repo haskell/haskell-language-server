@@ -26,7 +26,7 @@ import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
 import           Development.IDE                      (IdeState,
-                                                       NormalizedOsPath,
+                                                       NormalizedFilePath,
                                                        Pretty (..), Range,
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
@@ -322,7 +322,7 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _)
 #endif
 getRecSels _ = ([], False)
 
-collectRecSelResult :: MonadIO m => IdeState -> NormalizedOsPath
+collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
                         -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
     runActionE "overloadedRecordDot.collectRecordSelectors" ideState
