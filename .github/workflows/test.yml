@@ -126,8 +126,6 @@ jobs:
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
-        env:
-          HLS_TEST_LOG_STDERR: "1"
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ${CABAL_ARGS} ghcide-tests || cabal test ${CABAL_ARGS} ghcide-tests
 
