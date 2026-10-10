@@ -21,6 +21,8 @@ data Log
     LogUnknownKeyWordInContextError KeyWordName
   | -- | This should never occur since we extract the word to lookup from the same map we look it up in.
     LogUnknownStanzaNameInContextError StanzaName
+  | -- | This should never occur since we should be at the toplevel if we at the first character in the first line
+    LogNotInTopLevelStanzaAtStartOfFirstLine
   | LogFilePathCompleterIOError FilePath IOError
   | LogUseWithStaleFastNoResult
   | LogMapLookUpOfKnownKeyFailed T.Text
@@ -34,6 +36,8 @@ instance Pretty Log where
       "Lookup of key word failed for:" <+> viaShow kw
     LogUnknownStanzaNameInContextError sn ->
       "Lookup of stanza name failed for:" <+> viaShow sn
+    LogNotInTopLevelStanzaAtStartOfFirstLine ->
+      "Not in toplevel stanza, but at start of first line"
     LogFilePathCompleterIOError fp ioErr ->
       "When trying to complete the file path:" <+> pretty fp <+> "the following unexpected IO error occurred" <+> viaShow ioErr
     LogUseWithStaleFastNoResult -> "Package description couldn't be read"
@@ -99,6 +103,8 @@ data FieldContext
     -- occurs right before the current word
     -- to be completed
     KeyWord !KeyWordName
+  | -- | Point is in the first line of the file and cabal version is missing
+    CabalVersion
   | -- | Keyword context where no keyword occurs
     -- right before the current word to be completed
     None
@@ -106,6 +112,7 @@ data FieldContext
 
 instance Pretty FieldContext where
     pretty (KeyWord kw) = "KeyWord" <+> pretty kw
+    pretty CabalVersion = "CabalVersion"
     pretty None         = "No Keyword"
 
 type KeyWordName = T.Text
