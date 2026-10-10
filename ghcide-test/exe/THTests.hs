@@ -6,14 +6,14 @@ import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test        (expectCurrentDiagnostics,
-                                              expectDiagnostics,
-                                              expectNoMoreDiagnostics)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls                    (expectCurrentDiagnostics,
+                                              expectDiagnostics,
+                                              expectNoMoreDiagnostics)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

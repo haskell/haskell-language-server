@@ -30,7 +30,7 @@ module Test.Hls.Util
     -- * Session Assertion Helpers
     , dontExpectCodeAction
     , expectDiagnostic
-    , expectNoMoreDiagnostics
+    , expectNoMoreDiagnosticsFromSource
     , failIfSessionTimeout
     , getCompletionByLabel
     , noLiteralCaps
@@ -298,8 +298,8 @@ waitForDiagnosticsFromSource = waitForDiagnosticsFromSourceWithTimeout 5
 
 -- | wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
-expectNoMoreDiagnostics :: Seconds -> TextDocumentIdentifier -> String -> Test.Session ()
-expectNoMoreDiagnostics timeout doc src = do
+expectNoMoreDiagnosticsFromSource :: Seconds -> TextDocumentIdentifier -> String -> Test.Session ()
+expectNoMoreDiagnosticsFromSource timeout doc src = do
     diags <- waitForDiagnosticsFromSourceWithTimeout timeout doc src
     unless (null diags) $
         liftIO $ assertFailure $

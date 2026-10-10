@@ -2,11 +2,11 @@
 module PreprocessorTests (tests) where
 
 import qualified Data.Text                   as T
-import           Development.IDE.Test        (expectDiagnostics)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
+import           Test.Hls                    (expectDiagnostics)
 -- import Test.QuickCheck.Instances ()
 import           Config
 import           Test.Tasty
