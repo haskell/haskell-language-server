@@ -260,7 +260,9 @@ tests = testGroup "diagnostics"
         ) $ \sessionDir -> do
       tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
-      liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
+      unless ideResultSuccess $ do
+        diags <- getCurrentDiagnostics tdoc
+        liftIO $ assertBool ("T should typecheck using srcA's C, diagnostics: " <> show diags) False
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
       assertDefsFile (sessionDir </> "srcA" </> "C.hs") locs
