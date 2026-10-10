@@ -106,7 +106,13 @@ import           Language.Haskell.HLint                             as Hlint
 import qualified Language.LSP.Protocol.Lens                         as LSP
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                        hiding
-                                                                    (Null)
+                                                                    (NormalizedFilePath,
+                                                                     Null,
+                                                                     emptyNormalizedFilePath,
+                                                                     fromNormalizedFilePath,
+                                                                     normalizedFilePathToUri,
+                                                                     toNormalizedFilePath,
+                                                                     uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types                        as LSP
 
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
@@ -365,7 +371,7 @@ getHlintConfig pId =
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context)
   | let TextDocumentIdentifier uri = documentId
-  , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
+  , Just docNormalizedFilePath <- uriToNormalizedFilePath uri
   = do
     verTxtDocId <-
         liftIO $

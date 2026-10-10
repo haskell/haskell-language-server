@@ -14,7 +14,8 @@ import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
                                                    insertNewPragma)
 import           Ide.Plugin.Error
 import           Ide.PluginUtils
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 
 -- | Check if some `HasSrcSpan` value is in the given range
 inRange :: Range -> SrcSpan -> Bool

@@ -20,9 +20,10 @@ import           Data.Maybe                        (catMaybes)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic,
-                                                    IdeState (..), Pretty (..),
-                                                    Priority (..), Recorder,
-                                                    WithPriority,
+                                                    IdeState (..),
+                                                    NormalizedFilePath,
+                                                    Pretty (..), Priority (..),
+                                                    Recorder, WithPriority,
                                                     fdLspDiagnosticL,
                                                     fdStructuredMessageL,
                                                     logWith, realSrcSpanToRange)
@@ -56,7 +57,8 @@ import           Ide.Types                         (Config, HandlerM,
                                                     defaultPluginDescriptor,
                                                     mkPluginHandler)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types       hiding (NormalizedFilePath,
+                                                    uriToNormalizedFilePath)
 import           Text.Regex.TDFA                   ((=~))
 
 data Log

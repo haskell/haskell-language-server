@@ -33,9 +33,7 @@ import           Development.IDE.Types.Location
 import           GHC.Iface.Ext.Types                  (Identifier)
 import qualified HieDb
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
-                                                       SymbolInformation (..),
-                                                       normalizedFilePathToUri,
-                                                       uriToNormalizedFilePath)
+                                                       SymbolInformation (..))
 
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
@@ -75,7 +73,7 @@ toCurrentLocation mapping file (Location uri range) =
   -- file than the one we are calling gotoDefinition from.
   -- So we check that the location file matches the file
   -- we are in.
-  if nUri == normalizedFilePathToUri file
+  if nUri == filePathToUri' file
   -- The Location matches the file, so use the PositionMapping
   -- we have.
   then pure $ Location uri <$> toCurrentRange mapping range
@@ -83,7 +81,7 @@ toCurrentLocation mapping file (Location uri range) =
   -- PositionMapping and use that instead.
   else do
     otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
-      otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
+      otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath uri
       useWithStaleFastMT GetHieAst otherLocationFile
     pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
   where

@@ -180,7 +180,13 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types            hiding
+                                                        (NormalizedFilePath,
+                                                         emptyNormalizedFilePath,
+                                                         fromNormalizedFilePath,
+                                                         normalizedFilePathToUri,
+                                                         toNormalizedFilePath,
+                                                         uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types            as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
@@ -489,7 +495,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             Just (v,del,mbVer) -> do
                 actual_version <- case mbVer of
                   Just ver -> pure (Just $ VFSVersion ver)
-                  Nothing -> (Just . ModificationTime <$> getModTime (fromNormalizedFilePath file))
+                  Nothing -> (Just . ModificationTime <$> let NormalizedFilePath _ osp = file in getModTime osp)
                               `catch` (\(_ :: IOException) -> pure Nothing)
                 atomicallyNamed "lastValueIO 2" $ do
                   STM.focus (Focus.alter (alterValue $ Stale (Just del) actual_version (toDyn v))) (toKey k file) state
@@ -1467,7 +1473,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
             | coerce ideTesting = c & L.relatedInformation ?~
                         [ DiagnosticRelatedInformation
                             (Location
-                                (filePathToUri $ fromNormalizedFilePath fp)
+                                (LSP.fromNormalizedUri (filePathToUri' fp))
                                 _range
                             )
                             (T.pack $ show k)

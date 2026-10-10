@@ -79,7 +79,7 @@ import           Ide.Logger                              (Pretty (pretty),
                                                           cmapWithPrio)
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath)
 
 import           Control.Lens                            (_last, (&))
 import           Control.Lens.Operators                  ((%~))

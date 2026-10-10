@@ -37,7 +37,13 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 emptyNormalizedFilePath,
+                                                 fromNormalizedFilePath,
+                                                 normalizedFilePathToUri,
+                                                 toNormalizedFilePath,
+                                                 uriToNormalizedFilePath)
+import qualified Language.LSP.Protocol.Types    as LSP
 import           Prelude                        hiding (mod, span)
 import           Text.Read                      (readMaybe)
 
@@ -142,7 +148,7 @@ mkCallHierarchyItem nfp ident kind span selSpan =
         kind
         Nothing
         (Just $ T.pack $ identifierToDetail ident)
-        (fromNormalizedUri $ normalizedFilePathToUri nfp)
+        (LSP.fromNormalizedUri $ filePathToUri' nfp)
         (realSrcSpanToRange span)
         (realSrcSpanToRange selSpan)
         (toJSON . show <$> mkSymbol ident)
@@ -252,7 +258,7 @@ queryCalls ::
     -> ([a] -> [a])
     -> Action [a]
 queryCalls item queryFunc makeFunc merge
-    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+    | Just nfp <- uriToNormalizedFilePath uri = do
         ShakeExtras{withHieDb} <- getShakeExtras
         maySymbol <- getSymbol nfp
         case maySymbol of

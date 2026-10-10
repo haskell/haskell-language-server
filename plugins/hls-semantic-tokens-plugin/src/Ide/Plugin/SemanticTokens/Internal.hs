@@ -29,6 +29,7 @@ import           Development.IDE                          (Action,
                                                            GetHieAst (GetHieAst),
                                                            HieAstResult (HAR, hieAst, hieModule, refMap),
                                                            IdeResult, IdeState,
+                                                           NormalizedFilePath,
                                                            Priority (..),
                                                            Recorder, Rules,
                                                            WithPriority,
@@ -62,8 +63,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
-import           Language.LSP.Protocol.Types              (NormalizedFilePath,
-                                                           SemanticTokens,
+import           Language.LSP.Protocol.Types              (SemanticTokens,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM

@@ -16,16 +16,16 @@ import qualified Data.Text                         as T
 import           Development.IDE                   (FileDiagnostic)
 import           Development.IDE.Types.Diagnostics (fdLspDiagnosticL,
                                                     ideErrorWithSource)
+import           Development.IDE.Types.Location    (NormalizedFilePath,
+                                                    fromNormalizedFilePath)
 import           Distribution.Fields               (showPError, showPWarning)
 import qualified Distribution.Parsec               as Syntax
 import           Ide.PluginUtils                   (extendNextLine)
 import           Language.LSP.Protocol.Lens        (range)
 import           Language.LSP.Protocol.Types       (Diagnostic (..),
                                                     DiagnosticSeverity (..),
-                                                    NormalizedFilePath,
                                                     Position (Position),
-                                                    Range (Range),
-                                                    fromNormalizedFilePath)
+                                                    Range (Range))
 
 -- | Produce a diagnostic for a fatal Cabal parser error.
 fatalParseErrorDiagnostic :: NormalizedFilePath -> T.Text -> FileDiagnostic

@@ -33,7 +33,8 @@ import           Data.IntMap                  (IntMap)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
 import qualified Language.LSP.Protocol.Lens   as JL
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types  hiding (NormalizedFilePath,
+                                               uriToNormalizedFilePath)
 
 type DocMap = NameEnv SpanDoc
 type TyThingMap = NameEnv TyThing

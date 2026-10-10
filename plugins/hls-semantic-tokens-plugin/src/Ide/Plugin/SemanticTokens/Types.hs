@@ -19,7 +19,8 @@ import           GHC.Generics                  (Generic)
 import           GHC.Iface.Ext.Types           (TypeIndex)
 import           Ide.Plugin.Error              (PluginError)
 import           Language.Haskell.TH.Syntax    (Lift)
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                uriToNormalizedFilePath)
 
 
 -- !!!! order of declarations matters deriving enum and ord

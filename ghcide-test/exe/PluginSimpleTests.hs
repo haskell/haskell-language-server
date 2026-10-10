@@ -3,14 +3,15 @@ module PluginSimpleTests (tests) where
 
 import           Config
 import           Development.IDE.Test        (expectDiagnostics)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import qualified Test.Hls.FileSystem         as FS
 import           Test.Hls.FileSystem
 import           Test.Tasty
-import qualified Test.Hls.FileSystem as FS
 
 tests :: TestTree
 tests = testGroup "ghc-plugins"

@@ -8,8 +8,8 @@ import           Data.Aeson                    (toJSON)
 import           Data.Proxy
 import qualified Data.Text                     as T
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                SemanticTokenAbsolute (..),
                                                 SemanticTokenRelative (..),
                                                 SemanticTokensEdit (..),
                                                 mkRange)

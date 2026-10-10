@@ -8,8 +8,8 @@ import qualified Data.Text                      as T
 import           Development.IDE.Test           (expectDiagnostics)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding
-                                                (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 SemanticTokenAbsolute (..),
                                                  SemanticTokenRelative (..),
                                                  SemanticTokensEdit (..),
                                                  mkRange)

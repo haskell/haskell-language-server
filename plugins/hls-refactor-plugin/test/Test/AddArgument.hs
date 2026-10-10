@@ -12,8 +12,8 @@ import           Data.List                         (find)
 import           Data.Maybe                        (isJust)
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
-import           Language.LSP.Protocol.Types       hiding
-                                                   (SemanticTokensEdit (_start),
+import           Language.LSP.Protocol.Types       hiding (NormalizedFilePath,
+                                                    SemanticTokensEdit (_start),
                                                     mkRange)
 import           Language.LSP.Test
 import           Test.Tasty

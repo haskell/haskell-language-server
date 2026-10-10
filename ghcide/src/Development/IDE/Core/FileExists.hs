@@ -35,10 +35,16 @@ import           Ide.Logger                            (Pretty (pretty),
                                                         Recorder, WithPriority,
                                                         cmapWithPrio)
 import           Ide.Plugin.Config                     (Config)
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types           hiding
+                                                       (NormalizedFilePath,
+                                                        emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import qualified StmContainers.Map                     as STM
-import qualified System.Directory                      as Dir
+import qualified System.Directory.OsPath               as Dir
 import qualified System.FilePath.Glob                  as Glob
 
 {- Note [File existence cache and LSP file watchers]
@@ -253,5 +259,6 @@ getFileExistsVFS file = do
   vf <- getVirtualFile file
   if isJust vf
   then pure True
-  else liftIO $ handle (\(_ :: IOException) -> return False) $
-         Dir.doesFileExist (fromNormalizedFilePath file)
+  else let NormalizedFilePath _ osp = file
+       in liftIO $ handle (\(_ :: IOException) -> return False) $
+         Dir.doesFileExist osp

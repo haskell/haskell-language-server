@@ -9,8 +9,8 @@ import           Development.IDE.Test          (configureCheckProject,
                                                 expectNoMoreDiagnostics,
                                                 getInterfaceFilesDir)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                SemanticTokenAbsolute (..),
                                                 SemanticTokenRelative (..),
                                                 SemanticTokensEdit (..),
                                                 mkRange)

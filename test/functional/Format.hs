@@ -8,7 +8,8 @@ import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              uriToNormalizedFilePath)
 import           Language.LSP.Test
 import           Test.Hls
 import           Test.Hls.Command

@@ -69,8 +69,7 @@ import           Language.LSP.Protocol.Types                  (DidChangeWatchedF
                                                                FileSystemWatcher (..),
                                                                TextDocumentIdentifier (..),
                                                                VersionedTextDocumentIdentifier (..),
-                                                               _watchers,
-                                                               uriToNormalizedFilePath)
+                                                               _watchers)
 import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
@@ -116,8 +115,7 @@ getModificationTimeImpl
   :: Bool
   -> NormalizedFilePath
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl missingFileDiags file = do
-    let file' = fromNormalizedFilePath file
+getModificationTimeImpl missingFileDiags file@(NormalizedFilePath _ osp) = do
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
     case mbVf of
@@ -137,9 +135,10 @@ getModificationTimeImpl missingFileDiags file = do
                     else -- in all other cases we will need to freshly check the file system
                         alwaysRerun
 
-            liftIO $ fmap wrap (getModTime file')
+            liftIO $ fmap wrap (getModTime osp)
                 `catch` \(e :: IOException) -> do
-                    let err | isDoesNotExistError e = "File does not exist: " ++ file'
+                    let file' = fromNormalizedFilePath file
+                        err | isDoesNotExistError e = "File does not exist: " ++ file'
                             | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
                         diag = ideErrorText file (T.pack err)
                     if isDoesNotExistError e && not missingFileDiags
@@ -154,15 +153,15 @@ getPhysicalModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogSh
 getPhysicalModificationTimeImpl
   :: NormalizedFilePath
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getPhysicalModificationTimeImpl file = do
-    let file' = fromNormalizedFilePath file
+getPhysicalModificationTimeImpl file@(NormalizedFilePath _ osp) = do
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
 
     alwaysRerun
 
-    liftIO $ fmap wrap (getModTime file')
+    liftIO $ fmap wrap (getModTime osp)
         `catch` \(e :: IOException) -> do
-            let err | isDoesNotExistError e = "File does not exist: " ++ file'
+            let file' = fromNormalizedFilePath file
+                err | isDoesNotExistError e = "File does not exist: " ++ file'
                     | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
                 diag = ideErrorText file (T.pack err)
             if isDoesNotExistError e
@@ -230,7 +229,7 @@ getFileModTimeContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
+            posix <- let NormalizedFilePath _ osp = f in getModTime osp
             pure $ posixSecondsToUTCTime posix
     return (modTime, contents)
 
@@ -239,7 +238,7 @@ getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
 getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+    join <$> traverse getFileContents (uriToNormalizedFilePath (LSP.fromNormalizedUri uri))
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -250,7 +249,7 @@ getVersionedTextDoc doc = do
   let uri = doc ^. L.uri
   mvf <-
     maybe (pure Nothing) getVirtualFile $
-        uriToNormalizedFilePath $ toNormalizedUri uri
+        uriToNormalizedFilePath uri
   let ver = case mvf of
         Just (VirtualFile lspver _ _ _) -> lspver
         Nothing                         -> 0

@@ -12,7 +12,8 @@ import qualified Data.Text                   as T
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Fourmolu         as Fourmolu
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              uriToNormalizedFilePath)
 import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls
