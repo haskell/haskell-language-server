@@ -10,6 +10,7 @@
 
 module Ide.Plugin.Eval.Types
     ( Log(..),
+      CapturePhase(..),
       locate,
       locate0,
       EvalExpr (..),
@@ -76,6 +77,15 @@ data Log
     | LogEvalImport String
     | LogEvalDeclaration String
     | LogEvalFailedSettingInteractivePrintFunction
+    | LogEvalCaptureStdHandles CapturePhase String
+
+-- | Step of redirecting the interpreted standard handles around a statement.
+data CapturePhase = CaptureSetup | CaptureTeardown
+
+instance Pretty CapturePhase where
+    pretty = \case
+        CaptureSetup    -> "setup"
+        CaptureTeardown -> "teardown"
 
 instance Pretty Log where
     pretty = \case
@@ -108,6 +118,9 @@ instance Pretty Log where
         LogEvalFailedSettingInteractivePrintFunction -> pretty $
                "Return value will not be captured: "
             ++ "Failed setting the interactive print function."
+        LogEvalCaptureStdHandles phase err ->
+            "Redirecting stdout/stderr failed during capture" <+> pretty phase
+            <> ":" <+> pretty err
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}

@@ -7,6 +7,7 @@ module Development.IDE.Main
 ,isLSP
 ,commandP
 ,defaultMain
+,emptyStdin
 ,testing
 ,Log(..)
 ) where
@@ -87,9 +88,12 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
 import           Development.IDE.Types.Shake              (WithHieDb,
                                                            toNoFileKey)
 import           GHC.Conc                                 (getNumProcessors)
+import           GHC.IO.Device                            (IODeviceType (Stream))
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate,
                                                            hDuplicateTo)
+import           GHC.IO.Handle.FD                         (fdToHandle,
+                                                           fdToHandle')
 import           HIE.Bios.Cradle                          (findCradle)
 import qualified HieDb.Run                                as HieDb
 import           Ide.Logger                               (Pretty (pretty),
@@ -122,12 +126,15 @@ import           System.Exit                              (ExitCode (ExitFailure
 import           System.FilePath                          (takeExtension,
                                                            takeFileName, (</>))
 import           System.IO                                (BufferMode (LineBuffering, NoBuffering),
-                                                           Handle, hFlush,
+                                                           Handle,
+                                                           IOMode (ReadMode),
+                                                           hClose, hFlush,
                                                            hPutStrLn,
                                                            hSetBuffering,
                                                            hSetEncoding, stderr,
                                                            stdin, stdout, utf8)
-import           System.Process                           (readProcessWithExitCode)
+import           System.Process                           (createPipeFd,
+                                                           readProcessWithExitCode)
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
@@ -251,7 +258,14 @@ defaultArguments recorder projectRoot plugins = Arguments
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
         , argsThreads = Nothing
-        , argsHandleIn = pure stdin
+        , argsHandleIn = do
+                -- Move stdin to another file descriptor and point stdin at an
+                -- empty pipe. This guards against code in the server process
+                -- (e.g., the eval plugin) consuming or blocking on the JSON-RPC
+                -- message stream.
+                newStdin <- hDuplicate stdin
+                emptyStdin
+                return newStdin
         , argsHandleOut = do
                 -- Move stdout to another file descriptor and duplicate stderr
                 -- to stdout. This guards against stray prints from corrupting the JSON-RPC
@@ -271,6 +285,19 @@ defaultArguments recorder projectRoot plugins = Arguments
         , argsDisableInitialCwdShift = False
         }
 
+-- | Point 'stdin' at the read end of a closed pipe. Code running in the server
+-- process (e.g., expressions evaluated by the eval plugin) then reads "end of
+-- file", instead of consuming JSON-RPC messages or blocking on the same handle
+-- the server reads them from.
+emptyStdin :: IO ()
+emptyStdin = do
+    (readFd, writeFd) <- createPipeFd
+    hClose =<< fdToHandle writeFd
+    -- Not 'createPipe': on Windows, it returns a duplex handle, which
+    -- 'hDuplicateTo'' cannot duplicate onto the file handle 'stdin'.
+    readEnd <- fdToHandle' readFd (Just Stream) False "<empty stdin>" ReadMode False
+    readEnd `hDuplicateTo` stdin
+    hClose readEnd
 
 testing :: Recorder (WithPriority Log) -> FilePath -> IdePlugins IdeState -> Arguments
 testing recorder projectRoot plugins =
