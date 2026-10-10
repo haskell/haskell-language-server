@@ -89,6 +89,12 @@ basicCompleterTests =
         let complTexts = getTextEditTexts compls
         liftIO $ complTexts @?= ["cabal-version:"]
         pure ()
+    , runCabalTestCaseSession "Don't suggest cabal-version at lines after the first line" "" $ do
+        doc <- openDoc "cabal-version-missing.cabal" "cabal"
+        compls <- getCompletions doc (Position 2 0)
+        let complTexts = getTextEditTexts compls
+        liftIO . assertBool "cabal-version is not suggested after first line" . not $ "cabal-version:" `elem` complTexts
+        pure ()
     , parameterisedCursorTestM "extensions completion" libraryStanzaData
         [ \_ actual -> assertBool "suggests FieldSelectors" $ "FieldSelectors" `elem` actual
         , \_ actual -> assertBool "suggests OverloadedStrings" $ "OverloadedStrings" `elem` actual
