@@ -71,7 +71,8 @@ import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
 import           Development.IDE.Core.Shake           (Log (..), ShakeExtras (..),
-                                                       runIdeAction, useWithStaleFast)
+                                                       runIdeAction,
+                                                       useWithStaleFast)
 import           Ide.Logger                           (Priority (Debug), logWith)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
@@ -263,9 +264,9 @@ atPoint
   -> HscEnv
   -> Position
   -> Util.EnumSet Extension
-  -> Module -- ^ the module currently being edited
+  -> M.Map ModuleName NormalizedFilePath -- ^ locations of the home modules imported by this file
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions currentMod =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions imports =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -345,21 +346,13 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
         -- the package(with version) this `ModuleName` belongs to.
         prettyImportedModule :: ModuleName -> IO T.Text
         prettyImportedModule mod = do
-
-          logWith (shakeRecorder shakeExtras) Debug $ LogHoverImport $ "Hover on import Start"
-
-          -- Note: mpkg is Nothing for local modules
+          -- Note: mpkg is Nothing for local modules, so we look them up in the import map
           mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
-          -- mdoc <- maybe (pure Nothing) (getModuleDocs env (Just currentMod)) mpkg
-          logWith (shakeRecorder shakeExtras) Debug $ LogHoverImport $ "Hover on import - Found mpkg: " <> T.pack (show (isJust mpkg))
-          mdoc <- maybe (pure Nothing) (getModuleDocs (shakeRecorder shakeExtras) env (Just currentMod)) mpkg
+          mpm <- case M.lookup mod imports of
+            Nothing  -> pure Nothing
+            Just nfp -> fmap fst <$> runIdeAction "HoverImport" shakeExtras (useWithStaleFast GetParsedModule nfp)
+          mdoc <- getModuleDocs (shakeRecorder shakeExtras) env mpm mpkg
 
-          let nfp = undefined :: NormalizedFilePath
-          Just (modiface, _) <- runIdeAction "prettyImportedModule" shakeExtras $ useWithStaleFast GetModIface nfp
-
-          --ToDoFabian Remove the Logs
-          logWith (shakeRecorder shakeExtras) Debug $
-            LogHoverImport $ "Hover on import " <> printOutputable mod <> ", docs found: " <> T.pack (show (isJust mdoc))
           let moduleName = printOutputable mod
               docs = maybe "" (\d -> "\n\n---\n" <> T.unlines (spanDocToMarkdown (SpanDocString [hsDocString d] (SpanDocUris Nothing Nothing)))) mdoc
           case mpkg >>= packageNameWithVersion of

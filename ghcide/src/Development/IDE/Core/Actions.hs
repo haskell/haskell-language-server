@@ -25,7 +25,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat           (DynFlags (..),
-                                                       ms_hspp_opts, ms_mod)
+                                                       ms_hspp_opts)
 import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
@@ -36,8 +36,6 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
-
-import Ide.Logger(logWith, Priority(Debug))
 
 -- IMPORTANT NOTE : make sure all rules `useWithStaleFastMT`d by these have a "Persistent Stale" rule defined,
 -- so we can quickly answer as soon as the IDE is opened
@@ -57,14 +55,14 @@ getAtPoint file pos = runMaybeT $ do
 
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
   modSummary <- fst <$> useWithStaleFastMT GetModSummary file
-
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  imports <- lift $ maybe mempty (importMap . fst) <$> runMaybeT (useWithStaleFastMT GetImportMap file)
   let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions (ms_mod (msrModSummary modSummary))
+    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions imports
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

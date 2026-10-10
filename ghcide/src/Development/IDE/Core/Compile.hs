@@ -1728,30 +1728,28 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
     ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode t session ms cgi_guts
   pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
 
--- | Documentation of a module header. Currently a stub returning a fixed string.
+-- | Documentation of a module header.
+-- Home modules are read from their 'ParsedModule' (their interface may be stale or missing),
+-- external modules from their interface.
 -- ToDoFabian Clean up Logs
-getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe Module -> Module -> IO (Maybe (HsDoc GhcRn))
-getModuleDocs recorder env currentMod m
-  | Just m == currentMod = logBranch "current module" >> currentModuleDocs
-  | otherwise            = logBranch "interface (home or external module)" >> currentModuleDocs
+getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
+getModuleDocs recorder env mpm mm = case (mpm, mm) of
+  (Just pm, _)  -> logBranch "home module" >> currentModuleDocs pm
+  (_, Just m)   -> logBranch "external module" >> interfaceDocs m
+  _             -> logBranch "not found" >> pure Nothing
   where
     logBranch :: T.Text -> IO ()
-    logBranch branch = logWith recorder Debug $
-      LogHoverImport $ "getModuleDocs for " <> printOutputable m <> ": " <> branch
+    logBranch branch = logWith recorder Debug $ LogHoverImport $ "getModuleDocs: " <> branch
 
-    -- Placeholder: the interface of the module being edited is stale or missing,
-    -- so this must later read 'hsmodHaddockModHeader' from the parsed module.
+    -- Home modules: read 'hsmodHaddockModHeader' from the parsed module.
+    -- The identifiers are only needed for renaming, so they are dropped.
+    currentModuleDocs :: ParsedModule -> IO (Maybe (HsDoc GhcRn))
+    currentModuleDocs pm = pure $ do
+      WithHsDocIdentifiers doc _ <- unLoc <$> hsmodHaddockModHeader (hsmodExt (unLoc (pm_parsed_source pm)))
+      pure $ WithHsDocIdentifiers doc []
 
-    -- Get the currentModuleDocs logic from Documentation.hs
-    -- but there is a cycle of imports.
-    currentModuleDocs :: IO (Maybe (HsDoc GhcRn))
-    currentModuleDocs =
-      pure $ Just $ WithHsDocIdentifiers (mkGeneratedHsDocString "Current module documentation (placeholder)") []
-
-    -- Home modules and external packages: read the header from the interface.
-    -- Only for External Modules
-    interfaceDocs :: IO (Maybe (HsDoc GhcRn))
-    interfaceDocs =
+    interfaceDocs :: Module -> IO (Maybe (HsDoc GhcRn))
+    interfaceDocs m =
       handleAny (\_ -> pure Nothing) $ do
         iface <- initIfaceLoad env $ loadSysInterface (text "getModuleDocs") m
         pure $ docs_mod_hdr =<< mi_docs iface
