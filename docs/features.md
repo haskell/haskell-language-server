@@ -52,6 +52,12 @@ Provided by: `hls-cabal-plugin`
 
 Provides errors and warnings from Cabal as diagnostics
 
+### Cabal project file errors and warnings
+
+Provided by: `hls-cabal-project-plugin`
+
+Provides parse errors, unknown-field and unknown-section warnings for `cabal.project` files as diagnostics.
+
 ## Hovers
 
 Provided by: `ghcide`
@@ -63,6 +69,12 @@ Type information and documentation on hover, [including from local definitions](
 Provided by: `hls-explicit-fixity-plugin`
 
 Provides fixity information.
+
+### Cabal project file documentation
+
+Provided by: `hls-cabal-project-plugin`
+
+Shows a summary of and a link to the Cabal reference documentation when hovering a field or section name in a `cabal.project` file.
 
 ## Signature help
 
@@ -134,6 +146,12 @@ Completion of the patterns of a `case`/`\case` expression.
 Note: The number of patterns that are inserted is limited to the value of
 `-fmax-uncovered-patterns` plus 1.
 
+### Cabal project file completions
+
+Provided by: `hls-cabal-project-plugin`
+
+Completions for fields, sections, file paths, and enumeration/boolean values in `cabal.project` files.
+
 ## Formatting
 
 Format your code with various Haskell code formatters.
@@ -162,6 +180,12 @@ To change the cabal formatter, edit the `cabalFormattingProvider` option.
 Provided by: `ghcide`
 
 Provides listing of the symbols defined in a module, used to power outline displays.
+
+### Cabal project file symbols
+
+Provided by: `hls-cabal-project-plugin`
+
+Provides the outline (sections and fields) of `cabal.project` files.
 
 ## Workspace symbols
 
@@ -424,6 +448,12 @@ Shows module name matching file path, and applies it with a click.
 Provided by: `hls-semantic-tokens-plugin`
 
 Provides semantic tokens for each token in the source code to support semantic highlighting.
+
+### Cabal project file tokens
+
+Provided by: `hls-cabal-project-plugin`
+
+Provides semantic tokens (fields, sections, strings, numbers, comments) for `cabal.project` files.
 
 ## Rewrite to overloaded record syntax
 

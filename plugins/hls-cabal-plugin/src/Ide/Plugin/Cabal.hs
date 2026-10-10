@@ -60,6 +60,7 @@ import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                              as VFS
+import           System.FilePath                               (takeFileName)
 import qualified Text.Fuzzy.Levenshtein                        as Fuzzy
 import qualified Text.Fuzzy.Parallel                           as Fuzzy
 import           Text.Regex.TDFA
@@ -149,25 +150,25 @@ descriptor recorder plId =
         mconcat
           [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
               \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri, _version}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                whenUriFile _uri $ \file -> unless (isCabalProjectFile file) $ do
                   log' Debug $ LogDocOpened _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(opened)" $
                     OfInterest.addFileOfInterest ofInterestRecorder ide file Modified{firstOpen = True}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
               \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                whenUriFile _uri $ \file -> unless (isCabalProjectFile file) $ do
                   log' Debug $ LogDocModified _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(changed)" $
                     OfInterest.addFileOfInterest ofInterestRecorder ide file Modified{firstOpen = False}
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
               \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                whenUriFile _uri $ \file -> unless (isCabalProjectFile file) $ do
                   log' Debug $ LogDocSaved _uri
                   restartCabalShakeSessionPhysical (shakeExtras ide) vfs file "(saved)" $
                     OfInterest.addFileOfInterest ofInterestRecorder ide file OnDisk
           , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
               \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
-                whenUriFile _uri $ \file -> do
+                whenUriFile _uri $ \file -> unless (isCabalProjectFile file) $ do
                   log' Debug $ LogDocClosed _uri
                   restartCabalShakeSession (shakeExtras ide) vfs file "(closed)" $
                     OfInterest.deleteFileOfInterest ofInterestRecorder ide file
@@ -207,6 +208,18 @@ restartCabalShakeSessionPhysical shakeExtras vfs file actionMsg actionBetweenSes
   restartShakeSession shakeExtras (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) [] $ do
     keys <- actionBetweenSession
     return (toKey GetModificationTime file:toKey GetPhysicalModificationTime file:keys)
+
+{- | Checks whether the file is a cabal project file: its base name is
+@cabal.project@ or has the prefix @cabal.project.@ (covering e.g.
+@cabal.project.freeze@).
+
+Project files are handled by the @cabal-project@ plugin; the cabal plugin must
+ignore them, even if a client reports them with the @cabal@ language id.
+-}
+isCabalProjectFile :: NormalizedFilePath -> Bool
+isCabalProjectFile fp =
+  let n = takeFileName (fromNormalizedFilePath fp)
+   in n == "cabal.project" || "cabal.project." `List.isPrefixOf` n
 
 -- ----------------------------------------------------------------
 -- Code Actions
