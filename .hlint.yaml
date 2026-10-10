@@ -89,6 +89,7 @@
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Key
     - Ide.Types
+    - Ide.Types.Location
     - Test.Hls
     - Test.Hls.Command
     - AutoTupleSpec
