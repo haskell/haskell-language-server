@@ -46,6 +46,7 @@ import           Control.Concurrent.STM.Stats                 hiding (orElse)
 import qualified Control.DeepSeq                              as DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
+import           Ide.Logger                                   (Recorder, WithPriority)
 import           Control.Lens                                 hiding (List, pre,
                                                                (<.>))
 import           Control.Monad.Extra
@@ -169,8 +170,8 @@ import           GHC.Types.Avail                              (emptyDetOrdAvails
 
 #if MIN_VERSION_ghc(9,12,0)
 import           Development.IDE.Import.FindImports
-import Ide.Logger (Recorder, WithPriority)
 #endif
+
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -1729,7 +1730,7 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 -- Home modules are read from their 'ParsedModule' (their interface may be stale or missing),
 -- external modules from their interface.
 getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
-getModuleDocs recorder env mpm mm = case (mpm, mm) of
+getModuleDocs _ env mpm mm = case (mpm, mm) of
   (Just pm, _)  -> currentModuleDocs pm
   (_, Just m)   -> interfaceDocs m
   _             -> pure Nothing
