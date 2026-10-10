@@ -20,6 +20,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class        (lift)
 import qualified Data.Char                        as Char
 import qualified Data.List                        as List
+import           Data.Maybe                       (fromMaybe)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Data.Text.Utf16.Rope.Mixed       as Rope
@@ -157,7 +158,8 @@ scanProjectTokens contents =
     fieldAtLineStart line = do
       let indent = T.length (T.takeWhile isSpaceChar line)
           rest = T.drop indent line
-      if T.null rest || not (Char.isAlphaNum (T.head rest)) then Nothing else do
+      (firstChar, _) <- T.uncons rest
+      if not (Char.isAlphaNum firstChar) then Nothing else do
         let (name, after) = T.span (\c -> Char.isAlphaNum c || c == '-') rest
         if T.null name || not (":" `T.isPrefixOf` after)
           then Nothing
@@ -184,7 +186,7 @@ scanProjectTokens contents =
             [mkToken (intToUInt lineNo) (intToUInt off) (intToUInt (T.length rest)) SemanticTokenTypes_Comment]
         | c == '"' ->
             let body = T.drop 1 rest
-                bodyLen = maybe (T.length body) id (findClose body) + 1
+                bodyLen = fromMaybe (T.length body) (findClose body) + 1
              in mkToken (intToUInt lineNo) (intToUInt off) (intToUInt bodyLen) SemanticTokenTypes_String
                   : scanChars lineNo (off + 1 + bodyLen) (T.drop (1 + bodyLen) rest)
         | Char.isAlpha c || Char.isDigit c ->
