@@ -650,9 +650,12 @@ library hls-rename-plugin
   exposed-modules:
     Ide.Plugin.Rename
     Ide.Plugin.Rename.ModuleName
+    Ide.Plugin.Rename.ModuleRename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
+    , extra ^>=1.8.1
     , aeson
+    , text-rope ^>=0.3
     , containers
     , filepath
     , ghc
@@ -674,6 +677,9 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  other-modules:
+    , RenameFile
+    , Util
   if !flag(rename)
     buildable: False
   type:             exitcode-stdio-1.0
