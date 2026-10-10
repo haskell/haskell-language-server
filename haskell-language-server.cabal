@@ -927,6 +927,7 @@ library hls-pragmas-plugin
     , lens
     , lsp
     , text
+    , text-rope
     , containers
 
 test-suite hls-pragmas-plugin-tests
