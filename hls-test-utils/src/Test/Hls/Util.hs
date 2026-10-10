@@ -39,6 +39,7 @@ module Test.Hls.Util
     , inspectDiagnostic
     , inspectDiagnosticAny
     , renameFile
+    , createFile
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
@@ -424,6 +425,80 @@ didRenameFile from to =
             [FileRename (docIdToText from) (docIdToText to)
             ]
         )
+
+-- ---------------------------------------------------------------------
+
+-- | Simulate the client action of renaming a file
+-- This consists of sending a `WillCreateFiles` request creating the `newFile`,
+-- and applying the returned `WorkspaceEdit` changes.
+-- Finally sends a `DidCreateFile` notification to the server.
+createFile :: TextDocumentIdentifier -> Test.Session ()
+createFile newFile = do
+    willCreateFile newFile >>= \case
+        InL we -> do
+            case LSP.reverseSortEdit we of
+                (WorkspaceEdit (Just e) _ _) ->
+                    traverse_
+                        ( \(uri, edits) ->
+                            -- TODO: once we move this to lsp, we can simply send an ApplyWorkspaceEdit
+                            -- request directly and the server will handle it for us
+                            traverse (Test.applyEdit (TextDocumentIdentifier uri)) edits
+                        )
+                        (Map.assocs e)
+                (WorkspaceEdit _ (Just docChanges) _) -> do
+                    traverse_
+                        ( \case
+                            InL edit ->
+                                traverse_
+                                    (\e ->
+                                        Test.applyEdit
+                                            (TextDocumentIdentifier $ edit ^. L.textDocument . L.uri)
+                                            $ mkTextEdit e
+                                    )
+                                    (edit ^. L.edits)
+                            InR unsupported ->
+                                error $ "createFile: Unsupported WorkspaceEdit " <> (show unsupported)
+                        )
+                        docChanges
+                _ -> pure ()
+        _ -> pure ()
+    didCreateFile newFile
+    where
+        mkTextEdit :: TextEdit |? AnnotatedTextEdit -> TextEdit
+        mkTextEdit (InL e)   = e
+        mkTextEdit (InR ate) =
+            TextEdit (ate ^. L.range) (ate ^. L.newText)
+
+-- | Sends a WillCreateFiles notification to the server and returns the edit the server produces
+-- In case the server returns an error, throws an error as well.
+willCreateFile :: TextDocumentIdentifier -> Test.Session (WorkspaceEdit |? Null)
+willCreateFile newFile = do
+  rsp <- Test.request
+    SMethod_WorkspaceWillCreateFiles
+        (
+            CreateFilesParams [FileCreate (docIdToText newFile)]
+        )
+
+  case rsp ^. L.result of
+    Right edit -> return edit
+    -- Todo: When this function is upstreamed to lsp-test,
+    -- remove this module from the fromJust entry in `.hlint.yaml`.
+    Left error -> throw (Test.UnexpectedResponseError (fromJust $ rsp ^. L.id) error)
+
+
+-- | Sends a DidCreateFile Notification to the server
+-- Currently the server does not handle this notification,
+-- but the plan is to reload the session on Create.
+didCreateFile :: TextDocumentIdentifier -> Test.Session ()
+didCreateFile newFile =
+    Test.sendNotification
+        SMethod_WorkspaceDidCreateFiles
+        ( CreateFilesParams
+            [FileCreate (docIdToText newFile)
+            ]
+        )
+
+-- ---------------------------------------------------------------------
 
 docIdToText :: TextDocumentIdentifier -> T.Text
 docIdToText tdi = getUri $ tdi ^. L.uri

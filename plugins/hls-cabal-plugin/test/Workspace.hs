@@ -98,32 +98,42 @@ cabalCreateTests :: TestTree
 cabalCreateTests =
   testGroup
     "Create"
-    [ runHaskellTestCaseSession "Create in named library" "create" $ do
-        let newName = "Lib.hs"
-        pd <- generateWorkspaceFileCreateTestSession "lib-named/create.cabal" newName
-        checkModuleCreateIn pd (FP.dropExtension newName) (CLibName $ LSubLibName "lib")
-    , runHaskellTestCaseSession "Create in executable" "create" $ do
-        let newName = "Exe.hs"
-        pd <- generateWorkspaceFileCreateTestSession "exe/create.cabal" newName
-        checkModuleCreateIn pd (FP.dropExtension newName) (CExeName "exe")
-    , runHaskellTestCaseSession "Create in main library" "create" $ do
-        let newName = "Lib.hs"
-        pd <- generateWorkspaceFileCreateTestSession "lib/create.cabal" newName
-        checkModuleCreateIn pd (FP.dropExtension newName) (CLibName LMainLibName)
-    , runHaskellTestCaseSession "Create in benchmark" "create" $ do
-        let newName = "Bench.hs"
-        pd <- generateWorkspaceFileCreateTestSession "bench/create.cabal" newName
-        checkModuleCreateIn pd (FP.dropExtension newName) (CBenchName "bench")
-    , runHaskellTestCaseSession "Create in test-suite" "create" $ do
-        let newName = "Test.hs"
-        pd <- generateWorkspaceFileCreateTestSession "test/create.cabal" newName
-        checkModuleCreateIn pd (FP.dropExtension newName) (CTestName "test")
-    ]
+    $ let cabalFile = "create.cabal" in
+      [ runHaskellTestCaseSession "Create in named library" "create" $ do
+          let newName = "Lib.hs"
+          pd <- generateWorkspaceFileCreateTestSession "lib-named" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CLibName $ LSubLibName "lib") 1
+      , runHaskellTestCaseSession "Create in executable (with existing entry)" "create" $ do
+          let newName = "Exe.hs"
+          pd <- generateWorkspaceFileCreateTestSession "exe" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CExeName "exe") 1
+      , runHaskellTestCaseSession "Create in executable" "create" $ do
+          let newName = "Exe2.hs"
+          pd <- generateWorkspaceFileCreateTestSession "exe" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CExeName "exe") 2
+      , runHaskellTestCaseSession "Create in main library" "create" $ do
+          let newName = "Lib.hs"
+          pd <- generateWorkspaceFileCreateTestSession "lib" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CLibName LMainLibName) 1
+      , runHaskellTestCaseSession "Create in benchmark" "create" $ do
+          let newName = "Bench.hs"
+          pd <- generateWorkspaceFileCreateTestSession "bench" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CBenchName "bench") 2
+      , runHaskellTestCaseSession "Create in test-suite" "create" $ do
+          let newName = "Test.hs"
+          pd <- generateWorkspaceFileCreateTestSession "test" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CTestName "test") 1
+      ]
  where
-  generateWorkspaceFileCreateTestSession :: FilePath -> FilePath -> Session PackageDescription
-  generateWorkspaceFileCreateTestSession cabalFile haskellFile = do
-    cabalDoc <- openDoc cabalFile "cabal"
-    _ <- createDoc haskellFile "haskell" "" -- empty file is fine
+  generateWorkspaceFileCreateTestSession :: FilePath -> FilePath -> FilePath -> Session PackageDescription
+  generateWorkspaceFileCreateTestSession targetDir cabalFile haskellFile = do
+    let haskellFP = targetDir FP.</> haskellFile
+        cabalFP   = targetDir FP.</> cabalFile
+
+    haskellDoc <- createDoc haskellFP "haskell" ""
+    cabalDoc <- openDoc cabalFP "cabal"
+    _ <- createFile haskellDoc
+  
     contents <- documentContents cabalDoc
     case parseCabalFileContents $ T.encodeUtf8 contents of
       (_, Right gpd) -> pure $ flattenPackageDescription gpd
@@ -132,8 +142,8 @@ cabalCreateTests =
   -- | tests if the new module is in `exposed-modules` for named libraries
   --   and `other-modules` for the other tests. Also asserts that we only
   --   have a single module per file
-  checkModuleCreateIn :: PackageDescription -> String -> ComponentName -> Session ()
-  checkModuleCreateIn pd newModName compName = do
+  checkModuleCreateIn :: PackageDescription -> String -> ComponentName -> Int -> Session ()
+  checkModuleCreateIn pd newModName compName expModuleNum = do
     let comp = getComponent pd compName
     compModules <- case comp of
       CLib lib ->
@@ -146,6 +156,6 @@ cabalCreateTests =
       CTest test   -> pure $ otherModules $ testBuildInfo test
       CBench bench -> pure $ otherModules $ benchmarkBuildInfo bench
       _            -> liftIO $ assertFailure "unsupported module"
-    let testDescription = newModName <> " was created in " <> showComponentName compName
-    liftIO $ assertBool testDescription $ length compModules == 1 -- there should only be one module in the tests
+    let testDescription = newModName <> " was created in " <> showComponentName compName <> " (other modules: " <> (show compModules) <> ")"
+    liftIO $ assertBool testDescription $ length compModules == expModuleNum
     liftIO $ assertBool testDescription $ fromString newModName `elem` compModules
