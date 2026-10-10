@@ -1535,6 +1535,62 @@ test-suite hls-ormolu-plugin-tests
     , text
 
 -----------------------------
+-- tilia plugin
+-----------------------------
+
+flag tilia
+  description: Enable tilia plugin
+  default:     True
+  manual:      True
+
+common tilia
+  if flag(tilia) && impl(ghc >= 9.14)
+    build-depends: haskell-language-server:hls-tilia-plugin
+    cpp-options: -Dhls_tilia
+
+library hls-tilia-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  exposed-modules:  Ide.Plugin.Tilia
+  hs-source-dirs:   plugins/hls-tilia-plugin/src
+  build-depends:
+    , choice
+    , filepath
+    , ghcide          == 2.15.0.0
+    , hls-plugin-api  == 2.15.0.0
+    , lsp
+    , mtl
+    , process-extras  >= 0.7.1
+    , text
+    , tilia           ^>=0.1
+    , transformers
+
+
+test-suite hls-tilia-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-tilia-plugin/test
+  main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
+  build-tool-depends:
+    tilia:tilia
+  build-depends:
+    , aeson
+    , containers
+    , filepath
+    , haskell-language-server:hls-tilia-plugin
+    , hls-plugin-api
+    , hls-test-utils     == 2.15.0.0
+    , lens
+    , lsp-types
+    , text
+
+-----------------------------
 -- stylish-haskell plugin
 -----------------------------
 
@@ -1922,6 +1978,7 @@ library
                   , explicitFields
                   , fourmolu
                   , ormolu
+                  , tilia
                   , stylishHaskell
                   , refactor
                   , overloadedRecordDot

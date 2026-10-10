@@ -20,6 +20,11 @@
 | --- | --- | --- | --- |
 | `mode` | Control how type lenses are shown | `Always` | <ul> <li><code>Always</code></li> <li><code>Exported</code></li> <li><code>Diagnostics</code></li> </ul> |
 
+## tilia
+| Property | Description | Default | Allowed values |
+| --- | --- | --- | --- |
+| `external` | Call out to an external "tilia" executable, rather than using the bundled library | `False` |  &nbsp;  |
+
 ## ormolu
 | Property | Description | Default | Allowed values |
 | --- | --- | --- | --- |
