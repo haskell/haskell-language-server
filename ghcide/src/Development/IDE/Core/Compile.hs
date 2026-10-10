@@ -169,6 +169,7 @@ import           GHC.Types.Avail                              (emptyDetOrdAvails
 
 #if MIN_VERSION_ghc(9,12,0)
 import           Development.IDE.Import.FindImports
+import Ide.Logger (Recorder, WithPriority)
 #endif
 
 --Simple constants to make sure the source is consistently named
