@@ -1,7 +1,7 @@
 module DocTarget (SourceBar, doctarget) where
 
-import DocSource
-import Data.Text.Internal
+import           Data.Text.Internal
+import           DocSource
 
 -- | foo Haddock
 doctarget = SourceBar

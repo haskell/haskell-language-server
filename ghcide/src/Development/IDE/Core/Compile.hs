@@ -1731,9 +1731,9 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 -- external modules from their interface.
 getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
 getModuleDocs _ env mpm mm = case (mpm, mm) of
-  (Just pm, _)  -> currentModuleDocs pm
-  (_, Just m)   -> interfaceDocs m
-  _             -> pure Nothing
+  (Just pm, _) -> currentModuleDocs pm
+  (_, Just m)  -> interfaceDocs m
+  _            -> pure Nothing
   where
 
     -- Home modules: read 'hsmodHaddockModHeader' from the parsed module.

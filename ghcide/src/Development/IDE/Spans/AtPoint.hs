@@ -37,7 +37,8 @@ import           Language.LSP.Protocol.Types          hiding
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
-import           Development.IDE.Core.Compile         (setNonHomeFCHook, getModuleDocs)
+import           Development.IDE.Core.Compile         (getModuleDocs,
+                                                       setNonHomeFCHook)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
@@ -70,10 +71,10 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
-import           Development.IDE.Core.Shake           (Log (..), ShakeExtras (..),
+import           Development.IDE.Core.Shake           (Log (..),
+                                                       ShakeExtras (..),
                                                        runIdeAction,
                                                        useWithStaleFast)
-import           Ide.Logger                           (Priority (Debug), logWith)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
                                                        HieAST (..),
@@ -96,6 +97,8 @@ import           GHC.Iface.Ext.Utils                  (EvidenceInfo (..),
                                                        selectSmallestContaining)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
+import           Ide.Logger                           (Priority (Debug),
+                                                       logWith)
 import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
 

@@ -53,9 +53,9 @@ tests = let
     , tst (getHover, checkHoverM) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
     , tst (getHover, checkHoverM) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
     ]
-  
+
   hoverImportTests :: [TestTree]
-  hoverImportTests = [ 
+  hoverImportTests = [
       tst (getHover, checkHoverM) (Position 2 9) "DocTarget.hs"
         (pure [ExpectHoverText ["DocSource", "DocSource Haddock\n 1. First\n 2. Second"]])
         "Hover on home module import shows module haddock",
