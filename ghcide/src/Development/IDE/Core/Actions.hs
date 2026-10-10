@@ -56,12 +56,13 @@ getAtPoint file pos = runMaybeT $ do
   env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
   modSummary <- fst <$> useWithStaleFastMT GetModSummary file
   dkMap <- lift $ maybe (DKMap mempty mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  imports <- lift $ maybe mempty (importMap . fst) <$> runMaybeT (useWithStaleFastMT GetImportMap file)
   let enabledExtensions = extensionFlags (ms_hspp_opts (msrModSummary modSummary))
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$>
-    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions
+    AtPoint.atPoint opts shakeExtras hf dkMap env pos' enabledExtensions imports
 
 -- | Converts locations in the source code to their current positions,
 -- taking into account changes that may have occurred due to edits.

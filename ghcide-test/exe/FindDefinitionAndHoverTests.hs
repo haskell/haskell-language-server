@@ -41,6 +41,7 @@ tests = let
           ]]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests
+    , testGroup "hover-import-haddock" hoverImportTests
     , testGroup "source-and-doc-links" linkToTests
     ]
 
@@ -52,6 +53,16 @@ tests = let
     , tst (getHover, checkHoverM) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
     , tst (getHover, checkHoverM) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
     ]
+
+  hoverImportTests :: [TestTree]
+  hoverImportTests = [
+      tst (getHover, checkHoverM) (Position 2 9) "DocTarget.hs"
+        (pure [ExpectHoverText ["DocSource", "DocSource Haddock\n 1. First\n 2. Second"]])
+        "Hover on home module import shows module haddock",
+      tst (getHover, checkHoverM) (Position 3 9) "DocTarget.hs"
+        (pure [ExpectHoverText ["Data.Text.Internal", "\nModule      : Data.Text.Internal\n Copyright   : (c) 2008, 2009 Tom Harper,\n               (c) 2009, 2010 Bryan O'Sullivan,\n               (c) 2009 Duncan Coutts"]])
+        "Hover on external module import shows module haddock"
+      ]
 
   test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)
   test runDef runHover look expect = testM runDef runHover look (return expect)

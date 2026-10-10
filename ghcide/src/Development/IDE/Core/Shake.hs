@@ -207,6 +207,7 @@ data Log
   | LogSessionInitialised
   | LogLookupPersistentKey !T.Text
   | LogShakeGarbageCollection !T.Text !Int !Seconds
+  | LogHoverImport !T.Text
   -- * OfInterest Log messages
   | LogSetFilesOfInterest ![(NormalizedFilePath, FileOfInterestStatus)]
   deriving Show
@@ -248,6 +249,7 @@ instance Pretty Log where
         "LOOKUP PERSISTENT FOR:" <+> pretty key
     LogShakeGarbageCollection label number duration ->
         pretty label <+> "of" <+> pretty number <+> "keys (took " <+> pretty (showDuration duration) <> ")"
+    LogHoverImport msg -> pretty msg
     LogSetFilesOfInterest ofInterest ->
         "Set files of interst to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)

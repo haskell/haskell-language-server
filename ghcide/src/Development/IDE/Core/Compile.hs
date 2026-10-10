@@ -30,6 +30,7 @@ module Development.IDE.Core.Compile
   , RecompilationInfo(..)
   , loadModulesHome
   , getDocsBatch
+  , getModuleDocs
   , lookupName
   , mergeEnvs
   , ml_core_file
@@ -45,6 +46,7 @@ import           Control.Concurrent.STM.Stats                 hiding (orElse)
 import qualified Control.DeepSeq                              as DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
+import           Ide.Logger                                   (Recorder, WithPriority)
 import           Control.Lens                                 hiding (List, pre,
                                                                (<.>))
 import           Control.Monad.Extra
@@ -169,6 +171,7 @@ import           GHC.Types.Avail                              (emptyDetOrdAvails
 #if MIN_VERSION_ghc(9,12,0)
 import           Development.IDE.Import.FindImports
 #endif
+
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -1722,6 +1725,29 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
     BCOLinkable    -> fmap (maybe emptyHomeModInfoLinkable justBytecode) <$> generateByteCode t session ms cgi_guts
     ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode t session ms cgi_guts
   pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
+
+-- | Documentation of a module header.
+-- Home modules are read from their 'ParsedModule' (their interface may be stale or missing),
+-- external modules from their interface.
+getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
+getModuleDocs _ env mpm mm = case (mpm, mm) of
+  (Just pm, _) -> currentModuleDocs pm
+  (_, Just m)  -> interfaceDocs m
+  _            -> pure Nothing
+  where
+
+    -- Home modules: read 'hsmodHaddockModHeader' from the parsed module.
+    -- The identifiers are only needed for renaming, so they are dropped.
+    currentModuleDocs :: ParsedModule -> IO (Maybe (HsDoc GhcRn))
+    currentModuleDocs pm = pure $ do
+      WithHsDocIdentifiers doc _ <- unLoc <$> hsmodHaddockModHeader (hsmodExt (unLoc (pm_parsed_source pm)))
+      pure $ WithHsDocIdentifiers doc []
+
+    interfaceDocs :: Module -> IO (Maybe (HsDoc GhcRn))
+    interfaceDocs m =
+      handleAny (\_ -> pure Nothing) $ do
+        iface <- initIfaceLoad env $ loadSysInterface (text "getModuleDocs") m
+        pure $ docs_mod_hdr =<< mi_docs iface
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
