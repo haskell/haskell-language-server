@@ -18,16 +18,13 @@ import           Control.Monad                   (forM_, guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
 import qualified Data.Maybe                      as Maybe
-import           Data.Text                       (Text)
 import qualified Data.Text                       as T
-import qualified Data.Text.IO                    as Text
 import           Definition                      (gotoDefinitionTests)
 import           Development.IDE.Test
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import           Language.LSP.Protocol.Lens      (HasRange (..))
 import qualified Language.LSP.Protocol.Lens      as L
-import qualified Language.LSP.Protocol.Message   as L
 import           Outline                         (outlineTests)
 import           System.FilePath
 import           Test.Hls
@@ -310,17 +307,3 @@ reloadOnCabalChangeTests = testGroup "Reload on .cabal changes"
 
         expectDiagnostics [("Main.hs", [(DiagnosticSeverity_Warning, (2, 0), "The import of \8216Data.List\8217 is redundant", Nothing)])]
     ]
-
--- | Persists the given contents to the 'TextDocumentIdentifier' on disk
--- and sends the @textDocument/didSave@ notification.
-saveDoc :: TextDocumentIdentifier -> Text -> Session ()
-saveDoc docId t = do
-    -- I couldn't figure out how to get the virtual file contents, so we write it
-    -- to disk and send the 'SMethod_TextDocumentDidSave' notification
-    case uriToFilePath (docId ^. L.uri) of
-        Nothing -> pure ()
-        Just fp -> do
-            liftIO $ Text.writeFile fp t
-
-    let params = DidSaveTextDocumentParams docId Nothing
-    sendNotification L.SMethod_TextDocumentDidSave params

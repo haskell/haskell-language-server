@@ -136,20 +136,6 @@ pathModuleNames recorder state nfp
       srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
       potentialModuleNames recorder state filePath srcPaths
-      -- Append a `pathSeparator` to make the path looks like a directory,
-      --   and then we can drop it uniformly.
-      -- See https://github.com/haskell/haskell-language-server/pull/3092 for details.
-      let paths = map (normalise . (<> pure pathSeparator)) srcPaths
-      logWith recorder Debug (NormalisedPaths paths)
-
-      -- TODO, this can be avoided if the filePath is already absolute,
-      -- we can avoid the toAbsolute call in the future.
-      -- see Note [Root Directory]
-      let mdlPath = (toAbsolute $ rootDir state) filePath
-      logWith recorder Debug (AbsoluteFilePath mdlPath)
-
-      let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
-      pure (map moduleNameFrom suffixes)
   where
     filePath = fromNormalizedFilePath nfp
 

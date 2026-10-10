@@ -677,6 +677,9 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  other-modules:
+    , RenameFile
+    , Util
   if !flag(rename)
     buildable: False
   type:             exitcode-stdio-1.0
