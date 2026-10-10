@@ -271,11 +271,18 @@ Open `Preferences > Package Settings > LSP > Settings` and add the following "ha
         "haskell-language-server": {
             "enabled": true,
             "command": ["haskell-language-server-wrapper", "--lsp"],
-            "selector": "source.haskell"
+            "selector": "source.haskell | source.cabal"
         }
     }
 }
+```
 
+On OSX, starting Sublime from the dock won't load your PATH. You can add it like this under `haskell-language-server`:
+
+```json
+"env": {
+    "PATH": "/Users/<user>/.ghcup/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+}
 ```
 
 See [the Sublime Text LSP documentation](https://lsp.sublimetext.io) for information on configuring the client. In particular, you can add a "settings" key to the "haskell-language-server" setting to configure specific HLS plugins as described elsewhere in these docs.
