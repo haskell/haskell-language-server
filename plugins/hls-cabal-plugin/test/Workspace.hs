@@ -139,8 +139,8 @@ cabalCreateTests =
       CLib lib ->
         let name = libName lib in
         case name of
-          LMainLibName  -> pure $ otherModules $ libBuildInfo lib
-          LSubLibName _ -> pure $ exposedModules lib -- exposed for named
+          LMainLibName  -> pure $ exposedModules lib -- exposed for libraries
+          LSubLibName _ -> pure $ otherModules $ libBuildInfo lib
       -- CFLib fLib   -> pure $ foreignLibModules fLib
       CExe exe     -> pure $ otherModules $ buildInfo exe
       CTest test   -> pure $ otherModules $ testBuildInfo test

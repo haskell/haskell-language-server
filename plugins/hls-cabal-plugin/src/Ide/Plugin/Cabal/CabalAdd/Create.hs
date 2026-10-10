@@ -34,8 +34,7 @@ import           Distribution.Parsec.Position                  (Position)
 import           Ide.Logger
 import           Ide.Plugin.Cabal.CabalAdd.CodeAction          (buildInfoToHsSourceDirs,
                                                                 mkModuleInsertionConfig,
-                                                                mkStanzaItems,
-                                                                getBuildTargets)
+                                                                mkStanzaItems)
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
                                                                 ParseCabalFile (..))
 import           Ide.Plugin.Error
@@ -50,6 +49,13 @@ import           Language.LSP.Protocol.Types                   (ClientCapabiliti
 import Ide.Plugin.Cabal.CabalAdd.Types hiding (Log)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe
+import System.FilePath (makeRelative, dropFileName)
+import Distribution.Verbosity (verboseNoStderr, silent)
+import Control.Exception (try)
+import Distribution.Simple.BuildTarget (readBuildTargets)
+import Distribution.Simple.Utils (VerboseException)
+import Distribution.Simple.Errors (CabalException)
+
 
 data Log
   = LogDidCreate FilePath
@@ -195,6 +201,12 @@ isModuleDeclaredE ::
   -- | the new file path after the create
   FilePath ->
   ExceptT PluginError m Bool
-isModuleDeclaredE pd cabalFilePath fileTarget = do
-  buildTargets <- liftIO (getBuildTargets pd cabalFilePath fileTarget)
-  pure $ not (null buildTargets)
+isModuleDeclaredE pd cabalFilePath haskellFilePath = do
+  let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
+  buildTargetsM <- liftIO
+    $ try @(VerboseException CabalException) -- we have to catch for `readBuildTargets` errors if module is not present
+    $ readBuildTargets (verboseNoStderr silent) pd [haskellFileRelativePath]
+  case buildTargetsM of
+    Left _ -> pure False
+    Right buildTargets -> do
+      pure $ not (null buildTargets)
