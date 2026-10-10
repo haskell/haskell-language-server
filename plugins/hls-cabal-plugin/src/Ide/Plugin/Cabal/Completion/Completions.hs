@@ -34,7 +34,7 @@ contextToCompleter :: Context -> Completer
 contextToCompleter (TopLevel, None) =
   snippetCompleter
     <> ( constantCompleter $
-           Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
+           Map.keys cabalKeywords ++ Map.keys stanzaKeywordMap
        )
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
