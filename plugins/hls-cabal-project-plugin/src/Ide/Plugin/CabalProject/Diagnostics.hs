@@ -25,9 +25,7 @@ import qualified Ide.Plugin.Cabal.Diagnostics            as CabalDiagnostics
 import qualified Ide.Plugin.CabalProject.Data            as Data
 import           Ide.PluginUtils                         (extendNextLine)
 import           Language.LSP.Protocol.Lens              (range)
-import           Language.LSP.Protocol.Types             (Diagnostic (..),
-                                                          DiagnosticSeverity (..),
-                                                          Position,
+import           Language.LSP.Protocol.Types             (DiagnosticSeverity (..),
                                                           Range (Range))
 
 -- | Diagnostic source for this plugin.
