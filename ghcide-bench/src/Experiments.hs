@@ -526,7 +526,7 @@ runBenchmarksFun dir allBenchmarks = do
 
   let headers = map fst summaryColumns
       summaryRow showTime b r = [ renderCell showTime (cell b r) | (_, cell) <- summaryColumns ]
-      csv = T.unlines $ map (T.intercalate ", ")
+      csv = T.unlines $ map (T.intercalate ",")
               (headers : [ summaryRow showMs b r | (b, r) <- results ])
   TIO.writeFile (outputCSV ?config) csv
 
