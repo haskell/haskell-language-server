@@ -26,7 +26,6 @@ import qualified Development.IDE.Core.Shake          as Shake
 import qualified Distribution.Fields                 as Syntax
 import qualified Distribution.Parsec                 as Syntax
 import           GHC.Generics                        (Generic)
-import           Ide.Logger
 import           Ide.Plugin.Cabal.Orphans            ()
 import qualified Ide.Plugin.CabalProject.Diagnostics as Diagnostics
 import qualified Ide.Plugin.CabalProject.OfInterest  as OfInterest
