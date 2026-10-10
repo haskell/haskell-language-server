@@ -1,1 +1,1 @@
-cradle: {direct: {arguments: ["Foo", "Bar", "GotoHover", "RecordDotSyntax", "GotoImplementation", "Constructors", "ConstructorsLinear"]}}
+cradle: {direct: {arguments: ["Foo", "Bar", "GotoHover", "RecordDotSyntax", "GotoImplementation", "Constructors", "ConstructorsLinear", "DocSource", "DochTarget"]}}
