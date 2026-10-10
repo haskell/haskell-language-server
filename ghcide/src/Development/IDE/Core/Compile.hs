@@ -46,10 +46,6 @@ import           Control.Concurrent.STM.Stats                 hiding (orElse)
 import qualified Control.DeepSeq                              as DeepSeq
 import           Control.Exception                            (evaluate)
 import           Control.Exception.Safe
-import           Ide.Logger                                   (Priority (Debug),
-                                                               Recorder,
-                                                               WithPriority,
-                                                               logWith)
 import           Control.Lens                                 hiding (List, pre,
                                                                (<.>))
 import           Control.Monad.Extra
@@ -1731,15 +1727,12 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 -- | Documentation of a module header.
 -- Home modules are read from their 'ParsedModule' (their interface may be stale or missing),
 -- external modules from their interface.
--- ToDoFabian Clean up Logs
 getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
 getModuleDocs recorder env mpm mm = case (mpm, mm) of
-  (Just pm, _)  -> logBranch "home module" >> currentModuleDocs pm
-  (_, Just m)   -> logBranch "external module" >> interfaceDocs m
-  _             -> logBranch "not found" >> pure Nothing
+  (Just pm, _)  -> currentModuleDocs pm
+  (_, Just m)   -> interfaceDocs m
+  _             -> pure Nothing
   where
-    logBranch :: T.Text -> IO ()
-    logBranch branch = logWith recorder Debug $ LogHoverImport $ "getModuleDocs: " <> branch
 
     -- Home modules: read 'hsmodHaddockModHeader' from the parsed module.
     -- The identifiers are only needed for renaming, so they are dropped.

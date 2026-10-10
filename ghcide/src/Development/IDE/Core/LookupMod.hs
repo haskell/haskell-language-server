@@ -1,5 +1,3 @@
--- | Hi! Custom Docs for Testing...
-
 module Development.IDE.Core.LookupMod (lookupMod, LookupModule) where
 
 import           Control.Monad.Trans.Maybe       (MaybeT (MaybeT))
