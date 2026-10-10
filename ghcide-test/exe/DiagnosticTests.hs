@@ -19,8 +19,11 @@ import           Development.IDE.Test            (diagnostic,
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types     hiding
-                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  SemanticTokenAbsolute (..),
+                                                  SemanticTokenRelative (..),
+                                                  SemanticTokensEdit (..),
+                                                  mkRange)
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath

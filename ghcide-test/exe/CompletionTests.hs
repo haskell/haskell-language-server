@@ -20,8 +20,11 @@ import           Development.IDE.Types.Location
 import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding
-                                                (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 SemanticTokenAbsolute (..),
+                                                 SemanticTokenRelative (..),
+                                                 SemanticTokensEdit (..),
+                                                 mkRange)
 import           Language.LSP.Test
 import           Test.Hls                       (waitForTypecheck)
 import qualified Test.Hls.FileSystem            as FS

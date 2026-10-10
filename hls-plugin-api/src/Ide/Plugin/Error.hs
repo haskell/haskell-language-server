@@ -18,7 +18,8 @@ import           Ide.Logger
 import           Ide.Plugin.HandleRequestTypes (RejectionReason)
 import           Ide.Types.Location            (NormalizedFilePath,
                                                 uriToNormalizedFilePath)
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                uriToNormalizedFilePath)
 
 -- ----------------------------------------------------------------------------
 -- Plugin Error wrapping

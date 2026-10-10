@@ -106,7 +106,13 @@ import           Language.Haskell.HLint                             as Hlint
 import qualified Language.LSP.Protocol.Lens                         as LSP
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                        hiding
-                                                                    (NormalizedFilePath, Null, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                                    (NormalizedFilePath,
+                                                                     Null,
+                                                                     emptyNormalizedFilePath,
+                                                                     fromNormalizedFilePath,
+                                                                     normalizedFilePathToUri,
+                                                                     toNormalizedFilePath,
+                                                                     uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types                        as LSP
 
 import           Development.IDE.Core.PluginUtils                   as PluginUtils

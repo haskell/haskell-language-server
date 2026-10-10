@@ -13,7 +13,11 @@ import           Development.IDE.Core.PositionMapping (PositionResult (..),
                                                        toCurrentPosition)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
-                                                      (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+                                                      (NormalizedFilePath,
+                                                       SemanticTokenAbsolute (..),
+                                                       SemanticTokenRelative (..),
+                                                       SemanticTokensEdit (..),
+                                                       mkRange)
 import           Language.LSP.VFS                     (applyChange)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()

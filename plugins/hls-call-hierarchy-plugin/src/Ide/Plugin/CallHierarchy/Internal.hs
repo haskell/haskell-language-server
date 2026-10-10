@@ -37,7 +37,12 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 emptyNormalizedFilePath,
+                                                 fromNormalizedFilePath,
+                                                 normalizedFilePathToUri,
+                                                 toNormalizedFilePath,
+                                                 uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types    as LSP
 import           Prelude                        hiding (mod, span)
 import           Text.Read                      (readMaybe)

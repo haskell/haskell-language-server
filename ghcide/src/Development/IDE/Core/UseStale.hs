@@ -28,7 +28,8 @@ import           Data.Functor.Identity                (Identity (Identity))
 import           Data.Kind                            (Type)
 import           Data.String                          (fromString)
 import           Development.IDE                      (Action, IdeRule,
-                                                       NormalizedFilePath, Range,
+                                                       NormalizedFilePath,
+                                                       Range,
                                                        rangeToRealSrcSpan,
                                                        realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P

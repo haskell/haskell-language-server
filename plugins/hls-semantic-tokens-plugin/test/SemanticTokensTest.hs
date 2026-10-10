@@ -21,7 +21,8 @@ import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types        hiding (NormalizedFilePath,
+                                                     uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types        as J
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))

@@ -70,7 +70,9 @@ import           Development.IDE                          (GhcVersion (..),
                                                            ghcVersion)
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types              hiding
+                                                          (NormalizedFilePath,
+                                                           uriToNormalizedFilePath)
 import qualified Language.LSP.Test                        as Test
 import qualified System.Directory                         as Directory
 import           System.FilePath

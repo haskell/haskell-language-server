@@ -52,7 +52,9 @@ import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as J
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types           hiding
+                                                       (NormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 
 #if !MIN_VERSION_base(4,20,0)
 import           Data.Foldable                         (Foldable (foldl'))

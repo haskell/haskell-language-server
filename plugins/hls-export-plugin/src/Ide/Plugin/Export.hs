@@ -26,7 +26,8 @@ import           Ide.Types
 import qualified Ide.Types                        as Ide
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (..), SMethod (..))
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =

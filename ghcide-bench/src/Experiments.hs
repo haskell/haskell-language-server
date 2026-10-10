@@ -55,7 +55,9 @@ import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types        hiding (NormalizedFilePath, Null, SemanticTokenAbsolute (..))
+import           Language.LSP.Protocol.Types        hiding (NormalizedFilePath,
+                                                     Null,
+                                                     SemanticTokenAbsolute (..))
 import qualified Language.LSP.Protocol.Types        as LSP
 import           Language.LSP.Test
 import           Numeric.Natural

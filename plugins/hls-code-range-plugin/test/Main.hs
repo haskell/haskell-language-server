@@ -11,7 +11,8 @@ import qualified Ide.Plugin.CodeRange.RulesTest
 import qualified Ide.Plugin.CodeRangeTest
 import           Language.LSP.Protocol.Lens     (result)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 uriToNormalizedFilePath)
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls
 

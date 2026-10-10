@@ -22,7 +22,12 @@ import           Data.Text                      (isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 emptyNormalizedFilePath,
+                                                 fromNormalizedFilePath,
+                                                 normalizedFilePathToUri,
+                                                 toNormalizedFilePath,
+                                                 uriToNormalizedFilePath)
 import           System.FilePath                (isRelative)
 
 -- | Lsp client relevant configuration details

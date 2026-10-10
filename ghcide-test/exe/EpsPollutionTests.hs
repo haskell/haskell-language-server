@@ -29,7 +29,8 @@ import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util    (readFileUtf8)
 import           Hover
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              uriToNormalizedFilePath)
 import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls

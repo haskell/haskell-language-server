@@ -181,7 +181,7 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import qualified System.Directory.OsPath               as Dir
+import qualified System.Directory.OsPath                      as Dir
 import           System.Info.Extra                            (isWindows)
 
 

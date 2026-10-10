@@ -31,8 +31,12 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types      hiding
-                                                  (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId "Provides a code action to convert datatypes to GADT syntax")

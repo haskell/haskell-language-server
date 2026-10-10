@@ -59,7 +59,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types           hiding
-                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                       (NormalizedFilePath,
+                                                        emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 

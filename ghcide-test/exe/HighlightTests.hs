@@ -5,8 +5,11 @@ import           Config
 import           Control.Monad.IO.Class         (liftIO)
 import qualified Data.Text                      as T
 import           Development.IDE.Types.Location
-import           Language.LSP.Protocol.Types    hiding
-                                                (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 SemanticTokenAbsolute (..),
+                                                 SemanticTokenRelative (..),
+                                                 SemanticTokensEdit (..),
+                                                 mkRange)
 import           Language.LSP.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit

@@ -7,7 +7,10 @@ import qualified Data.Text                   as T
 import           Development.IDE.Test        (expectCurrentDiagnostics,
                                               getStoredKeys, waitForGC,
                                               waitForTypecheck)
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              SemanticTokenAbsolute (..),
+                                              SemanticTokenRelative (..),
+                                              SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls.FileSystem

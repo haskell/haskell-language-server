@@ -13,7 +13,12 @@ module Development.IDE.LSP.Notifications
 
 import qualified Language.LSP.Protocol.Message         as LSP
 import           Language.LSP.Protocol.Types           hiding
-                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                       (NormalizedFilePath,
+                                                        emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types           as LSP
 
 import           Control.Concurrent.STM.Stats          (atomically)

@@ -13,7 +13,8 @@ import qualified Data.Text                   as T
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Ormolu           as Ormolu
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              uriToNormalizedFilePath)
 import           System.FilePath
 import           Test.Hls
 

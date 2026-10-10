@@ -32,8 +32,11 @@ import           Ide.Types                       (Config (..),
                                                   SessionLoadingPreferenceConfig (..))
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types     hiding
-                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  SemanticTokenAbsolute (..),
+                                                  SemanticTokenRelative (..),
+                                                  SemanticTokensEdit (..),
+                                                  mkRange)
 import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls                        (GhcVersion (..),

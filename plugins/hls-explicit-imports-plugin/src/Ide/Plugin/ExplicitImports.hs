@@ -61,7 +61,12 @@ import           Language.LSP.Protocol.Lens           (HasInlayHint (inlayHint),
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types          hiding
-                                                      (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                      (NormalizedFilePath,
+                                                       emptyNormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       normalizedFilePathToUri,
+                                                       toNormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 
 -- This plugin is named explicit-imports for historical reasons. Besides
 -- providing code actions and lenses to make imports explicit it also provides

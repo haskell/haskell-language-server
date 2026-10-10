@@ -36,8 +36,8 @@ import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        GhcSession (GhcSession),
                                                        IdeState,
-                                                       NormalizedFilePath, Pretty,
-                                                       Priority (Debug),
+                                                       NormalizedFilePath,
+                                                       Pretty, Priority (Debug),
                                                        Recorder, WithPriority,
                                                        colon, evalGhcEnv,
                                                        hscEnv, logWith,
@@ -58,7 +58,9 @@ import           Ide.Plugin.Error
 import           Ide.PluginUtils                      (toAbsolute)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types          hiding
+                                                      (NormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 import           System.FilePath                      (dropExtension, normalise,
                                                        pathSeparator,
                                                        splitDirectories,

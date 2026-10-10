@@ -27,7 +27,9 @@ import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
 import           Ide.Types                             (traceWithSpan)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types           hiding
+                                                       (NormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import qualified Language.LSP.Server                   as LSP
 import           System.IO
 import           UnliftIO.Async

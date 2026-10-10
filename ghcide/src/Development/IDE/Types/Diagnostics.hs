@@ -50,7 +50,12 @@ import           GHC.Types.Error                (DiagnosticCode (..),
 import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP hiding
-                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                       (NormalizedFilePath,
+                                                        emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
 import qualified Prettyprinter.Render.Terminal  as Terminal

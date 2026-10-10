@@ -55,7 +55,12 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types          hiding
-                                                      (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                      (NormalizedFilePath,
+                                                       emptyNormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       normalizedFilePathToUri,
+                                                       toNormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
 import           System.Time.Extra

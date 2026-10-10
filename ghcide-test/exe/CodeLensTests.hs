@@ -12,8 +12,11 @@ import           Data.Maybe
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Protocol.Lens      as L
-import           Language.LSP.Protocol.Types     hiding
-                                                 (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  SemanticTokenAbsolute (..),
+                                                  SemanticTokenRelative (..),
+                                                  SemanticTokensEdit (..),
+                                                  mkRange)
 import           Language.LSP.Test
 import           Test.Hls                        (mkRange, waitForProgressDone)
 import           Test.Tasty
@@ -26,8 +29,8 @@ tests = testGroup "code lenses"
 
 data TestSpec =
   TestSpec
-    { mName :: Maybe TestName -- ^ Optional Test Name
-    , input :: T.Text -- ^ Input
+    { mName    :: Maybe TestName -- ^ Optional Test Name
+    , input    :: T.Text -- ^ Input
     , expected :: Maybe T.Text -- ^ Expected Type Sig
     }
 
@@ -41,7 +44,7 @@ noExpected t = t { expected = Nothing }
 
 mkTestName :: TestSpec -> String
 mkTestName t = case mName t of
-  Nothing -> T.unpack $ T.replace "\n" "\\n" (input t)
+  Nothing   -> T.unpack $ T.replace "\n" "\\n" (input t)
   Just name -> name
 
 addSigLensesTests :: TestTree

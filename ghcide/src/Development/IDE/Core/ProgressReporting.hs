@@ -34,7 +34,12 @@ import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
-import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 emptyNormalizedFilePath,
+                                                 fromNormalizedFilePath,
+                                                 normalizedFilePathToUri,
+                                                 toNormalizedFilePath,
+                                                 uriToNormalizedFilePath)
 import           Language.LSP.Server            (ProgressAmount (..),
                                                  ProgressCancellable (..),
                                                  withProgress)

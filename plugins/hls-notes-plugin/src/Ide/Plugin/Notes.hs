@@ -27,8 +27,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCompletion, Method_TextDocumentDefinition, Method_TextDocumentHover, Method_TextDocumentReferences),
                                                    SMethod (SMethod_TextDocumentCompletion, SMethod_TextDocumentDefinition, SMethod_TextDocumentHover, SMethod_TextDocumentReferences))
-import           Language.LSP.Protocol.Types      hiding
-                                                  (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,

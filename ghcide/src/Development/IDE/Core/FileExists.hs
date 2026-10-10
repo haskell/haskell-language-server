@@ -36,7 +36,12 @@ import           Ide.Logger                            (Pretty (pretty),
                                                         cmapWithPrio)
 import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Protocol.Types           hiding
-                                                       (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                       (NormalizedFilePath,
+                                                        emptyNormalizedFilePath,
+                                                        fromNormalizedFilePath,
+                                                        normalizedFilePathToUri,
+                                                        toNormalizedFilePath,
+                                                        uriToNormalizedFilePath)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory.OsPath               as Dir

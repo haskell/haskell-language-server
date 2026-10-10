@@ -31,7 +31,11 @@ import           Ide.PluginUtils                              (pluginDescToIdePl
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                  hiding
-                                                              (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+                                                              (NormalizedFilePath,
+                                                               SemanticTokenAbsolute (..),
+                                                               SemanticTokenRelative (..),
+                                                               SemanticTokensEdit (..),
+                                                               mkRange)
 import           Language.LSP.Test
 import           Network.URI
 import qualified Progress

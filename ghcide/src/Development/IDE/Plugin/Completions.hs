@@ -48,7 +48,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types              hiding
-                                                          (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                          (NormalizedFilePath,
+                                                           emptyNormalizedFilePath,
+                                                           fromNormalizedFilePath,
+                                                           normalizedFilePathToUri,
+                                                           toNormalizedFilePath,
+                                                           uriToNormalizedFilePath)
 import           Numeric.Natural
 import           Prelude                                  hiding (mod)
 import           Text.Fuzzy.Parallel                      (Scored (..))

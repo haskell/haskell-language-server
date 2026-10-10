@@ -57,7 +57,8 @@ import           GHC.TypeLits                    (symbolVal)
 import           Ide.Plugin.Config               (CheckParents, checkProject)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  uriToNormalizedFilePath)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           System.Directory                (canonicalizePath)

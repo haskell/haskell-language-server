@@ -25,7 +25,12 @@ import           Ide.PluginUtils
 import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
 import           Language.LSP.Protocol.Types      as LSP hiding
-                                                         (NormalizedFilePath, emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                         (NormalizedFilePath,
+                                                          emptyNormalizedFilePath,
+                                                          fromNormalizedFilePath,
+                                                          normalizedFilePathToUri,
+                                                          toNormalizedFilePath,
+                                                          uriToNormalizedFilePath)
 import           System.FilePath
 
 #if !MIN_VERSION_stylish_haskell(0,15,0)

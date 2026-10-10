@@ -8,7 +8,10 @@ import           Control.Monad.IO.Class      (liftIO)
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Compat  (GhcVersion (..), ghcVersion)
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, SemanticTokenAbsolute (..), SemanticTokenRelative (..), SemanticTokensEdit (..), mkRange)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              SemanticTokenAbsolute (..),
+                                              SemanticTokenRelative (..),
+                                              SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           Test.Hls.FileSystem         (file, text)
 import           Test.Tasty

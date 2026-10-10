@@ -57,7 +57,8 @@ import           Ide.Types                         (Config, HandlerM,
                                                     defaultPluginDescriptor,
                                                     mkPluginHandler)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types       hiding (NormalizedFilePath,
+                                                    uriToNormalizedFilePath)
 import           Text.Regex.TDFA                   ((=~))
 
 data Log

@@ -55,7 +55,8 @@ import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              uriToNormalizedFilePath)
 import           Language.LSP.Server
 import           System.FilePath             ((</>))
 import qualified Text.Megaparsec             as P

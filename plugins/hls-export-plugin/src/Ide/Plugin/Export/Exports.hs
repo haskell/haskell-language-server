@@ -16,7 +16,8 @@ import           Development.IDE.GHC.ExactPrint.CPP (spanHasCpp)
 import           Ide.Plugin.Export.ExactPrint
 import           Ide.Plugin.Export.Utils
 import           Language.Haskell.GHC.ExactPrint    (makeDeltaAst)
-import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, uriToNormalizedFilePath)
+import           Language.LSP.Protocol.Types        hiding (NormalizedFilePath,
+                                                     uriToNormalizedFilePath)
 
 isExplicit :: ParsedSource -> Bool
 isExplicit = isJust . hsmodExports . unLoc

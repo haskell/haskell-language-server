@@ -33,7 +33,13 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
-                                                      (NormalizedFilePath, SemanticTokenAbsolute (..), emptyNormalizedFilePath, fromNormalizedFilePath, normalizedFilePathToUri, toNormalizedFilePath, uriToNormalizedFilePath)
+                                                      (NormalizedFilePath,
+                                                       SemanticTokenAbsolute (..),
+                                                       emptyNormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       normalizedFilePathToUri,
+                                                       toNormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
