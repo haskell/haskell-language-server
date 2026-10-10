@@ -674,6 +674,9 @@ instance PluginMethod Request (Method_CustomMethod m) where
 instance PluginMethod Request Method_WorkspaceWillRenameFiles where
   handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
 
+instance PluginMethod Request Method_WorkspaceWillCreateFiles where
+  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+
 -- Plugin Notifications
 
 instance PluginMethod Notification Method_TextDocumentDidOpen where
@@ -915,6 +918,8 @@ instance PluginRequestMethod Method_TextDocumentInlayHint where
   combineResponses _ _ _ _ x = sconcat x
 
 instance PluginRequestMethod Method_WorkspaceWillRenameFiles where
+
+instance PluginRequestMethod Method_WorkspaceWillCreateFiles where
 
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
