@@ -3033,6 +3033,44 @@ addInstanceConstraintTests = let
     "Add `Eq c` to the context of the instance declaration"
     (incompleteConstraintSourceCode2 Nothing)
     (incompleteConstraintSourceCode2 $ Just "Eq c")
+  , testSession "qualified imported class keeps its qualifier (#5085)" $ do
+      let contentA = T.unlines
+            [ "module MyFunctor where"
+            , ""
+            , "class Functor f where"
+            , "  myFmap :: (a -> b) -> f a -> f b"
+            ]
+          contentB = T.unlines
+            [ "{-# LANGUAGE UndecidableInstances #-}"
+            , "module MyLib where"
+            , ""
+            , "import qualified MyFunctor"
+            , ""
+            , "data Foo a = Foo a"
+            , ""
+            , "instance Functor Foo where"
+            , "  fmap = MyFunctor.myFmap"
+            ]
+      _docA <- createDoc "MyFunctor.hs" "haskell" contentA
+      docB <- createDoc "MyLib.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle
+        "Add `MyFunctor.Functor Foo` to the context of the instance declaration"
+        =<< getCodeActions docB (R 8 9 8 25)
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expected = T.unlines
+            [ "{-# LANGUAGE UndecidableInstances #-}"
+            , "module MyLib where"
+            , ""
+            , "import qualified MyFunctor"
+            , ""
+            , "data Foo a = Foo a"
+            , ""
+            , "instance MyFunctor.Functor Foo => Functor Foo where"
+            , "  fmap = MyFunctor.myFmap"
+            ]
+      liftIO $ expected @=? contentAfterAction
   ]
 
 addFunctionConstraintTests :: TestTree
@@ -3195,6 +3233,42 @@ addFunctionConstraintTests = let
     "Add `Monad m` to the context of the type signature for `f`"
     (quantifiedConstraintSourceCode "((forall a. Eq (f a)), Applicative m)")
     (quantifiedConstraintSourceCode "((forall a. Eq (f a)), Applicative m, Monad m)")
+  , checkCodeAction
+    "missing constraint on a qualified-imported class keeps its qualifier"
+    "Add `Data.String.IsString a` to the context of the type signature for `foo`"
+    (T.unlines
+      [ "module Testing where"
+      , ""
+      , "import qualified Data.String"
+      , ""
+      , "foo :: a"
+      , "foo = Data.String.fromString \"x\""
+      ])
+    (T.unlines
+      [ "module Testing where"
+      , ""
+      , "import qualified Data.String"
+      , ""
+      , "foo :: Data.String.IsString a => a"
+      , "foo = Data.String.fromString \"x\""
+      ])
+  , checkCodeAction
+    "missing constraint on a not-imported class is rendered unqualified"
+    "Add `IsString a` to the context of the type signature for `foo`"
+    (T.unlines
+      [ "{-# LANGUAGE OverloadedStrings #-}"
+      , "module Testing where"
+      , ""
+      , "foo :: a"
+      , "foo = \"x\""
+      ])
+    (T.unlines
+      [ "{-# LANGUAGE OverloadedStrings #-}"
+      , "module Testing where"
+      , ""
+      , "foo :: IsString a => a"
+      , "foo = \"x\""
+      ])
   ]
 
 checkCodeAction :: TestName -> T.Text -> T.Text -> T.Text -> TestTree
