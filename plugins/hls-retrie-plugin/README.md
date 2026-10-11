@@ -36,6 +36,10 @@ The following transformations are currently provided:
 * Capture avoidance outside of the substitution (if a binder somewhere on the path to the splice point captures a free variable in the template, we reject the inline). When tested on real code this case happens so infrequently that it’s not worth the extra effort to support.
 * Rewrites into CPP modules have incorrect indentation (see https://github.com/xich/retrie/issues/24)
 
+## Inlining
+
+Retrie natively supports Fold and Unfolds on top-level definitions. For an interactive refactoring tool it's also nice to be able to select a binding in a let or where statement. This plugin provides that via an "Inline" action, distinct from the Fold and Unfold actions.
+
 <!--## Dispatch
 
 Where possible we will replace the usage site with the body of the definition.
