@@ -195,24 +195,27 @@ withCaptureStdHandles ::
   -> Ghc (String, a)
 withCaptureStdHandles recorder opts action = withTempFile $ \outputTemp -> do
     bracket
-      (execStmtCheck recorder CaptureSetup (captureSetup outputTemp) opts)
+      (execStmtCheck recorder (captureSetup outputTemp) opts)
       -- Restore the handles no matter how the statement terminated.
-      (\_ -> execStmtCheck recorder CaptureTeardown captureTeardown opts)
+      (\_ -> execStmtCheck recorder captureTeardown opts)
       (\_ -> action)
 
 -- | Run an internal handle-redirection statement and log on failure.
 execStmtCheck ::
      Recorder (WithPriority Log)
   -> CapturePhase
-  -> String
   -> ExecOptions
   -> Ghc ()
-execStmtCheck recorder phase stmt opts = do
+execStmtCheck recorder phase opts = do
     result <- execStmt stmt opts
     case result of
       ExecComplete (Left err) _ ->
         logWith recorder Log.Warning $ LogEvalCaptureStdHandles phase (show err)
       _ -> pure ()
+  where
+    stmt = case phase of
+      CaptureSetup    x -> x
+      CaptureTeardown x -> x
 
 -- Open a temporary file and redirect the interpreted @stdout@/@stderr@ to
 -- it, saving the original handles in interactive bindings so 'captureTeardown'
@@ -221,9 +224,9 @@ execStmtCheck recorder phase stmt opts = do
 --
 -- @stdin@ is left alone: the server has already pointed it at an empty pipe
 -- (see 'Development.IDE.Main.emptyStdin'), so reads hit end of file.
-captureSetup :: FilePath -> String
+captureSetup :: FilePath -> CapturePhase
 -- Squeeze into one line (executed by GHCi).
-captureSetup outputTemp = unwords
+captureSetup outputTemp = CaptureSetup $ unwords
     [ "(__hls_captureHandle, __hls_savedStdout, __hls_savedStderr) <- do {"
     , "  __hls_h <- System.IO.openFile", show outputTemp, "System.IO.WriteMode;"
     , "  System.IO.hSetBuffering __hls_h System.IO.LineBuffering;"
@@ -237,9 +240,9 @@ captureSetup outputTemp = unwords
 
 -- Flush, restore the original handles and close the temporary file so the
 -- host can read back the captured output.
-captureTeardown :: String
+captureTeardown :: CapturePhase
 -- Squeeze into one line (executed by GHCi).
-captureTeardown = unwords
+captureTeardown = CaptureTeardown $ unwords
     [ "__hls_restored <- do {"
     , "  System.IO.hFlush System.IO.stdout;"
     , "  System.IO.hFlush System.IO.stderr;"

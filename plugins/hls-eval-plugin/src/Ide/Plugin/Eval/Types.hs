@@ -79,13 +79,25 @@ data Log
     | LogEvalFailedSettingInteractivePrintFunction
     | LogEvalCaptureStdHandles CapturePhase String
 
--- | Step of redirecting the interpreted standard handles around a statement.
-data CapturePhase = CaptureSetup | CaptureTeardown
+-- | Phases required to capture standard handles
+--
+-- Phases of the @eval@ plugin:
+-- - fire up a GHCi session
+-- - inject code into the GHCi session
+-- - run the code
+-- - capture the output
+--
+-- The code injected into the GHCi session contains a setup and a teardown
+-- preparing and closing the involved handles, see 'captureSetup' and
+-- 'captureTeardown'.
+data CapturePhase =
+    CaptureSetup    String
+  | CaptureTeardown String
 
 instance Pretty CapturePhase where
     pretty = \case
-        CaptureSetup    -> "setup"
-        CaptureTeardown -> "teardown"
+        CaptureSetup{}    -> "setup"
+        CaptureTeardown{} -> "teardown"
 
 instance Pretty Log where
     pretty = \case
