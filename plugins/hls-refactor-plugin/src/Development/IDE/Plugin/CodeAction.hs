@@ -1270,11 +1270,18 @@ scopeAwarePprCtx hscEnv tcg = defaultCtx {queryQualifyName = go}
     rdrEnv = tcg_rdr_env tcg
     defaultCtx = mkPrintUnqualifiedDefault hscEnv rdrEnv
     inScope = S.fromList
-      [ (moduleName (nameModule nm), occName nm)
+      [ (mdl, occName nm)
       | GRE nm _ _ _ <- globalRdrEnvElts rdrEnv
+      , Just mdl <- [nameModule_maybe nm]
       ]
     go mdl occ
-      | S.member (moduleName mdl, occ) inScope = queryQualifyName defaultCtx mdl occ
+      | S.member (mdl, occ) inScope =
+#if MIN_VERSION_ghc(9,13,0)
+        -- GHC 9.13 (dev cycle of 9.14) added a user-qualifier hint parameter.
+        queryQualifyName defaultCtx mdl Nothing occ
+#else
+        queryQualifyName defaultCtx mdl occ
+#endif
       | otherwise                              = NameUnqual
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
