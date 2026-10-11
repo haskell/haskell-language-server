@@ -354,7 +354,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           mpm <- case M.lookup mod imports of
             Nothing  -> pure Nothing
             Just nfp -> fmap fst <$> runIdeAction "HoverImport" shakeExtras (useWithStaleFast GetParsedModule nfp)
-          mdoc <- getModuleDocs (shakeRecorder shakeExtras) env mpm mpkg
+          mdoc <- getModuleDocs env mpm mpkg
 
           let moduleName = printOutputable mod
               docs = maybe "" (\d -> "\n\n---\n" <> T.unlines (spanDocToMarkdown (SpanDocString [hsDocString d] (SpanDocUris Nothing Nothing)))) mdoc

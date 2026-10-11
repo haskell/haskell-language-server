@@ -1729,8 +1729,8 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 -- | Documentation of a module header.
 -- Home modules are read from their 'ParsedModule' (their interface may be stale or missing),
 -- external modules from their interface.
-getModuleDocs :: Recorder (WithPriority Log) -> HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
-getModuleDocs _ env mpm mm = case (mpm, mm) of
+getModuleDocs :: HscEnv -> Maybe ParsedModule -> Maybe Module -> IO (Maybe (HsDoc GhcRn))
+getModuleDocs env mpm mm = case (mpm, mm) of
   (Just pm, _) -> currentModuleDocs pm
   (_, Just m)  -> interfaceDocs m
   _            -> pure Nothing
