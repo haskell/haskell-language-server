@@ -13,6 +13,8 @@ module Development.IDE.Spans.AtPoint (
   , gotoImplementation
   , documentHighlight
   , pointCommand
+  , rangeCommand
+  , exprTypeAtSpan
   , referencesAtPoint
   , computeTypeReferences
   , FOIReferences(..)
@@ -51,10 +53,12 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
+import           Data.Generics                        (everythingBut, mkQ)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe
 import qualified Data.Text                            as T
+import           GHC.Hs.Syn.Type                      (lhsExprType)
 
 import qualified Data.Array                           as A
 import           Data.Either
@@ -253,24 +257,25 @@ gotoImplementation
 gotoImplementation withHieDb getHieFile ideOpts srcSpans pos
   = lift $ instanceLocationsAtPoint withHieDb getHieFile ideOpts pos srcSpans
 
--- | Synopsis for the name at a given position.
+-- | Synopsis for the name at a given position (or, when the range is
+-- non-empty, for the smallest expression enclosing the whole range).
 atPoint
   :: IdeOptions
   -> ShakeExtras
   -> HieAstResult
   -> DocAndTyThingMap
   -> HscEnv
-  -> Position
+  -> Range
   -> Util.EnumSet Extension
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
-    listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env queryRange enabledExtensions =
+    listToMaybe <$> sequence (rangeCommand hf queryRange hoverInfo)
   where
     -- Hover info for values/data
     hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
     hoverInfo ast = do
         locationsWithIdentifier <- runIdeAction "TypeCheck" shakeExtras $ do
-          runMaybeT $ gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts har pos
+          runMaybeT $ gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts har (queryRange ^. L.start)
 
         let locationsMap = M.fromList $ mapMaybe (\(loc, identifier) -> case identifier of
               Right typeName ->
@@ -668,17 +673,50 @@ defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
 defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
-pointCommand hf pos k =
+pointCommand hf pos = rangeCommand hf (Range pos pos)
+
+-- | Apply a function to the smallest node in each AST that fully contains
+-- the given range. With an empty range this is the node under the cursor;
+-- with a non-empty range (e.g. the current selection) this is the smallest
+-- enclosing expression.
+rangeCommand :: HieASTs t -> Range -> (HieAST t -> a) -> [a]
+rangeCommand hf (Range startPos endPos) k =
     M.elems $ flip M.mapMaybeWithKey (getAsts hf) $ \(LexicalFastString fs) ast ->
       case selectSmallestContaining (sp fs) ast of
         Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
-   sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
-   sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
-   line :: UInt
-   line = _line pos
-   cha = _character pos
+   sloc fs (Position line cha) = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
+   sp fs = mkRealSrcSpan (sloc fs startPos) (sloc fs endPos)
+
+-- | The type of the smallest expression in the typechecked module that fully
+-- contains the given span, together with the expression's span.
+--
+-- The HieAST deliberately omits the types of many intermediate expression
+-- nodes such as applications and if/case expressions (see @skipDesugaring@ in
+-- "GHC.Iface.Ext.Ast"), so hovering over a selection cannot rely on the
+-- HieAST alone: we recover the type from the typechecked source instead.
+exprTypeAtSpan :: RealSrcSpan -> TcGblEnv -> Maybe (RealSrcSpan, Type)
+exprTypeAtSpan sp tcg = do
+    (exprSpan, expr) <- listToMaybe $ sortOn (spanSize . fst) candidates
+    pure (exprSpan, lhsExprType expr)
+  where
+    candidates :: [(RealSrcSpan, LHsExpr GhcTc)]
+    candidates = everythingBut (++) (([], False) `mkQ` q) (tcg_binds tcg)
+
+    q :: LHsExpr GhcTc -> ([(RealSrcSpan, LHsExpr GhcTc)], Bool)
+    q expr = case getLocA expr of
+      RealSrcSpan exprSpan _
+        | exprSpan `containsSpan` sp -> ([(exprSpan, expr)], False)
+        -- The expression does not contain the target span, so neither can
+        -- any of its children: stop descending.
+        | otherwise -> ([], True)
+      _ -> ([], False)
+
+    spanSize s =
+      ( srcSpanEndLine s - srcSpanStartLine s
+      , srcSpanEndCol s - srcSpanStartCol s
+      )
 
 -- In ghc9, nodeInfo is monomorphic, so we need a case split here
 nodeInfoH :: HieKind a -> HieAST a -> NodeInfo a
