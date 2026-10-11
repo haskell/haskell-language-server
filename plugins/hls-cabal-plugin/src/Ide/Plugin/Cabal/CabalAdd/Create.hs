@@ -34,8 +34,10 @@ import           Distribution.PackageDescription
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Parsec.Position                  (Position)
 import           Distribution.Simple.BuildTarget               (readBuildTargets)
+#if MIN_VERSION_Cabal(3, 12, 0)
 import           Distribution.Simple.Errors                    (CabalException)
 import           Distribution.Simple.Utils                     (VerboseException)
+#endif
 import           Distribution.Verbosity                        (silent,
                                                                 verboseNoStderr)
 import           Ide.Logger
