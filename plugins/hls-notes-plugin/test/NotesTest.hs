@@ -1,7 +1,10 @@
+{-# LANGUAGE GADTs #-}
 module Main (main) where
 
 import           Data.List        (sort)
+import qualified Data.Map.Strict  as Map
 import           Ide.Plugin.Notes (Log, descriptor)
+import           Ide.Types        (Config (..), PluginConfig (..))
 import           System.FilePath  ((</>))
 import           Test.Hls
 
@@ -82,7 +85,31 @@ testDataDir = "plugins" </> "hls-notes-plugin" </> "test" </> "testdata"
 
 hoverNoteTests :: TestTree
 hoverNoteTests = testGroup "Hover Notes"
-  [ testCase "hover normal-notes" $
+  [ testGroup "End of document"
+    [ testCase name $
+      runSessionWithTestConfig def
+        { testPluginDescriptor = plugin
+        , testDirLocation = Left testDataDir
+        , testLspConfig = def
+            { plugins = Map.singleton "ghcide-hover-and-symbols" def { plcHoverOn = False } }
+        } $ \_dir -> do
+        doc <- createDoc "EOF.hs" "haskell" contents
+        waitForKickDone
+        -- Only enable the notes hover so another hover handler cannot mask an
+        -- internal error by returning a successful empty response.
+        response <- request SMethod_TextDocumentHover (HoverParams doc position Nothing)
+        case response of
+          TResponseMessage _ _ (Right (InR _)) -> pure ()
+          _ -> liftIO $ assertFailure $ "Expected a successful empty hover response, got: " <> show response
+    | (name, contents, position) <-
+        [ ("hover after final newline", "module EOF where\nvalue = ()\n", Position 2 0)
+        , ("hover in empty document", "", Position 0 0)
+        , ("hover after consecutive newlines", "module EOF where\n\n", Position 2 0)
+        , ("hover without final newline", "module EOF where", Position 0 16)
+        ]
+    ]
+
+  , testCase "hover normal-notes" $
       runSessionWithServer' testDataDir $ \_dir -> do
         let file = "HoverNote.hs"
             pos  = Position 24 10

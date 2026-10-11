@@ -12,7 +12,9 @@ import           Data.IORef.Extra                             (atomicModifyIORef
 import           Data.List.Extra
 import           Data.String                                  (IsString (fromString))
 import qualified Data.Text                                    as T
+import qualified Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Development.IDE.Core.FileStore               (getModTime)
+import           Development.IDE.Core.Text                     (lineAt)
 import           Development.IDE.Import.DependencyInformation (DependencyInformation (..),
                                                                FilePathId (..),
                                                                PathIdMap (..),
@@ -143,6 +145,21 @@ tests = do
                }
          (sort <$> transitiveReverseDependencies (path 0) depInfo)
            @?= Just [path 1, path 2, path 3]
+     , testGroup "lineAt"
+          [ testCase name $ lineAt line (Rope.fromText contents) @?= expected
+          | (name, contents, line, expected) <-
+              [ ("empty document", "", 0, Just "")
+              , ("past empty document", "", 1, Nothing)
+              , ("first line", "first\nlast", 0, Just "first")
+              , ("last line without newline", "first\nlast", 1, Just "last")
+              , ("past document without newline", "first\nlast", 2, Nothing)
+              , ("final empty line", "first\nlast\n", 2, Just "")
+              , ("past final empty line", "first\nlast\n", 3, Nothing)
+              , ("consecutive empty lines", "\n\n", 1, Just "")
+              , ("final consecutive empty line", "\n\n", 2, Just "")
+              , ("maximum line number", "first\n", maxBound, Nothing)
+              ]
+          ]
      , Progress.tests
      , FuzzySearch.tests
      ]

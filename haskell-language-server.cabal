@@ -1806,8 +1806,10 @@ test-suite hls-notes-plugin-tests
   hs-source-dirs:   plugins/hls-notes-plugin/test
   main-is:          NotesTest.hs
   build-depends:
+    , containers
     , filepath
     , haskell-language-server:hls-notes-plugin
+    , hls-plugin-api == 2.15.0.0
     , hls-test-utils == 2.15.0.0
   default-extensions: OverloadedStrings
 
