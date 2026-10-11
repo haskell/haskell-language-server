@@ -31,7 +31,7 @@ import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            Priority (Debug),
-                                                           Rules, hDuplicateTo')
+                                                           Rules)
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
 import           Development.IDE.Core.FileStore           (isWatchSupported,
@@ -88,7 +88,8 @@ import           Development.IDE.Types.Shake              (WithHieDb,
                                                            toNoFileKey)
 import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
-import           GHC.IO.Handle                            (hDuplicate)
+import           GHC.IO.Handle                            (hDuplicate,
+                                                           hDuplicateTo)
 import           HIE.Bios.Cradle                          (findCradle)
 import qualified HieDb.Run                                as HieDb
 import           Ide.Logger                               (Pretty (pretty),
@@ -256,7 +257,7 @@ defaultArguments recorder projectRoot plugins = Arguments
                 -- to stdout. This guards against stray prints from corrupting the JSON-RPC
                 -- message stream.
                 newStdout <- hDuplicate stdout
-                stderr `hDuplicateTo'` stdout
+                stderr `hDuplicateTo` stdout
                 hSetBuffering stdout NoBuffering
 
                 -- Print out a single space to assert that the above redirection works.

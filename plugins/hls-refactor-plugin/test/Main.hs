@@ -2088,7 +2088,40 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         ]
     ]
   , testGroup "Qualify strategy"
-    [ testCase "won't suggest full name for qualified module" $
+    [ testSession "Replace with qualified preserves backticks" $ do
+        let contentA = T.unlines
+              [ "module ModuleA where"
+              , "op = undefined"
+              ]
+        _docA <- createDoc "ModuleA.hs" "haskell" contentA
+        let contentB = T.unlines
+              [ "module ModuleB where"
+              , "op = undefined"
+              ]
+        _docB <- createDoc "ModuleB.hs" "haskell" contentB
+        let contentC = T.unlines
+              [ "module Main where"
+              , "import ModuleA"
+              , "import ModuleB"
+              , ""
+              , "bla :: a -> a -> a"
+              , "bla x y = x `op` y"
+              ]
+        docC <- createDoc "Main.hs" "haskell" contentC
+        _ <- waitForDiagnostics
+        action <- pickActionWithTitle "Replace with qualified: ModuleA.op" =<< getCodeActions docC (R 5 13 5 14)
+        executeCodeAction action
+        contentAfterAction <- documentContents docC
+        let expectedContentAfterAction = T.unlines
+              [ "module Main where"
+              , "import ModuleA"
+              , "import ModuleB"
+              , ""
+              , "bla :: a -> a -> a"
+              , "bla x y = x `ModuleA.op` y"
+              ]
+        liftIO $ expectedContentAfterAction @=? contentAfterAction
+    , testCase "won't suggest full name for qualified module" $
       withHideFunction [(8,9),(10,8)] $ \_ _ actions -> do
         liftIO $
             assertBool "EVec.fromList must not be suggested" $
