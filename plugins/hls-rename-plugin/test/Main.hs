@@ -196,7 +196,7 @@ moduleNameTests =
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
-  , goldenWithModuleName "Must infer module name as Main, if the file name starts with a lowercase" "mainlike" $ \doc -> do
+  , goldenWithModuleName' "Must infer module name as Main if the file name starts with a lowercase" mainlikeVFT "mainlike" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
@@ -229,6 +229,7 @@ moduleNameTests =
   where
     subdirVFT = [directCradle ["-i./subdir","TWrongModuleName"], directory "subdir" [copy "subdir/TWrongModuleName.hs"]]
     canonicalVFT = [directCradle ["-i./canonicalize","Lib.A"], directory "canonicalize" [directory "Lib" [copy "canonicalize/Lib/A.hs"]]]
+    mainlikeVFT = [directCradle ["mainlike.hs"], copy "mainlike.hs"]
 
 -- NOTE: This should eventually be moved upstream to lsp-test (see
 -- https://github.com/haskell/lsp/issues/636).
