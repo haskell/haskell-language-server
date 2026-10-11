@@ -118,7 +118,7 @@ mkModuleInsertionConfig txtDocIdentifier cabalFilePath haskellFilePath (StanzaIt
 mkCodeActionForModulePath :: PluginId -> J.Diagnostic -> ModuleInsertionConfig -> J.CodeAction
 mkCodeActionForModulePath plId diag insertionConfig =
   J.CodeAction
-    { _title = "Add to " <> label <> " as " <> fieldName
+    { _title = "Add module to " <> label <> " as " <> fieldName
     , _kind = Just CodeActionKind_Refactor
     , _diagnostics = Just [diag]
     , _isPreferred = Nothing
@@ -273,7 +273,7 @@ addDependencySuggestCodeAction plId verTxtDocId suggestions haskellFilePath caba
       versionTitle = if T.null suggestedVersion then T.empty else "-" <> suggestedVersion
       targetTitle = case target of
         Nothing -> T.empty
-        Just t  -> " at " <> T.pack t
+        Just t  -> " to " <> T.pack t
       title = "Add dependency " <> suggestedDep <> versionTitle <> targetTitle
       version = if T.null suggestedVersion then Nothing else Just suggestedVersion
 

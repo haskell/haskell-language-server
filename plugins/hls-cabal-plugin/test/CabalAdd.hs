@@ -57,7 +57,7 @@ cabalAddModuleTests =
         cabalDoc <- openDoc cabalFile "cabal"
         _ <- waitForDiagnosticsFrom haskellDoc
         cas <- Maybe.mapMaybe (^? _R) <$> getAllCodeActions haskellDoc
-        let selectedCas = filter (\ca -> (T.pack $ "Add to " <> Pretty.prettyShow compName <> " ") `T.isPrefixOf` (ca ^. L.title)) cas
+        let selectedCas = filter (\ca -> (T.pack $ "Add module to " <> Pretty.prettyShow compName <> " ") `T.isPrefixOf` (ca ^. L.title)) cas
         mapM_ executeCodeAction $ selectedCas
         _ <- skipManyTill anyMessage $ getDocumentEdit cabalDoc -- Wait for the changes in cabal file
         contents <- documentContents cabalDoc
