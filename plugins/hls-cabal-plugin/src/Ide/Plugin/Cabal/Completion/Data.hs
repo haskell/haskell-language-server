@@ -14,7 +14,9 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer, ComponentSpec (name, isRequired), optCS, defCS)
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer,
+                                                                 ComponentSpec (isRequired, name),
+                                                                 defCS, optCS)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 import           Language.Haskell.Extension
