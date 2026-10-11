@@ -845,7 +845,7 @@ runSessionWithTestConfig TestConfig{..} session =
     keepAlive (pipeIn, pipeOut) $ do
       server <- async $
           IDEMain.defaultMain (cmapWithPrio LogIDEMain recorderIde)
-              arguments { argsHandleIn = pure inR , argsHandleOut = pure outW }
+              arguments { argsHandleIn = emptyStdin >> pure inR , argsHandleOut = pure outW }
       result <- runSessionWithHandles inW outR sconf' testConfigCaps clientRoot (session root)
       hClose inW
       timeout 3 (wait server) >>= \case

@@ -10,6 +10,7 @@
 
 module Ide.Plugin.Eval.Types
     ( Log(..),
+      CapturePhase(..),
       locate,
       locate0,
       EvalExpr (..),
@@ -76,6 +77,27 @@ data Log
     | LogEvalImport String
     | LogEvalDeclaration String
     | LogEvalFailedSettingInteractivePrintFunction
+    | LogEvalCaptureStdHandles CapturePhase String
+
+-- | Phases required to capture standard handles
+--
+-- Phases of the @eval@ plugin:
+-- - fire up a GHCi session
+-- - inject code into the GHCi session
+-- - run the code
+-- - capture the output
+--
+-- The code injected into the GHCi session contains a setup and a teardown
+-- preparing and closing the involved handles, see 'captureSetup' and
+-- 'captureTeardown'.
+data CapturePhase =
+    CaptureSetup    String
+  | CaptureTeardown String
+
+instance Pretty CapturePhase where
+    pretty = \case
+        CaptureSetup{}    -> "setup"
+        CaptureTeardown{} -> "teardown"
 
 instance Pretty Log where
     pretty = \case
@@ -108,6 +130,9 @@ instance Pretty Log where
         LogEvalFailedSettingInteractivePrintFunction -> pretty $
                "Return value will not be captured: "
             ++ "Failed setting the interactive print function."
+        LogEvalCaptureStdHandles phase err ->
+            "Redirecting stdout/stderr failed during capture" <+> pretty phase
+            <> ":" <+> pretty err
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
