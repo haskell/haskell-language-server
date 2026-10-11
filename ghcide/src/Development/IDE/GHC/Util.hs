@@ -200,7 +200,7 @@ printOutputableQualified ctx =
     printOutputable' (printSDocQualifiedUnsafe ctx . ppr)
 
 printTypeQualified :: Type -> T.Text
-printTypeQualified = printOutputableOneLine  . pprSigmaType
+printTypeQualified = printOutputableOneLine . pprSigmaType
 
 printOutputable' :: Outputable a => (a -> String) -> a -> T.Text
 printOutputable' print =
