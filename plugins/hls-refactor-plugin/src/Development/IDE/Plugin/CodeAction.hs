@@ -1274,15 +1274,16 @@ scopeAwarePprCtx hscEnv tcg = defaultCtx {queryQualifyName = go}
       | GRE nm _ _ _ <- globalRdrEnvElts rdrEnv
       , Just mdl <- [nameModule_maybe nm]
       ]
-    go mdl occ
-      | S.member (mdl, occ) inScope =
 #if MIN_VERSION_ghc(9,13,0)
-        -- GHC 9.13 (dev cycle of 9.14) added a user-qualifier hint parameter.
-        queryQualifyName defaultCtx mdl Nothing occ
+    -- GHC 9.13 (dev cycle of 9.14) added a user-qualifier hint parameter.
+    go mdl hint occ
+      | S.member (mdl, occ) inScope = queryQualifyName defaultCtx mdl hint occ
+      | otherwise                   = NameUnqual
 #else
-        queryQualifyName defaultCtx mdl occ
+    go mdl occ
+      | S.member (mdl, occ) inScope = queryQualifyName defaultCtx mdl occ
+      | otherwise                   = NameUnqual
 #endif
-      | otherwise                              = NameUnqual
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint
