@@ -43,7 +43,8 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.GHC.Util             (printOutputable,
-                                                       printOutputableOneLine)
+                                                       printOutputableOneLine,
+                                                       printTypeQualified)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
@@ -316,12 +317,16 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           -- Identifier details that are not evidence variables are used to display type information and
           -- documentation of that name.
           | otherwise = do
+
+
             let
-              typeSig = case identType dets of
-                Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
-                  Just kind -> prettyTypeFromType (Just n) locationsMap kind
-                  Nothing   -> wrapHaskell (printOutputable n)
+              typeSig =
+                case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
+                    Just ty -> prettyTypeFromType (Just n) locationsMap ty
+                    Nothing -> case identType dets of
+                      Just t  -> prettyType (Just n) locationsMap t
+                      Nothing -> wrapHaskell (printOutputable n)
+
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
               docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
 
@@ -373,7 +378,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
 
         prettyTypeFromType :: Maybe Name -> M.Map Name Location -> Type -> T.Text
         prettyTypeFromType boundNameMay locationsMap ty =
-          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printOutputableOneLine ty)
+          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printTypeQualified ty)
 
         prettyType :: Maybe Name -> M.Map Name Location -> hietype -> T.Text
         prettyType boundNameMay locationsMap t =
