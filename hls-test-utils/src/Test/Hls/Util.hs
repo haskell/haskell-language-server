@@ -404,10 +404,7 @@ willRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Sessi
 willRenameFile from to = do
     rsp <- Test.request
         SMethod_WorkspaceWillRenameFiles
-            (
-                RenameFilesParams [FileRename (docIdToText from) (docIdToText to)]
-            )
-
+        (RenameFilesParams [FileRename (docIdToText from) (docIdToText to)])
     case rsp ^. L.result of
         Right edit -> return edit
         -- Todo: When this function is upstreamed to lsp-test,
@@ -421,14 +418,12 @@ didRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Sessio
 didRenameFile from to =
     Test.sendNotification
         SMethod_WorkspaceDidRenameFiles
-            (
-                RenameFilesParams [FileRename (docIdToText from) (docIdToText to)]
-            )
+        (RenameFilesParams [FileRename (docIdToText from) (docIdToText to)])
 
 -- ---------------------------------------------------------------------
 
--- | Simulate the client action of renaming a file
--- This consists of sending a `WillCreateFiles` request creating the `newFile`,
+-- | Simulate the client action of creating a file
+-- This consists of sending a `WillCreateFiles` request, creating the `newFile`
 -- and applying the returned `WorkspaceEdit` changes.
 -- Finally sends a `DidCreateFile` notification to the server.
 createFile :: TextDocumentIdentifier -> Test.Session ()
@@ -474,10 +469,7 @@ willCreateFile :: TextDocumentIdentifier -> Test.Session (WorkspaceEdit |? Null)
 willCreateFile newFile = do
     rsp <- Test.request
         SMethod_WorkspaceWillCreateFiles
-            (
-                CreateFilesParams [FileCreate (docIdToText newFile)]
-            )
-
+        (CreateFilesParams [FileCreate (docIdToText newFile)])
     case rsp ^. L.result of
         Right edit -> return edit
         -- Todo: When this function is upstreamed to lsp-test,
@@ -492,9 +484,7 @@ didCreateFile :: TextDocumentIdentifier -> Test.Session ()
 didCreateFile newFile =
     Test.sendNotification
         SMethod_WorkspaceDidCreateFiles
-            (
-                CreateFilesParams [FileCreate (docIdToText newFile)]
-            )
+        (CreateFilesParams [FileCreate (docIdToText newFile)])
 
 -- ---------------------------------------------------------------------
 

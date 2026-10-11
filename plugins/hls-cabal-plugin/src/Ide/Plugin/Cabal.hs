@@ -345,7 +345,6 @@ renameModuleHelper recorder ideState (FileRename oldUri newUri) = do
               oldHaskellFilePath
               newHaskellFilePath
               cabalFilePath
-              ideState
     case renameResult of
       Left err -> do
         logWith recorder Debug $ LogCabalRenameFailed oldUri err
@@ -375,7 +374,6 @@ createModulesHelper recorder ideState (FileCreate newUri) = do
               caps
               newHaskellFilePath
               cabalFilePath
-              ideState
     case renameResult of
       Left err -> do
         logWith recorder Debug $ LogCabalCreateFailed newUri err

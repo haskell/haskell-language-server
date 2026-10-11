@@ -83,19 +83,14 @@ renameHandler ::
   FilePath ->
   -- | the path to the cabal file, responsible for the renamed module
   FilePath ->
-  Shake.IdeState ->
   ExceptT PluginError m WorkspaceEdit
-renameHandler recorder _ caps oldHaskellFilePath newHaskellFilePath cabalFilePath ideState = do
+renameHandler recorder ideState caps oldHaskellFilePath newHaskellFilePath cabalFilePath = do
   logWith recorder Info $ LogDidRename oldHaskellFilePath newHaskellFilePath
   (contents, fields, gpd, verTxtDocId) <- runActionE "cabal-plugin.getUriContents" ideState $ do
     let nuri = toNormalizedUri $ filePathToUri cabalFilePath
         nfp = toNormalizedFilePath cabalFilePath
     mContent <- lift $ getUriContents nuri
-    verTxtDocId <-
-      runActionE "cabalAdd.getVersionedTextDoc" ideState $
-        lift $
-          getVersionedTextDoc $
-            TextDocumentIdentifier (filePathToUri cabalFilePath)
+    verTxtDocId <- lift $ getVersionedTextDoc $ TextDocumentIdentifier (filePathToUri cabalFilePath)
     content <- case mContent of
       Just content -> pure $ Rope.toText content
       Nothing      -> liftIO $ Text.readFile cabalFilePath
