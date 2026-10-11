@@ -14,6 +14,7 @@ import           Language.LSP.Protocol.Types (Null (Null))
 import           RenameFile                  (renameFileTests)
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.FileSystem
 import           Util
 
 main :: IO ()
@@ -30,40 +31,40 @@ tests = testGroup "Rename"
 
 prepareRenameTests :: TestTree
 prepareRenameTests = testGroup "PrepareRename"
-    [ testCase "Module name (not yet renameable)" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    [ testCase "Module name (not yet renameable)" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 0 9)
         liftIO $ result @?= InR Null
 
-    , testCase "Function name" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    , testCase "Function name" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 8 1)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 8 0) (Position 8 3))))
 
-    , testCase "Imported function name" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    , testCase "Imported function name" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 10 16)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 19))))
 
-    , testCase "Non-renameable position" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    , testCase "Non-renameable position" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 6 23)
         liftIO $ result @?= InR Null
 
-    , testCase "Operator" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    , testCase "Operator" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 10 7)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 10 6) (Position 10 9))))
 
-    , testCase "Built-in operator" $ runRenameSession (projectDir ["PrepareRename.hs"]) $ do
+    , testCase "Built-in operator" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 13 7)
@@ -200,23 +201,23 @@ moduleNameTests =
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
-  , goldenWithModuleName "Fix wrong module name in nested directory" "subdir/TWrongModuleName" $ \doc -> do
+  , goldenWithModuleName' "Fix wrong module name in nested directory" subdirVFT "subdir/TWrongModuleName" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Should not show code lens if the module name is correct" $
-      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+      runSessionWithServerInTmpDir def renamePlugin (mkModNameVFT [directCradle ["CorrectName"], copy "CorrectName.hs"]) $ do
         doc <- openDoc "CorrectName.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
         closeDoc doc
   -- https://github.com/haskell/haskell-language-server/issues/3047
-  , goldenWithModuleName "Fix#3047" "canonicalize/Lib/A" $ \doc -> do
+  , goldenWithModuleName' "Fix#3047" canonicalVFT "canonicalize/Lib/A" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Keep stale lens even if parse failed" $ do
-      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+      runSessionWithServerInTmpDir def renamePlugin (mkModNameVFT [directCradle ["Stale"], copy "Stale.hs"]) $ do
         doc <- openDoc "Stale.hs" "haskell"
         oldLens <- getCodeLenses doc
         let edit = TextEdit (mkRange 1 0 1 0) "f ="
@@ -225,6 +226,9 @@ moduleNameTests =
         liftIO $ newLens @?= oldLens
         closeDoc doc
   ]
+  where
+    subdirVFT = [directCradle ["-i./subdir","TWrongModuleName"], directory "subdir" [copy "subdir/TWrongModuleName.hs"]]
+    canonicalVFT = [directCradle ["-i./canonicalize","Lib.A"], directory "canonicalize" [directory "Lib" [copy "canonicalize/Lib/A.hs"]]]
 
 -- NOTE: This should eventually be moved upstream to lsp-test (see
 -- https://github.com/haskell/lsp/issues/636).
