@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -205,7 +206,11 @@ isModuleDeclaredE ::
 isModuleDeclaredE pd cabalFilePath haskellFilePath = do
   let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
   buildTargetsM <- liftIO
+#if MIN_VERSION_Cabal(3, 12, 0)
     $ try @(VerboseException CabalException) -- we have to catch for `readBuildTargets` errors if module is not present
+#else
+    $ try @IOError  -- we have to catch for `readBuildTargets` errors if module is not present
+#endif
     $ readBuildTargets (verboseNoStderr silent) pd [haskellFileRelativePath]
   case buildTargetsM of
     Left _ -> pure False
