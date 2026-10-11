@@ -48,6 +48,7 @@ import           Development.IDE.GHC.Util             (printOutputable,
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
+import           Control.Applicative                  ((<|>))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -317,15 +318,15 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           -- Identifier details that are not evidence variables are used to display type information and
           -- documentation of that name.
           | otherwise = do
-
-
             let
-              typeSig =
-                case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
-                    Just ty -> prettyTypeFromType (Just n) locationsMap ty
-                    Nothing -> case identType dets of
-                      Just t  -> prettyType (Just n) locationsMap t
-                      Nothing -> wrapHaskell (printOutputable n)
+              typeSigFromGHC = do
+                tyThing <- lookupNameEnv km n
+                ty <- safeTyThingType (Util.member LinearTypes enabledExtensions) tyThing
+                pure $ prettyTypeFromType (Just n) locationsMap ty
+
+              typeSigFromHie = prettyType (Just n) locationsMap <$> identType dets
+
+              typeSig = fromMaybe (wrapHaskell (printOutputable n)) $ typeSigFromGHC <|> typeSigFromHie
 
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
               docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
