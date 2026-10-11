@@ -421,10 +421,9 @@ didRenameFile :: TextDocumentIdentifier -> TextDocumentIdentifier -> Test.Sessio
 didRenameFile from to =
     Test.sendNotification
         SMethod_WorkspaceDidRenameFiles
-        ( RenameFilesParams
-            [FileRename (docIdToText from) (docIdToText to)
-            ]
-        )
+            (
+                RenameFilesParams [FileRename (docIdToText from) (docIdToText to)]
+            )
 
 -- ---------------------------------------------------------------------
 
@@ -493,10 +492,9 @@ didCreateFile :: TextDocumentIdentifier -> Test.Session ()
 didCreateFile newFile =
     Test.sendNotification
         SMethod_WorkspaceDidCreateFiles
-        ( CreateFilesParams
-            [FileCreate (docIdToText newFile)
-            ]
-        )
+            (
+                CreateFilesParams [FileCreate (docIdToText newFile)]
+            )
 
 -- ---------------------------------------------------------------------
 

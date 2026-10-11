@@ -113,8 +113,8 @@ instance Pretty Log where
     LogSessionRestart -> "Restarting shake session globally"
     LogShake logs -> pretty logs
     LogNoCabalFile file -> "Cannot find responsible cabal file for" <+> pretty file
-    LogCabalRenameFailed file err -> "Rename of file" <+> pretty file <+> "failed with error:" <+> pretty err
-    LogCabalCreateFailed file err -> "Create of file" <+> pretty file <+> "failed with error:" <+> pretty err
+    LogCabalRenameFailed file err -> "Handling rename of file" <+> pretty file <+> "failed with error:" <+> pretty err
+    LogCabalCreateFailed file err -> "Handling creation of file" <+> pretty file <+> "failed with error:" <+> pretty err
 
 {- | Some actions in cabal files can be triggered from haskell files.
 This descriptor allows us to hook into the diagnostics of haskell source files and

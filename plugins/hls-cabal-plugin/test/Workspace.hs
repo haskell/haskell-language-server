@@ -98,7 +98,6 @@ cabalRenameTests =
         testDescription = newModName <> " was renamed in " <> showComponentName compName
     liftIO $ assertBool testDescription $ fromString newModName `elem` compModules
 
-
 cabalCreateTests :: TestTree
 cabalCreateTests =
   testGroup

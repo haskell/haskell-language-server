@@ -120,8 +120,8 @@ createHandler recorder _ caps newHaskellFilePath cabalFilePath ideState = do
 {- | Apply create to the given cabal file
 
 Adds the module name corresponding to the new file path in the given cabal file.
-Fails if the cabal file cannot be parsed or the file path cannot be parsed to module
-names. Returns an empty workspace edit if a module is already present in the cabal file.
+Fails if the cabal file cannot be parsed or the file path cannot be parsed to a module
+name. Returns an empty workspace edit if a module is already present in the cabal file.
 -}
 applyModuleAddToCabalFile ::
   forall m.
@@ -208,10 +208,12 @@ isModuleDeclaredE ::
 isModuleDeclaredE pd cabalFilePath haskellFilePath = do
   let haskellFileRelativePath = makeRelative (dropFileName cabalFilePath) haskellFilePath
   buildTargetsM <- liftIO
+  -- we have to catch the errors thrown by `readBuildTargets` errors if module is not present
+  -- these errors changed between cabal versions
 #if MIN_VERSION_Cabal(3, 12, 0)
-    $ try @(VerboseException CabalException) -- we have to catch for `readBuildTargets` errors if module is not present
+    $ try @(VerboseException CabalException)
 #else
-    $ try @IOError  -- we have to catch for `readBuildTargets` errors if module is not present
+    $ try @IOError
 #endif
     $ readBuildTargets (verboseNoStderr silent) pd [haskellFileRelativePath]
   case buildTargetsM of
