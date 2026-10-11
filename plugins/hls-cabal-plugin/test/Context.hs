@@ -76,7 +76,7 @@ getContextTests =
             -- but the cursor is in the middle of the keyword,
             -- we are not in a keyword context
             ctx <- callGetContext (Position 0 5) "cabal" "cabal-version:\n"
-            ctx @?= (TopLevel, None)
+            ctx @?= (TopLevel, CabalVersion)
         , testCase "Cabal version keyword - no value, many spaces" $ do
             -- on a file, where the "cabal-version:" keyword is already written
             -- the context should still be top level but the keyword should be recognized
@@ -182,7 +182,7 @@ getContextTests =
             ctx <- callGetContext (Position 8 14) "" multiLineOptsData
             ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
         , parameterisedCursorTest "Contexts in large testfile" multiPositionTestData
-            [ (TopLevel, None)
+            [ (TopLevel, CabalVersion)
             , (TopLevel, KeyWord "cabal-version:")
             , (TopLevel, None)
             , (TopLevel, KeyWord "description:")
