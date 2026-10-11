@@ -37,16 +37,19 @@ import           Language.LSP.Protocol.Types          hiding
 import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
-import           Development.IDE.Core.Compile         (setNonHomeFCHook)
+import           Development.IDE.Core.Compile         (getModuleDocs,
+                                                       setNonHomeFCHook)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.GHC.Util             (printOutputable,
-                                                       printOutputableOneLine)
+                                                       printOutputableOneLine,
+                                                       printTypeQualified)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
+import           Control.Applicative                  ((<|>))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -70,8 +73,10 @@ import           Data.Tree
 import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Core.LookupMod       (LookupModule, lookupMod)
-import           Development.IDE.Core.Shake           (ShakeExtras (..),
-                                                       runIdeAction)
+import           Development.IDE.Core.Shake           (Log (..),
+                                                       ShakeExtras (..),
+                                                       runIdeAction,
+                                                       useWithStaleFast)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           GHC.Iface.Ext.Types                  (EvVarSource (..),
                                                        HieAST (..),
@@ -94,6 +99,8 @@ import           GHC.Iface.Ext.Utils                  (EvidenceInfo (..),
                                                        selectSmallestContaining)
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
+import           Ide.Logger                           (Priority (Debug),
+                                                       logWith)
 import qualified Language.LSP.Protocol.Lens           as L
 import           System.Directory                     (doesFileExist)
 
@@ -262,8 +269,9 @@ atPoint
   -> HscEnv
   -> Position
   -> Util.EnumSet Extension
+  -> M.Map ModuleName NormalizedFilePath -- ^ locations of the home modules imported by this file
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions =
+atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@(HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km _am) env pos enabledExtensions imports =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -317,11 +325,15 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
           -- documentation of that name.
           | otherwise = do
             let
-              typeSig = case identType dets of
-                Just t -> prettyType (Just n) locationsMap t
-                Nothing -> case safeTyThingType (Util.member LinearTypes enabledExtensions) =<< lookupNameEnv km n of
-                  Just kind -> prettyTypeFromType (Just n) locationsMap kind
-                  Nothing   -> wrapHaskell (printOutputable n)
+              typeSigFromGHC = do
+                tyThing <- lookupNameEnv km n
+                ty <- safeTyThingType (Util.member LinearTypes enabledExtensions) tyThing
+                pure $ prettyTypeFromType (Just n) locationsMap ty
+
+              typeSigFromHie = prettyType (Just n) locationsMap <$> identType dets
+
+              typeSig = fromMaybe (wrapHaskell (printOutputable n)) $ typeSigFromGHC <|> typeSigFromHie
+
               definitionLoc = maybeToList (pretty (definedAt n) (prettyPackageName n))
               docs = maybeToList (T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n)
 
@@ -331,7 +343,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
                 pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
-        prettyName _locationsMap (Left m,_) = packageNameForImportStatement m
+        prettyName _locationsMap (Left m,_) = prettyImportedModule m
 
         prettyPackageName :: Name -> Maybe T.Text
         prettyPackageName n = do
@@ -341,13 +353,20 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
 
         -- Return the module text itself and
         -- the package(with version) this `ModuleName` belongs to.
-        packageNameForImportStatement :: ModuleName -> IO T.Text
-        packageNameForImportStatement mod = do
+        prettyImportedModule :: ModuleName -> IO T.Text
+        prettyImportedModule mod = do
+          -- Note: mpkg is Nothing for local modules, so we look them up in the import map
           mpkg <- findImportedModule (setNonHomeFCHook env) mod :: IO (Maybe Module)
+          mpm <- case M.lookup mod imports of
+            Nothing  -> pure Nothing
+            Just nfp -> fmap fst <$> runIdeAction "HoverImport" shakeExtras (useWithStaleFast GetParsedModule nfp)
+          mdoc <- getModuleDocs env mpm mpkg
+
           let moduleName = printOutputable mod
+              docs = maybe "" (\d -> "\n\n---\n" <> T.unlines (spanDocToMarkdown (SpanDocString [hsDocString d] (SpanDocUris Nothing Nothing)))) mdoc
           case mpkg >>= packageNameWithVersion of
-            Nothing             -> pure moduleName
-            Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion
+            Nothing             -> pure $ moduleName <> docs
+            Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion <> docs
 
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
@@ -373,7 +392,7 @@ atPoint opts@IdeOptions{} shakeExtras@ShakeExtras{ withHieDb, hiedbWriter } har@
 
         prettyTypeFromType :: Maybe Name -> M.Map Name Location -> Type -> T.Text
         prettyTypeFromType boundNameMay locationsMap ty =
-          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printOutputableOneLine ty)
+          prettyTypeCommon boundNameMay locationsMap (S.fromList $ namesInType ty) (printTypeQualified ty)
 
         prettyType :: Maybe Name -> M.Map Name Location -> hietype -> T.Text
         prettyType boundNameMay locationsMap t =

@@ -20,7 +20,7 @@ import           Control.Lens                         (_Just, (&), (?~), (^?))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT)
+import           Control.Monad.Trans.Except           (ExceptT, catchE, throwE)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
@@ -104,13 +104,25 @@ descriptorForModules recorder modFilter plId =
       pluginRules = minimalImportsRule recorder modFilter,
       pluginHandlers =
          -- This plugin provides code lenses
-           mkPluginHandler SMethod_TextDocumentCodeLens (lensProvider recorder)
+           mkPluginHandlerWithDefault SMethod_TextDocumentCodeLens (InL []) (lensProvider recorder)
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
         -- This plugin provides inlay hints
-        <> mkPluginHandler SMethod_TextDocumentInlayHint (inlayHintProvider recorder)
+        <> mkPluginHandlerWithDefault SMethod_TextDocumentInlayHint (InL []) (inlayHintProvider recorder)
         -- This plugin provides code actions
         <> codeActionHandlers
     }
+
+mkPluginHandlerWithDefault :: PluginRequestMethod m => SClientMethod m -> MessageResult m -> PluginMethodHandler ideState m -> PluginHandlers ideState
+mkPluginHandlerWithDefault smethod defaultResult handler =
+  mkPluginHandler smethod
+    (\ ideState pluginId params -> do
+      catchE
+        (handler ideState pluginId params)
+        (\ r -> case r of
+          PluginRuleFailed _ -> pure defaultResult
+          _                  -> throwE r
+        )
+    )
 
 isInlayHintsSupported :: IdeState -> Bool
 isInlayHintsSupported ideState =

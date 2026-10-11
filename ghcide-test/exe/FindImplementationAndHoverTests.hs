@@ -56,7 +56,7 @@ tests = let
     , testGroup "hover"          $ mapMaybe snd allTests
     ]
     where
-      allTests = tests ++ recordDotSyntaxTests
+      allTests = tests ++ recordDotSyntaxTests ++ hoverOnFunction
 
   recordDotSyntaxTests =
     -- We get neither new hover information nor 'Goto Implementation' locations for record-dot-syntax
@@ -64,6 +64,10 @@ tests = let
     , test' "RecordDotSyntax.hs" yes yes (Position 17 18) [ExpectNoImplementations, ExpectHoverText ["_ :: Integer"]] "hover over dot shows child"
     , test' "RecordDotSyntax.hs" yes yes (Position 17 25) [ExpectNoImplementations, ExpectHoverText ["_ :: MyChild"]] "hover over child"
     , test' "RecordDotSyntax.hs" yes yes (Position 17 27) [ExpectNoImplementations, ExpectHoverText ["_ :: [Char]"]] "hover over grandchild"
+    ]
+
+  hoverOnFunction =
+    [ test' "HoverOnFunction.hs" yes yes (Position 4 1)  [ExpectNoImplementations, ExpectHoverText ["foo :: Num a => p -> a"]] "hover on function"
     ]
 
   test :: (HasCallStack) => (TestTree -> a) -> (TestTree -> b) -> Position -> [Expect] -> String -> (a, b)

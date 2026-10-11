@@ -1044,11 +1044,15 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 , parent = Nothing
                 , identModuleName  = mkModuleNameFS $ mkFastStringByteString $ T.encodeUtf8 mod}
 
+data FunctionNotation
+  = PrefixName       -- foo x y
+  | InfixBackticks   -- x `foo` y
+  | ParenthesizedOp  -- (+) x y
+
 data HidingMode
     = HideOthers [ModuleTarget]
     | ToQualified
-        Bool
-        -- ^ Parenthesised?
+        FunctionNotation
         ModuleName
 
 data ModuleTarget
@@ -1105,8 +1109,12 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
              = Just $ ImplicitPrelude $
                 maybe [] NE.toList (Map.lookup "Prelude" locDic)
         toModuleTarget mName = ExistingImp <$> Map.lookup mName locDic
-        parensed =
-            "(" `T.isPrefixOf` T.strip (textInRange _range txt)
+        strippedTextInRange = T.strip (textInRange _range txt)
+        notation = if "(" `T.isPrefixOf` strippedTextInRange
+                   then ParenthesizedOp
+                   else if "`" `T.isPrefixOf` strippedTextInRange
+                   then InfixBackticks
+                   else PrefixName
         -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
         removeAllDuplicates = map NE.head . filter ((==1) . length) . NE.group . sort
         hasDuplicate xs = length xs /= length (S.fromList xs)
@@ -1126,7 +1134,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
             , let modName = targetModuleName modTarget
                   modNameText = T.pack $ moduleNameString modName
             , mode <-
-                [ ToQualified parensed qual
+                [ ToQualified notation qual
                 | ExistingImp imps <- [modTarget]
                 {- HLINT ignore suggestImportDisambiguation "Use nubOrd" -}
                 -- TODO: The use of nub here is slow and maybe wrong for UnhelpfulLocation
@@ -1134,7 +1142,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
                 , L _ qual <- nub $ mapMaybe (ideclAs . unLoc)
                     $ NE.toList imps
                 ]
-                ++ [ToQualified parensed modName
+                ++ [ToQualified notation modName
                     | any (occursUnqualified symbol . unLoc)
                         (targetImports modTarget)
                     || case modTarget of
@@ -1197,19 +1205,28 @@ disambiguateSymbol ps fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     else Right . hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
-    (ToQualified parensed qualMod) ->
+    (ToQualified notation qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-         in Right <$> [ if parensed
-                then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
-                    liftParseAST @(HsExpr GhcPs) df $
-                    T.unpack $ printOutputable $
-                        HsVar @GhcPs noExtField $
-                            reLocA $ L (mkGeneralSrcSpan  "") rdr
-                else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
-                    liftParseAST @RdrName df $
-                    T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
+         in Right <$> [ case notation of
+                           PrefixName ->
+                               Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                                  liftParseAST @RdrName df $
+                                  T.unpack $ printOutputable $ L (mkGeneralSrcSpan "") rdr
+                           ParenthesizedOp ->
+                              Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                                  liftParseAST @(HsExpr GhcPs) df $
+                                  T.unpack $ printOutputable $
+                                      HsVar @GhcPs noExtField $
+                                          reLocA $ L (mkGeneralSrcSpan "") rdr
+                           InfixBackticks ->
+                               Rewrite (rangeToSrcSpan "<dummy>" (trimRange _range)) $ \df ->
+                                  liftParseAST @RdrName df $
+                                  T.unpack $ printOutputable $ L (mkGeneralSrcSpan "") rdr
             ]
+    where
+     trimRange (Range (Position r c) (Position r' c')) =
+       Range (Position r (c + 1)) (Position r' (c' - 1))
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
