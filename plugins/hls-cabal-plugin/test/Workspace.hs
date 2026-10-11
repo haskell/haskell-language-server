@@ -8,16 +8,21 @@ module Workspace (
 import           Control.Lens                                  ((^.))
 import           Data.String                                   (IsString (fromString))
 import qualified Data.Text.Encoding                            as T
-import           Distribution.PackageDescription               (ComponentName (..),
+import           Distribution.PackageDescription               (Benchmark (benchmarkBuildInfo),
+                                                                BuildInfo (otherModules),
+                                                                ComponentName (..),
+                                                                Executable (buildInfo),
+                                                                Library (exposedModules, libBuildInfo, libName),
                                                                 LibraryName (..),
                                                                 PackageDescription,
+                                                                TestSuite (testBuildInfo),
                                                                 benchmarkModules,
                                                                 exeModules,
                                                                 explicitLibModules,
                                                                 foreignLibModules,
                                                                 getComponent,
                                                                 showComponentName,
-                                                                testModules, Library (libName, exposedModules, libBuildInfo), Executable (buildInfo), BuildInfo (otherModules), TestSuite (testBuildInfo), Benchmark (benchmarkBuildInfo))
+                                                                testModules)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Types.Component                  (Component (..))
 import           Ide.Plugin.Cabal.Parse                        (parseCabalFileContents)
@@ -133,7 +138,7 @@ cabalCreateTests =
     haskellDoc <- createDoc haskellFP "haskell" ""
     cabalDoc <- openDoc cabalFP "cabal"
     _ <- createFile haskellDoc
-  
+
     contents <- documentContents cabalDoc
     case parseCabalFileContents $ T.encodeUtf8 contents of
       (_, Right gpd) -> pure $ flattenPackageDescription gpd

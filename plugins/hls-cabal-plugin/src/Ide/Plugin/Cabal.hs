@@ -38,8 +38,8 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import qualified Distribution.Parsec.Position                  as Syntax
 import qualified Ide.Plugin.Cabal.CabalAdd.CodeAction          as CabalAdd
 import qualified Ide.Plugin.Cabal.CabalAdd.Command             as CabalAdd
-import qualified Ide.Plugin.Cabal.CabalAdd.Rename              as Rename
 import qualified Ide.Plugin.Cabal.CabalAdd.Create              as Create
+import qualified Ide.Plugin.Cabal.CabalAdd.Rename              as Rename
 import           Ide.Plugin.Cabal.Completion.CabalFields       as CabalFields
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types   as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions       as Completions

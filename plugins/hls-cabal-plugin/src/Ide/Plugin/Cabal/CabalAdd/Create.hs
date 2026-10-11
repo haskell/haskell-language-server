@@ -8,10 +8,13 @@ module Ide.Plugin.Cabal.CabalAdd.Create (
 )
 where
 
+import           Control.Exception                             (try)
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Except                    (ExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.ByteString                               (ByteString)
+import qualified Data.List.NonEmpty                            as NE
+import           Data.Maybe
 import qualified Data.Text                                     as T
 import qualified Data.Text.Encoding                            as T
 import qualified Data.Text.IO                                  as Text
@@ -22,19 +25,25 @@ import           Development.IDE.Core.PluginUtils              (runActionE,
                                                                 useE)
 import qualified Development.IDE.Core.Shake                    as Shake
 import           Development.IDE.Types.Location                (toNormalizedUri)
-import qualified Distribution.Client.Add                       as Add
 import           Distribution.Client.Add                       (AddConfig (..),
                                                                 executeAddConfig)
-import           Ide.Plugin.Cabal.CabalAdd.Rename              (resolveBuildInfoE,
-                                                                toRelativeModulePathE)
+import qualified Distribution.Client.Add                       as Add
 import           Distribution.Fields                           (Field)
 import           Distribution.PackageDescription
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Parsec.Position                  (Position)
+import           Distribution.Simple.BuildTarget               (readBuildTargets)
+import           Distribution.Simple.Errors                    (CabalException)
+import           Distribution.Simple.Utils                     (VerboseException)
+import           Distribution.Verbosity                        (silent,
+                                                                verboseNoStderr)
 import           Ide.Logger
 import           Ide.Plugin.Cabal.CabalAdd.CodeAction          (buildInfoToHsSourceDirs,
                                                                 mkModuleInsertionConfig,
                                                                 mkStanzaItems)
+import           Ide.Plugin.Cabal.CabalAdd.Rename              (resolveBuildInfoE,
+                                                                toRelativeModulePathE)
+import           Ide.Plugin.Cabal.CabalAdd.Types               hiding (Log)
 import           Ide.Plugin.Cabal.Completion.Types             (ParseCabalFields (..),
                                                                 ParseCabalFile (..))
 import           Ide.Plugin.Error
@@ -46,16 +55,8 @@ import           Language.LSP.Protocol.Types                   (ClientCapabiliti
                                                                 WorkspaceEdit,
                                                                 filePathToUri,
                                                                 toNormalizedFilePath)
-import Ide.Plugin.Cabal.CabalAdd.Types hiding (Log)
-import qualified Data.List.NonEmpty as NE
-import Data.Maybe
-import System.FilePath (makeRelative, dropFileName)
-import Distribution.Verbosity (verboseNoStderr, silent)
-import Control.Exception (try)
-import Distribution.Simple.BuildTarget (readBuildTargets)
-import Distribution.Simple.Utils (VerboseException)
-import Distribution.Simple.Errors (CabalException)
-
+import           System.FilePath                               (dropFileName,
+                                                                makeRelative)
 
 data Log
   = LogDidCreate FilePath
