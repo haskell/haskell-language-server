@@ -31,6 +31,7 @@ module Development.IDE.GHC.Util(
     getExtensions,
     getExtensionsSet,
     stripOccNamePrefix,
+    printTypeQualified,
     ) where
 
 import           Data.Binary.Put                   (Put, runPut)
@@ -197,6 +198,9 @@ printOutputableOneLine = printOutputable' printWithoutUniquesOneLine
 printOutputableQualified :: Outputable a => PrintUnqualified -> a -> T.Text
 printOutputableQualified ctx =
     printOutputable' (printSDocQualifiedUnsafe ctx . ppr)
+
+printTypeQualified :: Type -> T.Text
+printTypeQualified = printOutputableOneLine . pprSigmaType
 
 printOutputable' :: Outputable a => (a -> String) -> a -> T.Text
 printOutputable' print =
