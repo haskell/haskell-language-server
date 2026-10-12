@@ -6,7 +6,7 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
 
-index-state: 2026-08-26T00:00:00Z
+index-state: 2026-10-08T18:50:00Z
 
 tests: True
 test-show-details: direct
@@ -84,3 +84,8 @@ if impl(ghc >= 9.14)
     time-compat:time,
     uuid-types:template-haskell,
     websockets:containers,
+
+-- The GADT plugin's golden tests expect the layout of ghc-exactprint 1.14.1;
+-- 1.14.3 indents every constructor after the first one further.
+if impl(ghc >= 9.14)
+  constraints: ghc-exactprint <1.14.2

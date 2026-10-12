@@ -40,7 +40,7 @@ This option obviously would not make sense for language servers for other langua
 
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
 
-- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `ormolu`, `fourmolu`, or `stylish-haskell`.
+- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `ormolu`, `fourmolu`, `stylish-haskell`, or `tilia`.
 - Cabal formatting provider (`haskell.cabalFormattingProvider`, default `cabal-gild`): what formatter to use for cabal files; one of `cabal-gild` or `cabal-fmt`.
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 - Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on initial load. As it is activated by default could drive to bad performance in large projects.
@@ -75,6 +75,8 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.ormolu.config.external`, default `false`: Use an external `ormolu` executable rather than the one packaged with HLS.
   - `fourmolu`:
     - `haskell.plugin.fourmolu.config.external`, default `false`: Use an external `fourmolu` executable rather than the one packaged with HLS.
+  - `tilia`:
+    - `haskell.plugin.tilia.config.external`, default `false`: Use an external `tilia` executable rather than the one packaged with HLS.
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
 - `haskell-language-server generate-default-config`: will print the json configuration with all default values. It can be used as template to modify it.
 - `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take and a description about it.

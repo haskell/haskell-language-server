@@ -159,6 +159,11 @@
         },
         "splice": {
             "globalOn": true
+        },
+        "tilia": {
+            "config": {
+                "external": false
+            }
         }
     }
 }
