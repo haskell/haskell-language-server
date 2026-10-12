@@ -13,8 +13,8 @@ import           Data.List.Extra
 import qualified Data.Set                        as Set
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
-import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  SemanticTokenAbsolute (..),
                                                   SemanticTokenRelative (..),
                                                   SemanticTokensEdit (..),
                                                   mkRange)

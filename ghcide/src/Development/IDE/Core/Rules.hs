@@ -181,7 +181,7 @@ import           Language.LSP.Server                          (LspT)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           Prelude                                      hiding (mod)
-import           System.Directory                             (doesFileExist)
+import qualified System.Directory.OsPath                      as Dir
 import           System.Info.Extra                            (isWindows)
 
 
@@ -1306,11 +1306,12 @@ getLinkableRule recorder =
             -- thus bump its modification time, forcing this rule to be rerun every time.
             -- Can't use `GetModificationTime` for the core file either, because it was
             -- possibly written in this very session, so the results aren't reliable
-            core_t <- liftIO $ getModTime core_file
-            exists <- liftIO $ doesFileExist obj_file
+            let toOsp = either (error . show) id . encodeOsPath
+            core_t <- liftIO $ getModTime (toOsp core_file)
+            exists <- liftIO $ Dir.doesFileExist (toOsp obj_file)
             mobj_time <- liftIO $
               if exists
-              then Just <$> getModTime obj_file
+              then Just <$> getModTime (toOsp obj_file)
               else pure Nothing
             case mobj_time of
               Just obj_t

@@ -21,6 +21,7 @@ import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (Action,
                                                        IdeState (shakeExtras),
+                                                       NormalizedFilePath,
                                                        Range (Range), Recorder,
                                                        WithPriority,
                                                        cmapWithPrio)
@@ -43,8 +44,7 @@ import           Language.LSP.Protocol.Message        (Method (Method_TextDocume
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
-                                                       NormalizedFilePath, Null,
-                                                       Position (..),
+                                                       Null, Position (..),
                                                        Range (_start),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),

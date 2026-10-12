@@ -96,9 +96,11 @@ import           GHC.Generics
 import           Ide.Plugin.Error
 import           Ide.Plugin.HandleRequestTypes
 import           Ide.Plugin.Properties
+import           Ide.Types.Location            (NormalizedFilePath)
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                uriToNormalizedFilePath)
 import qualified Language.LSP.Protocol.Types   as J
 import           Language.LSP.Server
 import           Language.LSP.VFS

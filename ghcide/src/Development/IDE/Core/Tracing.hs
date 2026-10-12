@@ -25,11 +25,12 @@ import           Development.IDE.Graph             (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
                                                     showDiagnostics)
-import           Development.IDE.Types.Location    (Uri (..))
+import           Development.IDE.Types.Location    (NormalizedFilePath,
+                                                    Uri (..),
+                                                    fromNormalizedFilePath)
 import           Ide.Logger
 import           Ide.Types                         (PluginId (..))
-import           Language.LSP.Protocol.Types       (NormalizedFilePath,
-                                                    fromNormalizedFilePath)
+
 import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
                                                     beginSpan, endSpan, setTag,
                                                     withSpan)

@@ -50,20 +50,23 @@ library
     Ide.Plugin.Resolve
     Ide.PluginUtils
     Ide.Types
+    Ide.Types.Location
 
   hs-source-dirs:     src
   build-depends:
     , aeson
     , base                  >=4.12    && <5
+    , binary
     , co-log-core
     , containers
     , data-default
+    , deepseq
     , dependent-map
     , dependent-sum         >=0.7
     , Diff                  ^>=0.5 || ^>=1.0.0
     , dlist
     , extra
-    , filepath
+    , filepath >=1.4.100
     , ghc
     , hashable
     , hls-graph             == 2.15.0.0

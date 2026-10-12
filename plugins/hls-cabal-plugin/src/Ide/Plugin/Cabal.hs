@@ -58,7 +58,13 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                    as JL
 import qualified Language.LSP.Protocol.Message                 as LSP
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types                   hiding
+                                                               (NormalizedFilePath,
+                                                                emptyNormalizedFilePath,
+                                                                fromNormalizedFilePath,
+                                                                normalizedFilePathToUri,
+                                                                toNormalizedFilePath,
+                                                                uriToNormalizedFilePath)
 import qualified Language.LSP.VFS                              as VFS
 import qualified Text.Fuzzy.Levenshtein                        as Fuzzy
 import qualified Text.Fuzzy.Parallel                           as Fuzzy
@@ -230,12 +236,12 @@ use some sort of fuzzy matching in the future, see issue #4357.
 fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics = diags}) = do
   mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
-  case (,) <$> mContents <*> uriToFilePath' uri of
+  case (,) <$> mContents <*> (uriToFilePath' uri >>= either (const Nothing) Just . decodeOsPath) of
     Nothing -> pure $ InL []
     Just (fileContents, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath' path
       case mFields of
         Nothing ->
           pure $ InL []
@@ -272,7 +278,7 @@ cabalAddDependencyCodeAction _ state plId (CodeActionParams _ _ (TextDocumentIde
               lift $
                 getVersionedTextDoc $
                   TextDocumentIdentifier (filePathToUri cabalFilePath)
-          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+          mbGPD <- liftIO $ runAction "cabal.cabal-add" state $ useWithStale ParseCabalFile $ toNormalizedFilePath' cabalFilePath
           case mbGPD of
             Nothing -> pure $ InL []
             Just (gpd, _) -> do
@@ -302,7 +308,7 @@ cabalAddModuleCodeAction recorder state plId (CodeActionParams _ _ (TextDocument
                 lift $
                   getVersionedTextDoc $
                     TextDocumentIdentifier (filePathToUri cabalFilePath)
-            (gpd, _) <- runActionE "cabal.cabal-add" state $ useWithStaleE ParseCabalFile $ toNormalizedFilePath cabalFilePath
+            (gpd, _) <- runActionE "cabal.cabal-add" state $ useWithStaleE ParseCabalFile $ toNormalizedFilePath' cabalFilePath
             actions <-
               CabalAdd.collectModuleInsertionOptions
                 (cmapWithPrio LogCabalAdd recorder)
@@ -404,11 +410,11 @@ completion recorder ide _ complParams = do
   let TextDocumentIdentifier uri = complParams ^. JL.textDocument
       position = complParams ^. JL.position
   mContents <- liftIO $ runAction "cabal-plugin.getUriContents" ide $ getUriContents $ toNormalizedUri uri
-  case (,) <$> mContents <*> uriToFilePath' uri of
+  case (,) <$> mContents <*> (uriToFilePath' uri >>= either (const Nothing) Just . decodeOsPath) of
     Just (cnts, path) -> do
       -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
       -- In case it fails, we still will get some completion results instead of an error.
-      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath' path
       case mFields of
         Nothing ->
           pure . InR $ InR Null
@@ -441,9 +447,9 @@ computeCompletionsAt recorder ide prefInfo fp fields matcher = do
                   -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
                   -- thus, a quick response gives us the desired result most of the time.
                   -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
-                  mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
+                  mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath' fp
                   pure $ fmap fst mGPD
-              , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath fp
+              , getCabalCommonSections = runAction "cabal-plugin.commonSections" ide $ use ParseCabalCommonSections $ toNormalizedFilePath' fp
               , cabalPrefixInfo = prefInfo
               , stanzaName =
                   case fst ctx of

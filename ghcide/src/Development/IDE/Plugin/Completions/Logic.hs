@@ -59,7 +59,9 @@ import           Ide.Types                                (CommandId (..),
                                                            PluginId)
 import           Language.Haskell.Syntax.Basic
 import qualified Language.LSP.Protocol.Lens               as L
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types              hiding
+                                                          (NormalizedFilePath,
+                                                           uriToNormalizedFilePath)
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)

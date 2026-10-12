@@ -131,7 +131,9 @@ import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Message            as LSP
-import           Language.LSP.Protocol.Types              hiding (Null)
+import           Language.LSP.Protocol.Types              hiding
+                                                          (NormalizedFilePath,
+                                                           Null)
 import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
 import           Prelude                                  hiding (log)

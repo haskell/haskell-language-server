@@ -13,7 +13,8 @@ import           Development.IDE.Core.PositionMapping (PositionResult (..),
                                                        toCurrentPosition)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
-                                                      (SemanticTokenAbsolute (..),
+                                                      (NormalizedFilePath,
+                                                       SemanticTokenAbsolute (..),
                                                        SemanticTokenRelative (..),
                                                        SemanticTokensEdit (..),
                                                        mkRange)

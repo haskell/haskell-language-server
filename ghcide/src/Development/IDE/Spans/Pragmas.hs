@@ -9,25 +9,28 @@ module Development.IDE.Spans.Pragmas
   , insertNewPragma
   , getFirstPragma ) where
 
-import           Control.Lens                    ((&), (.~))
-import           Data.Bits                       (Bits (setBit))
-import qualified Data.List                       as List
-import qualified Data.Maybe                      as Maybe
-import           Data.Text                       (Text, pack)
-import qualified Data.Text                       as Text
-import           Data.Text.Utf16.Rope.Mixed      (Rope)
-import qualified Data.Text.Utf16.Rope.Mixed      as Rope
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
+import           Control.Lens                     ((&), (.~))
+import           Control.Monad.IO.Class           (MonadIO (..))
+import           Control.Monad.Trans.Except       (ExceptT)
+import           Data.Bits                        (Bits (setBit))
+import qualified Data.List                        as List
+import qualified Data.Maybe                       as Maybe
+import           Data.Text                        (Text, pack)
+import qualified Data.Text                        as T
+import qualified Data.Text                        as Text
+import           Data.Text.Utf16.Rope.Mixed       (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed       as Rope
+import           Development.IDE                  (GhcSession (..), IdeState,
+                                                   NormalizedFilePath,
+                                                   getFileContents, hscEnv,
+                                                   runAction, srcSpanToRange)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified Language.LSP.Protocol.Types    as LSP
-import           Control.Monad.IO.Class         (MonadIO (..))
-import           Control.Monad.Trans.Except     (ExceptT)
-import           Ide.Plugin.Error               (PluginError)
-import           Ide.Types                      (PluginId(..))
-import qualified Data.Text                      as T
-import           Development.IDE.Core.PluginUtils
-import qualified Language.LSP.Protocol.Lens     as L
+import           Ide.Plugin.Error                 (PluginError)
+import           Ide.Types                        (PluginId (..))
+import qualified Language.LSP.Protocol.Lens       as L
+import qualified Language.LSP.Protocol.Types      as LSP
 
 getNextPragmaInfo :: DynFlags -> Maybe Rope -> NextPragmaInfo
 getNextPragmaInfo dynFlags mbSource =

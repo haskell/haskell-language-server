@@ -41,7 +41,13 @@ import           Development.IDE.Types.Options                (IdeOptions)
 import           Ide.Plugin.Error                             (PluginError)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types                  hiding
+                                                              (NormalizedFilePath,
+                                                               emptyNormalizedFilePath,
+                                                               fromNormalizedFilePath,
+                                                               normalizedFilePathToUri,
+                                                               toNormalizedFilePath,
+                                                               uriToNormalizedFilePath)
 
 type CodeActionTitle = T.Text
 

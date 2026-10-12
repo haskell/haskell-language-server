@@ -32,7 +32,8 @@ import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types   hiding (NormalizedFilePath,
+                                                uriToNormalizedFilePath)
 
 data Log
     = DoesNotSupportResolve T.Text

@@ -9,7 +9,8 @@ import           Development.IDE.GHC.Util
 import           Development.IDE.Test        (expectCurrentDiagnostics,
                                               expectDiagnostics,
                                               expectNoMoreDiagnostics)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath,
+                                              SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test

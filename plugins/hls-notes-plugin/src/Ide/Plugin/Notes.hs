@@ -27,7 +27,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCompletion, Method_TextDocumentDefinition, Method_TextDocumentHover, Method_TextDocumentReferences),
                                                    SMethod (SMethod_TextDocumentCompletion, SMethod_TextDocumentDefinition, SMethod_TextDocumentHover, SMethod_TextDocumentReferences))
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   emptyNormalizedFilePath,
+                                                   fromNormalizedFilePath,
+                                                   normalizedFilePathToUri,
+                                                   toNormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 import           Text.Regex.TDFA                  (Regex, caseSensitive,
                                                    defaultCompOpt,
                                                    defaultExecOpt,
@@ -123,7 +128,7 @@ getNote nfp state (Position l c) = do
 
 listReferences :: PluginMethodHandler IdeState Method_TextDocumentReferences
 listReferences state _ param
-    | Just nfp <- uriToNormalizedFilePath uriOrig
+    | Just nfp <- uriToNormalizedFilePath (fromNormalizedUri uriOrig)
     = do
         let pos@(Position l _) = param ^. L.position
         noteOpt <- getNote nfp state pos
@@ -136,7 +141,7 @@ listReferences state _ param
                   Just poss -> pure $ InL $ mapMaybe (\(noteFp, pos@(Position l' _)) ->
                       if l' == l
                         then Nothing
-                        else Just (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                        else Just (Location (fromNormalizedUri $ filePathToUri' noteFp) (Range pos pos))
                     )
                     poss
     where
@@ -145,7 +150,7 @@ listReferences _ _ _ = throwError $ PluginInternalError "conversion to normalize
 
 jumpToNote :: PluginMethodHandler IdeState Method_TextDocumentDefinition
 jumpToNote state _ param
-    | Just nfp <- uriToNormalizedFilePath uriOrig
+    | Just nfp <- uriToNormalizedFilePath (fromNormalizedUri uriOrig)
     = do
         noteOpt <- getNote nfp state (param ^. L.position)
         case noteOpt of
@@ -155,7 +160,7 @@ jumpToNote state _ param
                 case HM.lookup note notes of
                   Nothing -> pure (InR (InR Null))
                   Just (noteFp, pos) -> pure $ InL $ Definition $ InL $
-                    Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos)
+                    Location (fromNormalizedUri $ filePathToUri' noteFp) (Range pos pos)
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
 jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
@@ -276,7 +281,7 @@ normalizeNewlines = T.replace "\r\n" "\n"
 -- ignores Note Declaration
 hoverNote :: PluginMethodHandler IdeState Method_TextDocumentHover
 hoverNote state _ params
-  | Just nfp <- uriToNormalizedFilePath uriOrig
+  | Just nfp <- uriToNormalizedFilePath (fromNormalizedUri uriOrig)
   = do
       let pos@(Position line _) = params ^. L.position
       noteOpt <- getNote nfp state pos
@@ -347,7 +352,7 @@ autocomplete state _ params = do
         -- Suggest list of all NOTE DECLARATION if "note [" infix detected
         else if "note[" `T.isInfixOf` linePrefix || "note [" `T.isInfixOf` linePrefix
         then
-          case uriToNormalizedFilePath nuri of
+          case uriToNormalizedFilePath (fromNormalizedUri nuri) of
             Nothing -> pure []
 
             Just nfp -> do

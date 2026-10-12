@@ -9,9 +9,10 @@ import qualified Data.Map                         as Map
 import           Data.Text                        (Text, unpack)
 import qualified Data.Text                        as T
 import           Development.IDE                  (GetParsedModule (GetParsedModule),
-                                                   IdeState, RuleResult, Rules,
-                                                   define, realSrcSpanToRange,
-                                                   use)
+                                                   IdeState, NormalizedFilePath,
+                                                   RuleResult, Rules, define,
+                                                   filePathToUri',
+                                                   realSrcSpanToRange, use)
 import           Development.IDE.Core.PluginUtils
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
@@ -32,7 +33,8 @@ import qualified Ide.Plugin.RangeMap              as RangeMap
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types      hiding (NormalizedFilePath,
+                                                   uriToNormalizedFilePath)
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -112,7 +114,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
         mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
+                changes = Just $ Map.singleton (fromNormalizedUri $ filePathToUri' nfp) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ExtensionNeeded exts) ghcExts

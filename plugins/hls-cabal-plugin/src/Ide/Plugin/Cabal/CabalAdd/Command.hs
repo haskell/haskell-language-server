@@ -32,6 +32,7 @@ import           Development.IDE.Core.FileStore    (getFileContents)
 import           Development.IDE.Core.Rules        (IdeState)
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (useWithStale)
+import           Development.IDE.Types.Location    (toNormalizedFilePath')
 import           Distribution.Client.Add           as Add
 import           Distribution.Fields               (Field)
 import           Distribution.PackageDescription
@@ -55,7 +56,6 @@ import           Language.LSP.Protocol.Types       (ApplyWorkspaceEditParams (Ap
                                                     Null (Null),
                                                     VersionedTextDocumentIdentifier,
                                                     WorkspaceEdit,
-                                                    toNormalizedFilePath,
                                                     type (|?) (InR))
 
 --------------------------------------------
@@ -188,9 +188,9 @@ mkCabalAddConfig ::
 mkCabalAddConfig recorder env cabalFilePath mkConfig = do
   let (state, caps, verTxtDocId) = env
   (mbCnfOrigContents, mbFields, mbPackDescr) <- liftIO $ runAction "cabal.cabal-add" state $ do
-    contents <- getFileContents $ toNormalizedFilePath cabalFilePath
-    inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath cabalFilePath
-    inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath cabalFilePath
+    contents <- getFileContents $ toNormalizedFilePath' cabalFilePath
+    inFields <- useWithStale ParseCabalFields $ toNormalizedFilePath' cabalFilePath
+    inPackDescr <- useWithStale ParseCabalFile $ toNormalizedFilePath' cabalFilePath
     let mbCnfOrigContents = case contents of
           (Just txt) -> Just $ encodeUtf8 $ Rope.toText txt
           _          -> Nothing

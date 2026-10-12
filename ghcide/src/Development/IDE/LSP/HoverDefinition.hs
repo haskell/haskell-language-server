@@ -19,6 +19,7 @@ module Development.IDE.LSP.HoverDefinition
 import           Control.Monad.Except           (ExceptT)
 import           Control.Monad.IO.Class
 import           Data.Maybe                     (fromMaybe)
+import qualified Data.Text                      as T
 import           Development.IDE.Core.Actions
 import qualified Development.IDE.Core.Rules     as Shake
 import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
@@ -28,9 +29,13 @@ import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
-
-import qualified Data.Text                      as T
+import           Language.LSP.Protocol.Types    hiding (NormalizedFilePath,
+                                                 emptyNormalizedFilePath,
+                                                 fromNormalizedFilePath,
+                                                 normalizedFilePathToUri,
+                                                 toNormalizedFilePath,
+                                                 uriToNormalizedFilePath)
+import           System.OsPath                  (OsPath)
 
 
 data Log
@@ -87,8 +92,8 @@ request label getResults notFound found recorder ide (TextDocumentPositionParams
         Nothing   -> pure Nothing
     pure $ maybe notFound found mbResult
 
-logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
+logAndRunRequest :: Recorder (WithPriority Log) -> T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> OsPath -> IO b
 logAndRunRequest recorder label getResults ide pos path = do
-  let filePath = toNormalizedFilePath' path
+  let filePath = either (error . show) toNormalizedFilePath' (decodeOsPath path)
   logWith recorder Debug $ LogRequest label pos filePath
   runIdeAction (T.unpack label) (shakeExtras ide) (getResults filePath pos)

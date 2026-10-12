@@ -24,7 +24,8 @@ import           Development.IDE.Core.FileStore                (getUriContents,
 import           Development.IDE.Core.PluginUtils              (runActionE,
                                                                 useE)
 import qualified Development.IDE.Core.Shake                    as Shake
-import           Development.IDE.Types.Location                (toNormalizedUri)
+import           Development.IDE.Types.Location                (toNormalizedFilePath',
+                                                                toNormalizedUri)
 import qualified Distribution.Client.Add                       as Add
 import           Distribution.Client.Rename                    (RenameConfig (..),
                                                                 executeRenameConfig)
@@ -48,8 +49,7 @@ import           Language.LSP.Protocol.Types                   (ClientCapabiliti
                                                                 TextDocumentIdentifier (TextDocumentIdentifier),
                                                                 VersionedTextDocumentIdentifier,
                                                                 WorkspaceEdit,
-                                                                filePathToUri,
-                                                                toNormalizedFilePath)
+                                                                filePathToUri)
 
 data Log
   = LogDidRename FilePath FilePath
@@ -85,7 +85,7 @@ renameHandler recorder _ caps oldHaskellFilePath newHaskellFilePath cabalFilePat
   logWith recorder Info $ LogDidRename oldHaskellFilePath newHaskellFilePath
   (contents, fields, gpd, verTxtDocId) <- runActionE "cabal-plugin.getUriContents" ideState $ do
     let nuri = toNormalizedUri $ filePathToUri cabalFilePath
-        nfp = toNormalizedFilePath cabalFilePath
+        nfp = toNormalizedFilePath' cabalFilePath
     mContent <- lift $ getUriContents nuri
     verTxtDocId <-
       runActionE "cabalAdd.getVersionedTextDoc" ideState $

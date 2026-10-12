@@ -47,12 +47,20 @@ import           Development.IDE.Session              (clearSessionLoaderPending
                                                        setSessionLoaderPendingBarrier)
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
-import           Development.IDE.Types.Location       (fromUri)
+import           Development.IDE.Types.Location       (NormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types          hiding
+                                                      (NormalizedFilePath,
+                                                       emptyNormalizedFilePath,
+                                                       fromNormalizedFilePath,
+                                                       normalizedFilePathToUri,
+                                                       toNormalizedFilePath,
+                                                       uriToNormalizedFilePath)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
 import           System.Time.Extra

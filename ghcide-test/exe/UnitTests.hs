@@ -31,7 +31,8 @@ import           Ide.PluginUtils                              (pluginDescToIdePl
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                  hiding
-                                                              (SemanticTokenAbsolute (..),
+                                                              (NormalizedFilePath,
+                                                               SemanticTokenAbsolute (..),
                                                                SemanticTokenRelative (..),
                                                                SemanticTokensEdit (..),
                                                                mkRange)
@@ -41,6 +42,7 @@ import qualified Progress
 import           System.IO.Extra                              hiding
                                                               (withTempDir)
 import           System.Mem                                   (performGC)
+import qualified System.OsPath                                as OsPath
 import           Test.Hls                                     (IdeState, def,
                                                                runSessionWithServerInTmpDir,
                                                                waitForProgressDone)
@@ -53,19 +55,19 @@ import           Text.Printf                                  (printf)
 tests :: TestTree
 tests = do
   testGroup "Unit"
-     [ testCase "empty file path does NOT work with the empty String literal" $
-         uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
+     [ testCase "empty file path via the empty String literal uses the IsString instance" $
+         uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just mempty
      , testCase "empty file path works using toNormalizedFilePath'" $
-         uriToFilePath' (fromNormalizedUri $ filePathToUri' (toNormalizedFilePath' "")) @?= Just ""
+         uriToFilePath' (fromNormalizedUri $ filePathToUri' (toNormalizedFilePath' "")) @?= Just mempty
      , testCase "empty path URI" $ do
          Just URI{..} <- pure $ parseURI (T.unpack $ getUri $ fromNormalizedUri emptyPathUri)
          uriScheme @?= "file:"
          uriPath @?= ""
      , testCase "from empty path URI" $ do
          let uri = Uri "file://"
-         uriToFilePath' uri @?= Just ""
+         uriToFilePath' uri @?= Just mempty
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
-         let diag = Diagnostics.FileDiagnostic "" Diagnostics.ShowDiag Diagnostic
+         let diag = Diagnostics.FileDiagnostic (toNormalizedFilePath' "") Diagnostics.ShowDiag Diagnostic
                {  _codeDescription = Nothing
                 , _data_ = Nothing
                 , _range = Range
@@ -154,6 +156,6 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     atomicFileWriteString f ""
     threadDelay delay_us
     atomicFileWriteString f' ""
-    t <- getModTime f
-    t' <- getModTime f'
+    t <- OsPath.encodeFS f >>= getModTime
+    t' <- OsPath.encodeFS f' >>= getModTime
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)

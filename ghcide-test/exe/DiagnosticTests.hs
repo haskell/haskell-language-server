@@ -19,8 +19,8 @@ import           Development.IDE.Test            (diagnostic,
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (..),
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  SemanticTokenAbsolute (..),
                                                   SemanticTokenRelative (..),
                                                   SemanticTokensEdit (..),
                                                   mkRange)
@@ -260,7 +260,9 @@ tests = testGroup "diagnostics"
         ) $ \sessionDir -> do
       tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
-      liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
+      unless ideResultSuccess $ do
+        diags <- getCurrentDiagnostics tdoc
+        liftIO $ assertBool ("T should typecheck using srcA's C, diagnostics: " <> show diags) False
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
       assertDefsFile (sessionDir </> "srcA" </> "C.hs") locs

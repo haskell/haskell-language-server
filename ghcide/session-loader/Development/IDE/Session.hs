@@ -77,6 +77,7 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
 import qualified System.Directory.Extra              as IO
+import qualified System.Directory.OsPath             as Dir
 import           System.FilePath
 import           System.Info
 
@@ -933,7 +934,7 @@ session recorder sessionShake sessionState knownTargetsVar(hieYaml, cfp, opts, l
         keys1 <- extendKnownTargets recorder knownTargetsVar all_targets
         -- Typecheck all files in the project on startup
         unless (null new_components_info || not checkProject) $ do
-            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
+            cfps' <- liftIO $ filterM (Dir.doesFileExist . (\(NormalizedFilePath _ osp) -> osp)) (concatMap targetLocations all_targets)
             void $ enqueueActions sessionShake $ mkDelayedAction "InitialLoad" Debug $ void $ do
                 mmt <- uses GetModificationTime cfps'
                 let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
@@ -1063,10 +1064,10 @@ extendKnownTargets recorder knownTargetsVar newTargets = do
         -- If we don't generate a TargetFile for each potential location, we will only have
         -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
         -- and also not find 'TargetModule Foo'.
-        fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+        fs <- filterM (Dir.doesFileExist . (\(NormalizedFilePath _ osp) -> osp)) targetLocations
         pure $ map (\fp -> (TargetFile fp, Set.singleton fp)) (nubOrd (f:fs))
       TargetModule _ -> do
-        found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+        found <- filterM (Dir.doesFileExist . (\(NormalizedFilePath _ osp) -> osp)) targetLocations
         return [(targetTarget, Set.fromList found)]
   hasUpdate <- atomically $ do
     known <- readTVar knownTargetsVar

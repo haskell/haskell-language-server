@@ -52,11 +52,16 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Location       (NormalizedFilePath)
+import           Development.IDE.Types.Location       (NormalizedFilePath,
+                                                       filePathToUri',
+                                                       fromNormalizedFilePath,
+                                                       fromUri,
+                                                       uriToNormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
-import           Ide.PluginUtils                      (asPosition, rangesOverlap)
+import           Ide.PluginUtils                      (asPosition,
+                                                       rangesOverlap)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as LSP
 import           Language.LSP.Protocol.Message        (SMethod (..))
@@ -139,7 +144,7 @@ uriToFilePathE uri = maybeToExceptT (PluginInvalidParams (T.pack $ "uriToFilePat
 
 -- |MaybeT version of `uriToFilePath`
 uriToFilePathMT :: Monad m => LSP.Uri -> MaybeT m FilePath
-uriToFilePathMT = MaybeT . pure . Location.uriToFilePath'
+uriToFilePathMT = MaybeT . pure . fmap fromNormalizedFilePath . uriToNormalizedFilePath
 
 -- ----------------------------------------------------------------------------
 -- PositionMapping wrappers
@@ -211,7 +216,7 @@ fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
 activeDiagnosticsInRangeMT :: MonadIO m => Shake.ShakeExtras -> NormalizedFilePath -> LSP.Range -> MaybeT m [FileDiagnostic]
 activeDiagnosticsInRangeMT ide nfp range = do
     MaybeT $ liftIO $ atomically $ do
-        mDiags <- STM.lookup (LSP.normalizedFilePathToUri nfp) (Shake.publishedDiagnostics ide)
+        mDiags <- STM.lookup (filePathToUri' nfp) (Shake.publishedDiagnostics ide)
         case mDiags of
             Nothing -> pure Nothing
             Just fileDiags -> do
@@ -239,7 +244,7 @@ activeDiagnosticsInRange ide nfp range = concat <$> runMaybeT (activeDiagnostics
 -- Prefer server-side diagnostics if available; they are authoritative.
 injectServerDiagnostics :: IdeState -> CodeActionParams -> IO CodeActionParams
 injectServerDiagnostics ide params@LSP.CodeActionParams{_textDocument=LSP.TextDocumentIdentifier{_uri}, _range} = do
-  serverDiags <- case LSP.uriToNormalizedFilePath (LSP.toNormalizedUri _uri) of
+  serverDiags <- case uriToNormalizedFilePath _uri of
     Nothing  -> pure []
     Just nfp -> do
       mDiags <- activeDiagnosticsInRange (shakeExtras ide) nfp _range
@@ -261,7 +266,7 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
   where
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler IdeState m
     provider m ide _pid params
-      | Just nfp <- LSP.uriToNormalizedFilePath $ LSP.toNormalizedUri uri = do
+      | Just nfp <- uriToNormalizedFilePath uri = do
         contentsMaybe <- liftIO $ runAction "mkFormattingHandlers" ide $ getFileContents nfp
         case contentsMaybe of
           Just contents -> do

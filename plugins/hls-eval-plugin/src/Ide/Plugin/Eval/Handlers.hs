@@ -51,7 +51,8 @@ import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags)
 import           Development.IDE.Import.DependencyInformation (transitiveDeps,
                                                                transitiveModuleDeps)
-import           Development.IDE.Types.Location               (toNormalizedFilePath')
+import           Development.IDE.Types.Location               (NormalizedFilePath,
+                                                               toNormalizedFilePath')
 import           GHC                                          (ClsInst,
                                                                ExecOptions (execLineNumber, execSourceFile),
                                                                FamInst,
@@ -123,7 +124,7 @@ import           Ide.Plugin.Eval.Util                         (gStrictTry,
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types hiding (NormalizedFilePath, toNormalizedFilePath, fromNormalizedFilePath, uriToNormalizedFilePath, normalizedFilePathToUri, emptyNormalizedFilePath)
 import           Language.LSP.Server
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC.Unit.Module.ModIface                     (IfaceTopEnv (..))

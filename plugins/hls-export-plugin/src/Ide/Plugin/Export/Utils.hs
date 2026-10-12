@@ -6,7 +6,8 @@ import qualified Data.Map.Strict                 as Map
 import           Data.Text                       (Text)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types     hiding (NormalizedFilePath,
+                                                  uriToNormalizedFilePath)
 
 rdrNameFS :: RdrName -> FastString
 rdrNameFS = occNameFS . rdrNameOcc
