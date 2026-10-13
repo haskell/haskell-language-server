@@ -665,11 +665,6 @@ instance Show CallRetrieError where
 
 instance Exception CallRetrieError
 
--- TODO(simon):
--- * Load TypeCheck for each impacted file
--- * We need accurate typecheck results for name resolution etc
--- * extractImports needs to know the GlobalRdrEnv to reject adding clashing imports
--- * it also looks up the definition binder to figure out what names need importing
 
 callRetrie ::
   Recorder (WithPriority Log) ->
