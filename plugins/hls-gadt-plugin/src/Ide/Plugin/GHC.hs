@@ -227,7 +227,7 @@ prettyGADTDecl df decl =
 #if MIN_VERSION_ghc_exactprint(1,14,3)
         -- the first constructor sets the layout column and the others are
         -- placed relative to it.
-        adjustCons (DataTypeCons td (c:cs)) = DataTypeCons td (adjustCon c : map (conAtCol 0) cs)
+        adjustCons (DataTypeCons td (c:cs)) = DataTypeCons td (adjustCon c:cs)
         adjustCons cons = fmap adjustCon cons
 #else
         adjustCons = fmap adjustCon
