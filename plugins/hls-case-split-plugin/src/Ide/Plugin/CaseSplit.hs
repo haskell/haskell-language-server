@@ -60,6 +60,7 @@
 
 module Ide.Plugin.CaseSplit
   ( caseSplitPluginCodeActionTitle
+  , splitPatternCodeActionTitle
   , descriptor
   , Log
   ) where
@@ -67,24 +68,28 @@ module Ide.Plugin.CaseSplit
 import           Control.Applicative                   (ZipList (ZipList, getZipList))
 import           Control.Arrow                         (first, (&&&), (>>>))
 import           Control.Lens                          ((^.), (^?))
-import           Control.Monad                         ((>=>))
+import           Control.Monad                         (guard, (>=>))
 import           Control.Monad.Except                  (runExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.State.Strict            (MonadState (get, put),
-                                                        State, evalState)
+                                                        State, evalState,
+                                                        runState)
 import           Control.Monad.Trans                   (lift)
 import           Control.Monad.Trans.Except            (ExceptT)
-import           Data.Data                             (Data)
+import           Data.Data                             (Data, cast)
 import           Data.Function                         (on, (&))
-import           Data.Generics.Schemes                 (everywhereM)
-import           Data.List.Extra                       (chunksOf, dropEnd,
-                                                        takeEnd, unsnoc)
+import           Data.Generics.Schemes                 (everywhere, everywhereM,
+                                                        listify)
+import           Data.List.Extra                       (chunksOf, dropEnd1,
+                                                        findIndex, takeEnd,
+                                                        unsnoc)
 import           Data.List.NonEmpty                    (NonEmpty ((:|)),
                                                         nonEmpty)
 import qualified Data.List.NonEmpty                    as NE
 import           Data.List.NonEmpty.Extra              ((|:))
-import           Data.Maybe                            (isJust, listToMaybe,
-                                                        mapMaybe, maybeToList)
+import           Data.Maybe                            (fromMaybe, isJust,
+                                                        listToMaybe, mapMaybe,
+                                                        maybeToList)
 import           Data.Semigroup                        (sconcat)
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
@@ -118,7 +123,7 @@ import           Development.IDE.GHC.Compat.Core       (AnnListItem,
                                                         GrhsAnn (..),
                                                         HasSrcSpan,
                                                         HsLamVariant (LamCase),
-                                                        HsMatchContext (LamAlt),
+                                                        HsMatchContext (FunRhs, LamAlt),
                                                         LocatedAn,
                                                         TcGblEnv (..),
                                                         lann_trailing,
@@ -189,7 +194,7 @@ import           Ide.Types                             (Config, HandlerM,
                                                         pluginGetClientCapabilities)
 import           Language.Haskell.Syntax               (HsConDetails (InfixCon, PrefixCon, RecCon),
                                                         HsLocalBindsLR (EmptyLocalBinds),
-                                                        LHsExpr,
+                                                        LHsExpr, LPat,
                                                         MatchGroup (MG, mg_alts),
                                                         ModuleName (ModuleName),
                                                         NoExtField (NoExtField),
@@ -203,7 +208,7 @@ import           Language.LSP.Protocol.Message         (Method (Method_TextDocum
 import qualified Language.LSP.Protocol.Message         as LSP
 import           Language.LSP.Protocol.Types           (ClientCapabilities,
                                                         CodeAction (..),
-                                                        CodeActionKind (CodeActionKind_QuickFix),
+                                                        CodeActionKind (CodeActionKind_QuickFix, CodeActionKind_Refactor),
                                                         CodeActionParams (CodeActionParams, _range, _textDocument),
                                                         Diagnostic,
                                                         NormalizedFilePath,
@@ -231,6 +236,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides the split cas
 caseSplitPluginCodeActionTitle :: Text
 caseSplitPluginCodeActionTitle = "Add placeholders for missing patterns"
 
+splitPatternCodeActionTitle :: Text
+splitPatternCodeActionTitle = "Split pattern by constructor"
+
 suggestCaseSplitProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 suggestCaseSplitProvider recorder state _ CodeActionParams{..}
   = do
@@ -247,14 +255,16 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
   caps <- lift pluginGetClientCapabilities
   verTxtDocId <- lift $ getVerTxtDocId state _textDocument
 
-  pprCtx <- getPprCtx state nfp
+  (pprCtx, tcGblEnv) <- getPprCtx state nfp
 
   codeAction <- case traverse (makeCodeAction caps verTxtDocId pprCtx psOld arrowSyntax) diagAndMissingCtors of
                      Left unsupportedPat -> do logWith recorder Warning $ LogPatternNotSupportedYet unsupportedPat
                                                pure Nothing
                      Right cAct -> pure cAct
 
-  pure $ InL $ InR <$> maybeToList codeAction
+  let splitAction = makeSplitCodeAction caps verTxtDocId pprCtx tcGblEnv psOld _range
+
+  pure $ InL $ InR <$> (maybeToList codeAction <> maybeToList splitAction)
 
   where
     makeCodeAction :: ClientCapabilities
@@ -282,14 +292,15 @@ suggestCaseSplitProvider recorder state _ CodeActionParams{..}
 -- | Retrieve the pretty printing context, which is used to determine whether
 -- the constructors of the patterns to be inserted need be qualified, and what
 -- the qualifier should be.
-getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) PrintUnqualified
+getPprCtx :: IdeState -> NormalizedFilePath -> ExceptT PluginError (HandlerM Config) (PrintUnqualified, TcGblEnv)
 getPprCtx state nfp = do
   (typechecked, hscEnvEq) <- runActionE "CaseSplit.GetPprContext" state $ do
     typechecked <- useE TypeCheck nfp
     hscEnvEq <- useE GhcSession nfp
     return (typechecked, hscEnvEq)
-  let reader = tcg_rdr_env (tmrTypechecked typechecked)
-  pure $ mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader
+  let tcGblEnv = tmrTypechecked typechecked
+      reader = tcg_rdr_env tcGblEnv
+  pure (mkPrintUnqualifiedDefault (hscEnv hscEnvEq) reader, tcGblEnv)
 
 -- | Retrieve 'VersionedTextDocumentIdentifier' from the handler.
 getVerTxtDocId :: IdeState -> TextDocumentIdentifier -> HandlerM Config VersionedTextDocumentIdentifier
@@ -435,6 +446,172 @@ graftMissingPatterns pprCtx ps range missingPs arrowSyntax
                    . grhssGRHSs
                    . m_grhss
                    . unLoc
+
+data SplitPlan = SplitPlan
+  { splitPatSpan   :: SrcSpan
+  , splitMatchSpan :: SrcSpan
+  , splitPats      :: [Pat GhcPs]
+  }
+
+makeSplitCodeAction :: ClientCapabilities
+                    -> VersionedTextDocumentIdentifier
+                    -> PrintUnqualified
+                    -> TcGblEnv
+                    -> ParsedSource
+                    -> Range
+                    -> Maybe CodeAction
+makeSplitCodeAction caps verTxtDocId pprCtx tcGblEnv ps range = do
+  plan <- findSplitPlan tcGblEnv pprCtx range ps
+  psNew <- graftSplitPattern plan ps
+  pure CodeAction { _title       = splitPatternCodeActionTitle
+                  , _kind        = Just CodeActionKind_Refactor
+                  , _diagnostics = Nothing
+                  , _isPreferred = Nothing
+                  , _disabled    = Nothing
+                  , _edit        = Just $ makeEditText caps verTxtDocId ps psNew
+                  , _command     = Nothing
+                  , _data_       = Nothing }
+
+findSplitPlan :: TcGblEnv -> PrintUnqualified -> Range -> ParsedSource -> Maybe SplitPlan
+findSplitPlan tcGblEnv pprCtx range ps
+  = listToMaybe
+  $ mapMaybe planFor
+  $ (listify (const True) ps :: [LMatch GhcPs (LHsExpr GhcPs)])
+  where
+    planFor :: LMatch GhcPs (LHsExpr GhcPs) -> Maybe SplitPlan
+    planFor lm@(L _ Match { m_ctxt, m_pats })
+      | isSplittableMatchCtxt m_ctxt
+      , Just leaf <- listToMaybe $ mapMaybe (leafInRange range) $ unLoc m_pats
+      , Just ty <- leafType tcGblEnv $ getLoc leaf
+      , Just pats <- constructorsOfType pprCtx ty
+      = Just SplitPlan { splitPatSpan = getLoc leaf
+                       , splitMatchSpan = getLoc lm
+                       , splitPats = pats }
+    planFor _ = Nothing
+
+isSplittableMatchCtxt :: HsMatchContext (Ext.LIdP (Ext.NoGhcTc GhcPs)) -> Bool
+isSplittableMatchCtxt = \case
+  FunRhs {}      -> True
+  CaseAlt        -> True
+  LamAlt LamCase -> True
+  _              -> False
+
+leafInRange :: Range -> LPat GhcPs -> Maybe (LPat GhcPs)
+leafInRange range p
+  | Just True <- getLoc p `spanContainsRange` range
+  = case unLoc p of
+      VarPat _ _ -> Just p
+      WildPat _  -> Just p
+      pat        -> listToMaybe
+                  $ mapMaybe (leafInRange range)
+                  $ childPats pat
+  | otherwise = Nothing
+
+childPats :: Pat GhcPs -> [LPat GhcPs]
+childPats = listify (const True)
+
+leafType :: TcGblEnv -> SrcSpan -> Maybe Ext.Type
+leafType tcGblEnv sp
+  = listToMaybe
+  $ mapMaybe fromLeaf
+  $ (listify (const True) $ tcg_binds tcGblEnv :: [LPat Ext.GhcTc])
+  where
+    fromLeaf :: LPat Ext.GhcTc -> Maybe Ext.Type
+    fromLeaf lp
+      | getLoc lp == sp
+      = case unLoc lp of
+          WildPat ty   -> Just ty
+          VarPat _ lid -> Just $ Ext.idType $ unLoc lid
+          _            -> Nothing
+      | otherwise = Nothing
+
+constructorsOfType :: PrintUnqualified -> Ext.Type -> Maybe [Pat GhcPs]
+constructorsOfType pprCtx ty = do
+  (tc, _args) <- Ext.splitTyConApp_maybe ty
+  ctors <- Ext.tyConDataCons_maybe tc
+  guard $ length ctors >= 2
+  traverse (conPattern pprCtx) ctors
+
+conPattern :: PrintUnqualified -> Ext.DataCon -> Maybe (Pat GhcPs)
+conPattern pprCtx dc = do
+  rdrConName <- qualifyIfNeeded pprCtx $ getName dc
+  let arity = Ext.dataConRepArity dc
+      infixed = dataConIsInfix dc && arity == 2
+      underscore = WildPat NoExtField
+      (locatedCon, args)
+        | infixed
+        = ( L noAnnSrcSpanDP1 rdrConName
+          , InfixCon (L noAnnSrcSpanDP0 underscore)
+                     (L noAnnSrcSpanDP1 underscore) )
+        | otherwise
+        = ( L noSrcSpanA rdrConName
+          , PrefixCon $ replicate arity $ L noAnnSrcSpanDP1 underscore )
+  pure $ if arity <= maxUnderscores def
+         then ConPat { pat_con_ext = (Nothing, Nothing)
+                     , pat_con = locatedCon
+                     , pat_args = args
+                     }
+         else ConPat { pat_con_ext = (Just (EpTok d1), Just (EpTok d0))
+                     , pat_con = locatedCon
+                     , pat_args = RecCon (HsRecFields NoExtField [] Nothing)
+                     }
+
+graftSplitPattern :: SplitPlan -> ParsedSource -> Maybe ParsedSource
+graftSplitPattern plan ps = case runState (everywhereM go ps) False of
+                              (ps', True) -> Just ps'
+                              _           -> Nothing
+  where
+    go :: forall a. Data a => a -> State Bool a
+    go node = do
+      found <- get
+      if found
+        then pure node
+        else case graftMatchGroup plan node of
+               Just node' -> do put True
+                                pure node'
+               Nothing    -> pure node
+
+graftMatchGroup :: forall a. Data a => SplitPlan -> a -> Maybe a
+graftMatchGroup plan node
+  = case typeOf node `eqTypeRep` typeRep @(MatchGroup GhcPs (LHsExpr GhcPs)) of
+      Just HRefl -> go node
+      Nothing    -> Nothing
+  where
+    go :: MatchGroup GhcPs (LHsExpr GhcPs) -> Maybe (MatchGroup GhcPs (LHsExpr GhcPs))
+    go mg@(MG { mg_alts = L altsLoc alts })
+      | Just idx <- findIndex ((== splitMatchSpan plan) . getLoc) alts
+      , let newPats = splitPats plan
+            n = length newPats
+            original = alts !! idx
+            isBraced = isJust $ getOpeningBraceCol altsLoc
+            deltaCol = case parseMatchLayout mg of
+                         NonBraced              -> 0
+                         Braced (SomeMatches i) -> i
+                         Braced NoMatches       -> indentation def
+            groupEnd = idx < length alts - 1
+            keepSemi k = isBraced && (k < n - 1 || groupEnd)
+            copies = zipWith (\k pat -> let c  = replacePattern plan pat original
+                                            c' = if k == 0
+                                                 then c
+                                                 else setEntryDP c (deltaPos 1 deltaCol)
+                                        in if keepSemi k then addSemiCol c' else c')
+                             [0 ..]
+                             newPats
+      = Just mg { mg_alts = L altsLoc $ take idx alts <> copies <> drop (idx + 1) alts }
+      | otherwise = Nothing
+
+replacePattern :: SplitPlan
+               -> Pat GhcPs
+               -> LMatch GhcPs (LHsExpr GhcPs)
+               -> LMatch GhcPs (LHsExpr GhcPs)
+replacePattern plan newPat (L ann m@Match { m_pats })
+  = L ann m { m_pats = everywhere replace m_pats }
+  where
+    replace :: forall b. Data b => b -> b
+    replace x = fromMaybe x $ do
+      old@(L leafAnn _) <- cast x :: Maybe (LPat GhcPs)
+      guard $ getLoc old == splitPatSpan plan
+      cast $ L leafAnn newPat
 
 -- | While @HsExpr GhcPs@ can contain any expression, the following refined
 -- type can only contain a @case@ or a @\\case@ expression.
@@ -635,7 +812,7 @@ appendMissingPats matchLayout mg@(MG { mg_alts = L altsLoc existingMatches }) mi
         -- Only if there's braces do we need to make sure the last of the
         -- existing matches ends with @;@:
         existingMatchesEP = if isBraced
-                               then dropEnd 1 existingMatches <> (addSemiCol <$> takeEnd 1 existingMatches)
+                               then dropEnd1 existingMatches <> (addSemiCol <$> takeEnd 1 existingMatches)
                                else existingMatches
 
     in mg { mg_alts = L altsLoc (existingMatchesEP <> missingMatchesEP) }
