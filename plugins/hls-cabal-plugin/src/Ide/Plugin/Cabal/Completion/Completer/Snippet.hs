@@ -57,7 +57,7 @@ snippetMap prefInfo =
             "  default-language: Haskell2010"
           ]
         ),
-        ( "recommended-fields",
+        ( "recommended-fields-snippet",
           [ "cabal-version: $1",
             "name: " <> completionFileName prefInfo,
             "version: 0.1.0.0",
