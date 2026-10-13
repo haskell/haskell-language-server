@@ -692,11 +692,6 @@ callRetrie recorder state session spec origin binds = do
             Set.toList knownFiles
         }
 
-      -- (theImports, theRewrites) = partitionEithers rewrites
-
-      -- annotatedImports =
-      --   unsafeMkA (map (noLocA . toImportDecl) theImports) 0
-
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
   originPm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments origin
