@@ -8,9 +8,14 @@ module Workspace (
 import           Control.Lens                                  ((^.))
 import           Data.String                                   (IsString (fromString))
 import qualified Data.Text.Encoding                            as T
-import           Distribution.PackageDescription               (ComponentName (..),
+import           Distribution.PackageDescription               (Benchmark (benchmarkBuildInfo),
+                                                                BuildInfo (otherModules),
+                                                                ComponentName (..),
+                                                                Executable (buildInfo),
+                                                                Library (exposedModules, libBuildInfo, libName),
                                                                 LibraryName (..),
                                                                 PackageDescription,
+                                                                TestSuite (testBuildInfo),
                                                                 benchmarkModules,
                                                                 exeModules,
                                                                 explicitLibModules,
@@ -31,6 +36,7 @@ cabalWorkspaceTests =
   testGroup
     "Workspace"
     [ cabalRenameTests
+    , cabalCreateTests
     ]
 
 cabalRenameTests :: TestTree
@@ -90,4 +96,70 @@ cabalRenameTests =
           CBench bench -> benchmarkModules bench
         -- todo maybe check that old name is gone
         testDescription = newModName <> " was renamed in " <> showComponentName compName
+    liftIO $ assertBool testDescription $ fromString newModName `elem` compModules
+
+cabalCreateTests :: TestTree
+cabalCreateTests =
+  testGroup
+    "Create"
+    $ let cabalFile = "create.cabal" in
+      [ runHaskellTestCaseSession "Create in named library" "create" $ do
+          let newName = "Lib.hs"
+          pd <- generateWorkspaceFileCreateTestSession "lib-named" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CLibName $ LSubLibName "lib") 1
+      , runHaskellTestCaseSession "Create in executable (with existing entry)" "create" $ do
+          let newName = "Exe.hs"
+          pd <- generateWorkspaceFileCreateTestSession "exe" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CExeName "exe") 1
+      , runHaskellTestCaseSession "Create in executable" "create" $ do
+          let newName = "Exe2.hs"
+          pd <- generateWorkspaceFileCreateTestSession "exe" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CExeName "exe") 2
+      , runHaskellTestCaseSession "Create in main library" "create" $ do
+          let newName = "Lib.hs"
+          pd <- generateWorkspaceFileCreateTestSession "lib" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CLibName LMainLibName) 1
+      , runHaskellTestCaseSession "Create in benchmark" "create" $ do
+          let newName = "Bench.hs"
+          pd <- generateWorkspaceFileCreateTestSession "bench" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CBenchName "bench") 2
+      , runHaskellTestCaseSession "Create in test-suite" "create" $ do
+          let newName = "Test.hs"
+          pd <- generateWorkspaceFileCreateTestSession "test" cabalFile newName
+          checkModuleCreateIn pd (FP.dropExtension newName) (CTestName "test") 1
+      ]
+ where
+  generateWorkspaceFileCreateTestSession :: FilePath -> FilePath -> FilePath -> Session PackageDescription
+  generateWorkspaceFileCreateTestSession targetDir cabalFile haskellFile = do
+    let haskellFP = targetDir FP.</> haskellFile
+        cabalFP   = targetDir FP.</> cabalFile
+
+    haskellDoc <- createDoc haskellFP "haskell" ""
+    cabalDoc <- openDoc cabalFP "cabal"
+    _ <- createFile haskellDoc
+
+    contents <- documentContents cabalDoc
+    case parseCabalFileContents $ T.encodeUtf8 contents of
+      (_, Right gpd) -> pure $ flattenPackageDescription gpd
+      _ -> liftIO $ assertFailure "could not parse cabal file to gpd"
+
+  -- | tests if the new module is in `exposed-modules` for named libraries
+  --   and `other-modules` for the other tests. Also asserts that we only
+  --   have a single module per file
+  checkModuleCreateIn :: PackageDescription -> String -> ComponentName -> Int -> Session ()
+  checkModuleCreateIn pd newModName compName expModuleNum = do
+    let comp = getComponent pd compName
+    compModules <- case comp of
+      CLib lib ->
+        let name = libName lib in
+        case name of
+          LMainLibName  -> pure $ exposedModules lib -- exposed for libraries
+          LSubLibName _ -> pure $ otherModules $ libBuildInfo lib
+      -- CFLib fLib   -> pure $ foreignLibModules fLib
+      CExe exe     -> pure $ otherModules $ buildInfo exe
+      CTest test   -> pure $ otherModules $ testBuildInfo test
+      CBench bench -> pure $ otherModules $ benchmarkBuildInfo bench
+      _            -> liftIO $ assertFailure "unsupported module"
+    let testDescription = newModName <> " was created in " <> showComponentName compName <> " (other modules: " <> (show compModules) <> ")"
+    liftIO $ assertBool testDescription $ length compModules == expModuleNum
     liftIO $ assertBool testDescription $ fromString newModName `elem` compModules
