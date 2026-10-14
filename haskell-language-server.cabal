@@ -261,6 +261,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.CabalAdd.Command
     Ide.Plugin.Cabal.CabalAdd.CodeAction
     Ide.Plugin.Cabal.CabalAdd.Types
+    Ide.Plugin.Cabal.CabalAdd.Create
     Ide.Plugin.Cabal.CabalAdd.Rename
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
@@ -609,7 +610,7 @@ library hls-case-split-plugin
     , syb
     , text
     , transformers
-    , ghc-exactprint        >= 1.14.1.0
+    , ghc-exactprint        >= 1.14.3.0
 
   default-extensions:
     DataKinds
