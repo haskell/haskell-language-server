@@ -235,6 +235,78 @@ common cabal
     build-depends: haskell-language-server:hls-cabal-plugin
     cpp-options: -Dhls_cabal
 
+flag cabalproject
+  description: Enable cabal project plugin
+  default:     True
+  manual:      True
+
+common cabalproject
+  if flag(cabalproject)
+    build-depends: haskell-language-server:hls-cabal-project-plugin
+    cpp-options: -Dhls_cabalproject
+
+library hls-cabal-project-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(cabalproject)
+    buildable: False
+  exposed-modules:
+    Ide.Plugin.CabalProject
+    Ide.Plugin.CabalProject.Data
+    Ide.Plugin.CabalProject.Diagnostics
+    Ide.Plugin.CabalProject.Docs
+    Ide.Plugin.CabalProject.OfInterest
+    Ide.Plugin.CabalProject.Rules
+    Ide.Plugin.CabalProject.Tokens
+
+  build-depends:
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , containers
+    , deepseq
+    , filepath
+    , ghcide                == 2.15.0.0
+    , hashable
+    , haskell-language-server:hls-cabal-plugin
+    , hls-plugin-api        == 2.15.0.0
+    , lens
+    , lsp                   ^>=2.8
+    , lsp-types             ^>=2.4
+    , mtl
+    , prettyprinter
+    , stm
+    , stm-containers
+    , text
+    , text-rope
+    , transformers
+    , unordered-containers
+
+  hs-source-dirs:   plugins/hls-cabal-project-plugin/src
+
+test-suite hls-cabal-project-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(cabalproject)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-project-plugin/test
+  main-is:          Main.hs
+  other-modules:
+    Utils
+
+  build-depends:
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , containers
+    , directory
+    , filepath
+    , ghcide
+    , haskell-language-server:hls-cabal-plugin
+    , haskell-language-server:hls-cabal-project-plugin
+    , hls-test-utils    == 2.15.0.0
+    , lens
+    , lsp-test
+    , lsp-types
+    , text
+
 library hls-cabal-plugin
   import:           defaults, pedantic, warnings
   if !flag(cabal)
@@ -1900,6 +1972,7 @@ library
                   , pedantic
                   -- plugins
                   , cabal
+                  , cabalproject
                   , callHierarchy
                   , cabalfmt
                   , cabalgild
