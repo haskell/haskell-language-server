@@ -7,7 +7,6 @@ import           Config
 import           Control.Lens               ((^.))
 import           Data.Maybe
 import qualified Data.Text                  as T
-import           Development.IDE.Test       (expectDiagnostics)
 import           Hover
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens as L

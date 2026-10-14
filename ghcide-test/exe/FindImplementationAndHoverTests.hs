@@ -7,16 +7,15 @@ module FindImplementationAndHoverTests (tests) where
 import           Control.Monad
 import           Data.Foldable
 import           Data.Maybe
-import           Data.Text            (Text)
-import qualified Data.Text            as T
+import           Data.Text           (Text)
+import qualified Data.Text           as T
 import           Language.LSP.Test
-import           Text.Regex.TDFA      ((=~))
+import           Text.Regex.TDFA     ((=~))
 
 import           Config
-import           Development.IDE.Test (standardizeQuotes)
 import           Hover
 import           Test.Hls
-import           Test.Hls.FileSystem  (copyDir)
+import           Test.Hls.FileSystem (copyDir)
 
 tests :: TestTree
 tests = let

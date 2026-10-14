@@ -10,7 +10,6 @@ import           Data.Functor                (void)
 import qualified Data.Map                    as M
 import           Data.Text                   (Text, pack)
 import qualified Data.Text.IO                as TIO
-import           Development.IDE.Test        (referenceReady)
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename           as Rename
 import qualified Language.LSP.Protocol.Lens  as L
@@ -131,7 +130,7 @@ renameTests = testGroup "Identifier"
 
     , testCase "fails when module does not compile" $ runRenameSession "" $ do
         doc <- openDoc "FunctionArgument.hs" "haskell"
-        expectNoMoreDiagnostics 3 doc "typecheck"
+        expectNoMoreDiagnosticsFromSource 3 doc "typecheck"
 
         -- Update the document so it doesn't compile
         let change = TextDocumentContentChangeEvent $ InL TextDocumentContentChangePartial
@@ -162,7 +161,7 @@ renameTests = testGroup "Identifier"
               , _text = "Int"
               }
         changeDoc doc [change']
-        expectNoMoreDiagnostics 3 doc "typecheck"
+        expectNoMoreDiagnosticsFromSource 3 doc "typecheck"
 
         -- Make sure renaming succeeds
         rename doc (Position 3 0) "foo'"
