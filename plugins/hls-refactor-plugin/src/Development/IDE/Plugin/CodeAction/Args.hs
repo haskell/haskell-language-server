@@ -79,12 +79,12 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
         caaHar <- onceIO $ runRule GetHieAst
         caaBindings <- onceIO $ runRule GetBindings
         caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
-        diags <- activeDiagnosticsInRange (shakeExtras state) nfp _range
+        caaDiagnostics <- activeDiagnosticsInRange (shakeExtras state) nfp _range
         results <- liftIO $
             sequence
                 [
                     runReaderT (runExceptT codeAction) CodeActionArgs {..}
-                        | caaDiagnostic <- diags
+                        | caaDiagnostic <- caaDiagnostics
                 ]
         let (_errs, successes) = partitionEithers results
         pure $ concat successes
@@ -150,7 +150,9 @@ data CodeActionArgs = CodeActionArgs
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
     caaGblSigs      :: IO (Maybe GlobalBindingTypeSigsResult),
-    caaDiagnostic   :: FileDiagnostic
+    caaDiagnostic   :: FileDiagnostic,
+    -- | All diagnostics that overlap the requested code action range.
+    caaDiagnostics  :: [FileDiagnostic]
   }
 
 -- | There's no concurrency in each provider,
@@ -232,6 +234,9 @@ instance ToCodeAction r => ToCodeAction (Diagnostic -> r) where
 
 instance ToCodeAction r => ToCodeAction (FileDiagnostic -> r) where
   toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostic = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f x
+
+instance ToCodeAction r => ToCodeAction ([FileDiagnostic] -> r) where
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostics = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f x
 
 instance ToCodeAction r => ToCodeAction (Maybe ParsedModule -> r) where
   toCodeAction = toCodeAction1 caaParsedModule
