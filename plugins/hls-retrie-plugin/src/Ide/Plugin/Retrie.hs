@@ -56,25 +56,23 @@ import           Development.IDE.Core.Shake            (ShakeExtras (ShakeExtras
 import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
                                                         GenLocated (L), GhcPs,
                                                         GhcRn,
-                                                        HsBindLR (FunBind),
+                                                        HsBindLR (FunBind, fun_matches),
                                                         HsExpr, HsGroup (..),
                                                         HsValBindsLR (..),
                                                         HscEnv, ImportDecl (..),
                                                         LHsExpr, LRuleDecls,
                                                         ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                        Outputable,
-                                                        ParsedModule,
-                                                        RuleDecl (HsRule),
+                                                        OccName, Outputable,
+                                                        RuleDecl (HsRule, rd_name),
                                                         RuleDecls (HsRules),
-                                                        TyClDecl (SynDecl),
+                                                        TyClDecl (SynDecl, tcdLName),
                                                         TyClGroup (..), fun_id,
+                                                        gopt_set, gopt_unset,
                                                         locA, ms_hspp_opts,
                                                         nameOccName, occNameFS,
                                                         pattern RealSrcSpan,
-                                                        pm_parsed_source,
                                                         rds_rules, recDotDot,
                                                         topDir, unLoc, unLocA)
-import qualified Development.IDE.GHC.Compat            as GHC
 import           Development.IDE.GHC.Compat.Util       hiding (catch, toList,
                                                         try)
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
@@ -83,7 +81,30 @@ import           Development.IDE.Plugin.CodeAction     (newImportInsertRange)
 import           Development.IDE.Spans.AtPoint         (LookupModule,
                                                         nameToLocation)
 import           Development.IDE.Types.Shake           (WithHieDb)
-import qualified GHC                                   as GHCGHC
+import           GHC                                   (ExprLStmt, GRHS (GRHS),
+                                                        GRHSs (grhssGRHSs),
+                                                        GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
+                                                        HsLocalBinds,
+                                                        HsLocalBindsLR (HsValBinds),
+                                                        HsRecFields, LIdP,
+                                                        LocatedA, LocatedN,
+                                                        Match (m_grhss),
+                                                        MatchGroup (mg_alts),
+                                                        Module, ModuleName,
+                                                        NHsValBindsLR (NValBinds),
+                                                        Name,
+                                                        NamedThing (getName),
+                                                        ParsedModule (..),
+                                                        ParsedSource, RdrName,
+                                                        RealSrcSpan,
+                                                        RenamedSource, Unit,
+                                                        extensionFlags, getLocA,
+                                                        isExternalName,
+                                                        isSubspanOf,
+                                                        parseModule)
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC                                   (LIdOccP)
+#endif
 import qualified GHC.Data.EnumSet                      as EnumSet
 import           GHC.Generics                          (Generic)
 import           GHC.Iface.Ext.Types                   (BindType (RegularBind),
@@ -263,7 +284,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
     let rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) site
         inline
-          | GHCGHC.isExternalName (unLoc fun_id) =
+          | isExternalName (unLoc fun_id) =
               applyAt site updateContext rewrites
           | otherwise = applyLocal site fromRange rewrites
     result <- liftIO $ try @_ @SomeException $
@@ -291,23 +312,23 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
 
 -- | Finds the binder at the provided span.
 findBinder
-  :: GHCGHC.RealSrcSpan
-  -> GHC.RenamedSource
-  -> Maybe ( GHC.LIdP GhcRn, GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) )
+  :: RealSrcSpan
+  -> RenamedSource
+  -> Maybe ( LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn) )
 findBinder originSpan =
     getFirst <$> everything (<>) (First Nothing `mkQ` matcher)
   where
     matcher
       :: HsBindLR GhcRn GhcRn
-      -> First ( GHC.LIdP GhcRn, GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) )
+      -> First ( LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn) )
     matcher FunBind{fun_id, fun_matches}
-      | RealSrcSpan sp _ <- GHC.getLocA fun_id
+      | RealSrcSpan sp _ <- getLocA fun_id
       , sp == originSpan =
         First $ Just (fun_id, fun_matches)
     matcher _ = First Nothing
 
 -- | Whether a definition's body uses the name it defines.
-referencesName :: GHC.Name -> GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+referencesName :: Name -> MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
 referencesName name = everything (||) (False `mkQ` uses)
   where
     uses :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
@@ -316,21 +337,21 @@ referencesName name = everything (||) (False `mkQ` uses)
 -- | Whether the clause can be determined statically. If there are multiple
 -- clauses or the clauses have guards then we cannot easily determine which
 -- clause should be used in the rewrite.
-triviallySelectable :: GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
-triviallySelectable mg = case unLoc (GHC.mg_alts mg) of
-  [L _ m] -> unguarded (GHCGHC.m_grhss m) && (null . listify wildcardCon) m
+triviallySelectable :: MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+triviallySelectable mg = case unLoc (mg_alts mg) of
+  [L _ m] -> unguarded (m_grhss m) && (null . listify wildcardCon) m
   _       -> False
   where
     unguarded :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
-    unguarded g = case toList (GHCGHC.grhssGRHSs g) of
-      [L _ (GHCGHC.GRHS _ [] _)] -> True
-      _                          -> False
+    unguarded g = case toList (grhssGRHSs g) of
+      [L _ (GRHS _ [] _)] -> True
+      _                   -> False
 
-    wildcardCon :: GHCGHC.HsRecFields GhcRn (LHsExpr GhcRn) -> Bool
+    wildcardCon :: HsRecFields GhcRn (LHsExpr GhcRn) -> Bool
     wildcardCon = isJust . recDotDot
 
 -- | Only install rewrites when the target subtree has been reached.
-applyLocal :: Maybe GHCGHC.RealSrcSpan -> GHCGHC.RealSrcSpan -> [Rewrite Universe] -> Retrie ()
+applyLocal :: Maybe RealSrcSpan -> RealSrcSpan -> [Rewrite Universe] -> Retrie ()
 applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
   where
     -- retrie will exit early if there are no rewrites, so just stub them out
@@ -351,25 +372,25 @@ applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
     bindsDefinition :: Int -> GenericQ Bool
     bindsDefinition i = ownBinds `extQ` stmts `extQ` guards
       where
-        stmts :: [GHC.ExprLStmt GhcPs] -> Bool
+        stmts :: [ExprLStmt GhcPs] -> Bool
         stmts (L _ s : _) = ownBinds s
         stmts []          = False
 
-        guards :: GHCGHC.GRHS GhcPs (LHsExpr GhcPs) -> Bool
-        guards (GHCGHC.GRHS _ gs _) = i == body && any (ownBinds . unLoc) gs
+        guards :: GRHS GhcPs (LHsExpr GhcPs) -> Bool
+        guards (GRHS _ gs _) = i == body && any (ownBinds . unLoc) gs
           where body = 2 -- after the extension field and the guard list
 
     ownBinds :: GenericQ Bool
     ownBinds = or . gmapQ (False `mkQ` definesIt)
 
-    definesIt :: GHC.HsLocalBinds GhcPs -> Bool
-    definesIt (GHC.HsValBinds _ (ValBinds _ binds _)) =
+    definesIt :: HsLocalBinds GhcPs -> Bool
+    definesIt (HsValBinds _ (ValBinds _ binds _)) =
         or [ sp == defSpan
            | L _ FunBind{fun_id} <- toList binds
-           , RealSrcSpan sp _ <- [GHC.getLocA fun_id] ]
+           , RealSrcSpan sp _ <- [getLocA fun_id] ]
     definesIt _ = False
 
-applyAt :: Maybe GHCGHC.RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
+applyAt :: Maybe RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
 applyAt (Just site) update = applyWithUpdate (atSite site update)
 applyAt Nothing update     = applyWithUpdateAndStrategy update topDown
 
@@ -377,18 +398,18 @@ applyAt Nothing update     = applyWithUpdateAndStrategy update topDown
 -- @f@ matches both the inner and outer applications. If a match occurs within
 -- an argument hole then map it to 'NoMatch' so the traversal decends into the
 -- inner match.
-headAt :: GHCGHC.RealSrcSpan -> Rewrite Universe -> Rewrite Universe
+headAt :: RealSrcSpan -> Rewrite Universe -> Rewrite Universe
 headAt site q = q { qResult = second (\transform c -> fmap refuse . transform c) (qResult q) }
   where
     refuse (MatchResult sub _)
       | foldSubst (\(_, v) found -> found || holds v) False sub = NoMatch
     refuse m = m
 
-    holds (HoleExpr e) = RealSrcSpan site Nothing `GHC.isSubspanOf` GHC.getLocA (astA e)
+    holds (HoleExpr e) = RealSrcSpan site Nothing `isSubspanOf` getLocA (astA e)
     holds _            = False
 
 -- | Drop rewriters outside of the target span.
-atSite :: GHCGHC.RealSrcSpan -> ContextUpdater -> ContextUpdater
+atSite :: RealSrcSpan -> ContextUpdater -> ContextUpdater
 atSite site update c i x = narrow <$> update c i x
   where
     narrow c'
@@ -400,7 +421,7 @@ atSite site update c i x = narrow <$> update c i x
     holdsSite = True `mkQ` inExpr
 
     inExpr :: LHsExpr GhcPs -> Bool
-    inExpr e = RealSrcSpan site Nothing `GHC.isSubspanOf` GHC.getLocA e
+    inExpr e = RealSrcSpan site Nothing `isSubspanOf` getLocA e
 
 -------------------------------------------------------------------------------
 
@@ -481,7 +502,7 @@ getBinds nfp = do
 #endif
       topLevelBinds <- case hs_valds of
         ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
-        XValBindsLR (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn) ->
+        XValBindsLR (NValBinds binds _sigs :: NHsValBindsLR GhcRn) ->
           pure
             [ decl
 #if MIN_VERSION_ghc(9,11,0)
@@ -497,7 +518,7 @@ getBinds nfp = do
 suggestBindRewrites ::
   Uri ->
   Position ->
-  GHC.Module ->
+  Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName, fun_matches}
@@ -522,7 +543,7 @@ suggestBindInlines ::
     -> [HsBindLR GhcRn GhcRn]
     -> Range
     -> WithHieDb
-    -> (FilePath -> GHCGHC.ModuleName -> GHCGHC.Unit -> Bool -> MaybeT IdeAction Uri)
+    -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
     -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
 suggestBindInlines _uri binds range hie lookupMod = do
     identifiers <- definedIdentifiers
@@ -545,29 +566,29 @@ suggestBindInlines _uri binds range hie lookupMod = do
 
       getGRHSIdentifierDetails ::
         WithHieDb
-        -> (FilePath -> GHCGHC.ModuleName -> GHCGHC.Unit -> Bool -> MaybeT IdeAction Uri)
+        -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
         -> GRHSs GhcRn (LHsExpr GhcRn)
-        -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+        -> IdeAction (Set.HashSet (OccName, Location, Location))
       getGRHSIdentifierDetails a b it@GRHSs{} =
         -- we only select candidates for which we have source code
         everything (<>) (pure mempty `mkQ` getDefinedIdentifierDetailsViaHieDb a b `extQ` getLocalBinderDetails) it
 
       -- a local binder is its own definition: inline it into every use
-      getLocalBinderDetails :: HsBindLR GhcRn GhcRn -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+      getLocalBinderDetails :: HsBindLR GhcRn GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
       getLocalBinderDetails FunBind{fun_id}
-        | Just defLoc <- srcSpanToLocation (GHC.getLocA fun_id)
+        | Just defLoc <- srcSpanToLocation (getLocA fun_id)
         , range `isSubrangeOf` getLocationRange defLoc =
             pure $ Set.singleton (nameOccName (unLoc fun_id), defLoc, defLoc)
       getLocalBinderDetails _ = pure mempty
 
 #if MIN_VERSION_ghc(9,13,0)
-      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> GHCGHC.LIdOccP GhcRn -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> LIdOccP GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
 #else
-      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> GHC.LIdP GhcRn -> IdeAction (Set.HashSet (GHC.OccName, Location, Location))
+      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> LIdP GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
 #endif
       getDefinedIdentifierDetailsViaHieDb withHieDb lookupModule lname
-        | name <- GHCGHC.getName (unLoc lname) =
-        case srcSpanToLocation (GHC.getLocA lname) of
+        | name <- getName (unLoc lname) =
+        case srcSpanToLocation (getLocA lname) of
             Just siteLoc
               | siteRange <- getLocationRange siteLoc
               , range `isSubrangeOf` siteRange -> do
@@ -578,7 +599,7 @@ suggestBindInlines _uri binds range hie lookupMod = do
 
 -- | Whether name is defined by a regular ValBind (i.e. it's not a class
 -- method, field, constructor, pattern synonym, etc).
-equationBound :: GHC.Name -> Location -> IdeAction Bool
+equationBound :: Name -> Location -> IdeAction Bool
 equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
     defFile <- hoistMaybe $
       uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri loc
@@ -592,7 +613,7 @@ equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
 
 suggestTypeRewrites ::
   Uri ->
-  GHC.Module ->
+  Module ->
   TyClDecl GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
@@ -612,7 +633,7 @@ suggestTypeRewrites _ _ _ = []
 suggestRuleRewrites
   :: Uri
   -> Position
-  -> GHC.Module
+  -> Module
   -> LRuleDecls GhcRn
   -> [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
@@ -734,8 +755,8 @@ fixityEnvForFile state f =
   useRuleBlocking "Retrie.GetFixity" state GetFixity f
     >>= maybe (throwIO $ NoTypeCheck f) (return . fixityEnvFor)
 
-fixAnns :: ParsedModule -> Annotated GHC.ParsedSource
-fixAnns GHC.ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
+fixAnns :: ParsedModule -> Annotated ParsedSource
+fixAnns ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
 
 parseSpecs
   :: IdeState
@@ -755,14 +776,14 @@ parseSpecs state origin originParsedModule originFixities specs = do
     specs
 
 constructfromFunMatches
-  :: Annotated [GHCGHC.LocatedA (ImportDecl GhcPs)]
-  -> GHCGHC.LocatedN GHCGHC.RdrName
-  -> GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
+  :: Annotated [LocatedA (ImportDecl GhcPs)]
+  -> LocatedN RdrName
+  -> MatchGroup GhcPs (LocatedA (HsExpr GhcPs))
   -> TransformT IO [Rewrite Universe]
 constructfromFunMatches imps fun_id fun_matches = do
   fe <- mkLocatedHsVar fun_id
   rewrites <- concat <$>
-    forM (unLoc $ GHC.mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
+    forM (unLoc $ mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
   let urewrites = toURewrite <$> rewrites
   assert (not $ null urewrites) $
     return urewrites
@@ -771,7 +792,7 @@ constructInlineFromIdentifer
   :: Data a
   => AnnotatedImports
   -> Annotated (GenLocated l a)
-  -> GHCGHC.RealSrcSpan
+  -> RealSrcSpan
   -> IO [Rewrite Universe]
 constructInlineFromIdentifer imports originParsedModule originSpan = do
   fmap astA $ transformA originParsedModule $ \(L _ m) -> do
@@ -779,11 +800,11 @@ constructInlineFromIdentifer imports originParsedModule originSpan = do
       ast = everything (<>) (First Nothing `mkQ` matcher) m
       matcher
         :: HsBindLR GhcPs GhcPs
-        -> First ( GHCGHC.LocatedN GHCGHC.RdrName
-                  , GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
+        -> First ( LocatedN RdrName
+                  , MatchGroup GhcPs (LocatedA (HsExpr GhcPs))
                   )
       matcher FunBind{fun_id, fun_matches}
-        | RealSrcSpan sp _ <- GHC.getLocA fun_id
+        | RealSrcSpan sp _ <- getLocA fun_id
         , sp == originSpan =
           First $ Just (fun_id, fun_matches)
       matcher _ = First Nothing
@@ -801,7 +822,7 @@ asEditMap =
 
 asTextEdits
   :: Uri
-  -> GHCGHC.ParsedSource
+  -> ParsedSource
   -> T.Text
   -> CPP AnnotatedModule
   -> CPP AnnotatedModule
@@ -824,7 +845,7 @@ rewriteTextEdits before after reps =
     (T.pack $ printCPP reps after)
 
 importTextEdits
-  :: Uri -> GHCGHC.ParsedSource -> T.Text -> [AnnotatedImports] -> [(Uri, TextEdit)]
+  :: Uri -> ParsedSource -> T.Text -> [AnnotatedImports] -> [(Uri, TextEdit)]
 importTextEdits uri ps contents imp
   | not (null imp)
   , Just (range, indent) <- newImportInsertRange ps contents
@@ -867,7 +888,7 @@ getCPPmodule
   -> HscEnv
   -> FixityEnv
   -> FilePath
-  -> IO (CPP AnnotatedModule, GHCGHC.ParsedSource, T.Text)
+  -> IO (CPP AnnotatedModule, ParsedSource, T.Text)
 getCPPmodule recorder state session fixities t = do
   -- TODO: is it safe to drop this makeAbsolute?
   let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
@@ -881,11 +902,11 @@ getCPPmodule recorder state session fixities t = do
                   -- keep comments, as GetParsedModuleWithComments does
                 , ms_hspp_opts =
                     ms_hspp_opts modSummary
-                      `GHC.gopt_set` GHC.Opt_KeepRawTokenStream
-                      `GHC.gopt_unset` GHC.Opt_Haddock
+                      `gopt_set` Opt_KeepRawTokenStream
+                      `gopt_unset` Opt_Haddock
                 }
         logWith recorder Info $ LogParsingModule t
-        parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
+        parsed <- evalGhcEnv session (parseModule ms')
             `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
         transformA (fixAnns parsed) (fix fixities)
 
@@ -897,8 +918,8 @@ getCPPmodule recorder state session fixities t = do
       Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
   pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
   let
-    ps = GHC.pm_parsed_source pm
-    extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
+    ps = pm_parsed_source pm
+    extensions = extensionFlags (ms_hspp_opts (pm_mod_summary pm))
   cpp <- if LangExt.Cpp `EnumSet.member` extensions
     then parseCPP parseWith contents
     else NoCPP <$> transformA (fixAnns pm) (fix fixities)

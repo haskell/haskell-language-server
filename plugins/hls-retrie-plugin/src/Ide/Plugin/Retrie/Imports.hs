@@ -38,8 +38,8 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             ImportDecl (..),
                                                             ImportDeclQualifiedStyle (..),
                                                             ImportListInterpretation (Exactly),
-                                                            LHsExpr, LIE,
-                                                            LImportDecl,
+                                                            ImportSpec, LHsExpr,
+                                                            LIE, LImportDecl,
                                                             ModuleName, Name,
                                                             OccName,
                                                             Parent (NoParent, ParentIs),
@@ -48,21 +48,39 @@ import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             TcGblEnv (..),
                                                             XImportDeclPass (XImportDeclPass),
                                                             availsToNameSet,
-                                                            elemNameSet, fun_id,
-                                                            gre_imp, gre_lcl,
-                                                            gre_name, gre_par,
+                                                            elemNameSet,
+                                                            extensionFlags,
+                                                            fun_id, gre_imp,
+                                                            gre_lcl, gre_name,
+                                                            gre_par,
                                                             isBuiltInSyntax,
                                                             isExact,
                                                             isInternalName,
+                                                            is_mod,
                                                             lookupGRE_Name,
                                                             mkRdrUnqual,
                                                             moduleNameString,
+                                                            ms_hspp_opts,
                                                             nameOccName,
                                                             occNameString,
                                                             rdrNameOcc,
                                                             simpleImportDecl)
-import qualified Development.IDE.GHC.Compat                as GHC
-import qualified Development.IDE.GHC.Compat                as RdrName
+#if MIN_VERSION_ghc(9,13,0)
+import           Development.IDE.GHC.Compat                (WithUserRdr (WithUserRdr))
+#elif MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat                (RealSrcSpan, locA,
+                                                            srcSpanToRealSrcSpan)
+#else
+import           Development.IDE.GHC.Compat                (RealSrcSpan,
+                                                            srcSpanToRealSrcSpan)
+#endif
+#if MIN_VERSION_ghc(9,7,0)
+import           Development.IDE.GHC.Compat                (LookupGRE (LookupRdrName),
+                                                            WhichGREs (SameNameSpace),
+                                                            lookupGRE)
+#else
+import           Development.IDE.GHC.Compat                (lookupGRE_RdrName)
+#endif
 import           Development.IDE.GHC.Compat.ExactPrint     (d0, dn, setEntryDP)
 #if MIN_VERSION_ghc(9,11,0)
 import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP0,
@@ -70,7 +88,18 @@ import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP0,
 #else
 import qualified Development.IDE.GHC.Compat.ExactPrint     as ExactPrint
 #endif
-import qualified GHC                                       as GHCGHC
+import           GHC                                       (MatchGroup,
+                                                            ParsedModule (..),
+                                                            ParsedSource)
+#if MIN_VERSION_ghc(9,13,0)
+import           GHC                                       (LIdOccP)
+#elif MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat                (HsMatchContextRn)
+import           GHC                                       (LIdP)
+#else
+import           GHC                                       (HsMatchContext,
+                                                            LIdP)
+#endif
 import qualified GHC.Data.EnumSet                          as EnumSet
 import           GHC.Parser.Annotation                     (AnnList (..),
                                                             DeltaPos (SameLine),
@@ -129,29 +158,29 @@ import           Development.IDE.GHC.Compat                (isDataOcc)
 
 -- | All of the 'Name's in this subtree along with their spellings, given
 -- the parsed module the subtree was renamed from.
-occurrences :: Data a => GHCGHC.ParsedSource -> a -> [(Name, RdrName)]
+occurrences :: Data a => ParsedSource -> a -> [(Name, RdrName)]
 #if MIN_VERSION_ghc(9,13,0)
 occurrences _ = everything (++) (mkQ [] occ)
   where
-    occ :: GHCGHC.LIdOccP GhcRn -> [(Name, RdrName)]
-    occ (L _ (GHC.WithUserRdr rdr name)) = [(name, rdr)]
+    occ :: LIdOccP GhcRn -> [(Name, RdrName)]
+    occ (L _ (WithUserRdr rdr name)) = [(name, rdr)]
 #else
 -- look up the original spelling in the parsed source by span
 occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt)
   where
-    occ :: GHCGHC.LIdP GhcRn -> ([(Name, RdrName)], Bool)
+    occ :: LIdP GhcRn -> ([(Name, RdrName)], Bool)
     occ (L l name) =
       ([ (name, rdr) | Just sp <- [realSpan l], Just rdr <- [Map.lookup sp spellings] ], False)
 #if MIN_VERSION_ghc(9,9,0)
-    ctxt :: GHC.HsMatchContextRn -> ([(Name, RdrName)], Bool)
+    ctxt :: HsMatchContextRn -> ([(Name, RdrName)], Bool)
 #else
-    ctxt :: GHCGHC.HsMatchContext GhcRn -> ([(Name, RdrName)], Bool)
+    ctxt :: HsMatchContext GhcRn -> ([(Name, RdrName)], Bool)
 #endif
     ctxt _ = ([], True)
     spellings = Map.fromList (everything (++) (mkQ [] spelling) ps)
-    spelling :: GHCGHC.LIdP GhcPs -> [(GHC.RealSrcSpan, RdrName)]
+    spelling :: LIdP GhcPs -> [(RealSrcSpan, RdrName)]
     spelling (L l rdr) = [ (sp, rdr) | Just sp <- [realSpan l] ]
-    realSpan l = GHC.srcSpanToRealSrcSpan (GHC.locA l)
+    realSpan l = srcSpanToRealSrcSpan (locA l)
 #endif
 
 -- | Look at each 'Name' in the provided ast. If it can be imported, then
@@ -161,11 +190,11 @@ occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt)
 extractInlineImports
   :: TcModuleResult
   -> TcModuleResult
-  -> GHCGHC.MatchGroup GhcRn (LHsExpr GhcRn)
+  -> MatchGroup GhcRn (LHsExpr GhcRn)
   -> Either String [(ModuleName, ImportForm)]
 extractInlineImports def tgt matches = sequence $ map importName names
   where
-    names = filter (not . skip) (occurrences (GHCGHC.pm_parsed_source (tmrParsed def)) matches)
+    names = filter (not . skip) (occurrences (pm_parsed_source (tmrParsed def)) matches)
 
     skip (name, rdr) =
       isInternalName name ||
@@ -203,11 +232,11 @@ extractInlineImports def tgt matches = sequence $ map importName names
           refuse $ "no provenance for " ++ (showRdr rdr)
 
     tc = tmrTypechecked def
-    mod = moduleName (GHC.tcg_mod tc)
-    targetEnv = GHC.tcg_rdr_env (tmrTypechecked tgt)
+    mod = moduleName (tcg_mod tc)
+    targetEnv = tcg_rdr_env (tmrTypechecked tgt)
     refuse = Left
     showRdr = occNameString . rdrNameOcc
-    extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary (tmrParsed tgt)))
+    extensions = extensionFlags (ms_hspp_opts (pm_mod_summary (tmrParsed tgt)))
 
 -- | Does this spelling resolve to something else in the target module?
 contested :: GlobalRdrEnv -> RdrName -> Name -> Bool
@@ -220,9 +249,9 @@ inScope env rdr name = any ((== name) . gre_name) (lookupGRERdr env rdr)
 -- FIXME(simon): wrong namespace
 lookupGRERdr :: GlobalRdrEnv -> RdrName -> [GlobalRdrElt]
 #if MIN_VERSION_ghc(9,7,0)
-lookupGRERdr env rdr = RdrName.lookupGRE env (RdrName.LookupRdrName rdr RdrName.SameNameSpace)
+lookupGRERdr env rdr = lookupGRE env (LookupRdrName rdr SameNameSpace)
 #else
-lookupGRERdr env rdr = RdrName.lookupGRE_RdrName rdr env
+lookupGRERdr env rdr = lookupGRE_RdrName rdr env
 #endif
 
 data Provenance
@@ -240,11 +269,11 @@ data Provenance
 
 -- | The import-facing module an 'ImportSpec' brought a name in from
 -- (@Data.Char@, not the defining @GHC.Internal.*@ module).
-greImportModule :: GHC.ImportSpec -> ModuleName
+greImportModule :: ImportSpec -> ModuleName
 #if MIN_VERSION_ghc(9,7,0)
-greImportModule = moduleName . RdrName.is_mod . is_decl
+greImportModule = moduleName . is_mod . is_decl
 #else
-greImportModule = RdrName.is_mod . is_decl
+greImportModule = is_mod . is_decl
 #endif
 
 -- | Figure out how the defining module references this 'Name'.
