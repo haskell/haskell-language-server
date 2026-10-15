@@ -763,33 +763,18 @@ parseSpecs state origin originParsedModule originFixities specs = do
     originFixities
     specs
 
-constructfromFunMatches ::
-  Annotated [GHCGHC.LocatedA (ImportDecl GhcPs)]
+constructfromFunMatches
+  :: Annotated [GHCGHC.LocatedA (ImportDecl GhcPs)]
   -> GHCGHC.LocatedN GHCGHC.RdrName
   -> GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
   -> TransformT IO [Rewrite Universe]
 constructfromFunMatches imps fun_id fun_matches = do
-    fe <- mkLocatedHsVar fun_id
-    rewrites <- concat <$>
-        forM (unLoc $ GHC.mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
-    let urewrites = toURewrite <$> rewrites
-    -- traceShowM $ map showQuery urewrites
-    assert (not $ null urewrites) $
-        return urewrites
-
--- showQuery :: Rewrite Universe -> String
--- showQuery = ppRewrite
---
--- showQuery :: Rewrite (LHsExpr GhcPs) -> String
--- showQuery q = unlines
---     [ "template: " <> show (hash (printOutputable . showAstData NoBlankSrcSpan . astA . tTemplate . fst . qResult $ q))
---     , "quantifiers: " <> show (hash (T.pack (show(Ext.toList $ qQuantifiers q))))
---     , "matcher: " <> show (hash (printOutputable . showAstData NoBlankSrcSpan . astA . qPattern $ q))
---     ]
---
--- s :: Data a => a -> String
--- s = T.unpack . printOutputable . showAstData NoBlankSrcSpan
---         NoBlankEpAnnotations
+  fe <- mkLocatedHsVar fun_id
+  rewrites <- concat <$>
+    forM (unLoc $ GHC.mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
+  let urewrites = toURewrite <$> rewrites
+  assert (not $ null urewrites) $
+    return urewrites
 
 constructInlineFromIdentifer :: Data a => AnnotatedImports -> Annotated (GenLocated l a) -> GHCGHC.RealSrcSpan -> IO [Rewrite Universe]
 constructInlineFromIdentifer imports originParsedModule originSpan = do
