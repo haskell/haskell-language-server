@@ -616,31 +616,22 @@ suggestRuleRewrites
   -> LRuleDecls GhcRn
   -> [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
-    concat
-        [ [ forwardRewrite   ruleName
-          , backwardsRewrite ruleName
-          ]
-        | L (locA -> l) r  <- rds_rules,
-          pos `isInsideSrcSpan` l,
-          let HsRule {rd_name = L _ rn} = r,
-          let ruleName = unpackFS rn
-      ]
+  concat
+    [ [forwardRewrite ruleName, backwardsRewrite ruleName]
+    | L (locA -> l) r  <- rds_rules
+    , pos `isInsideSrcSpan` l
+    , let HsRule {rd_name = L _ rn} = r
+    , let ruleName = unpackFS rn
+    ]
   where
     forwardRewrite ruleName =
-        let spec = RuleForward (qualify ms_mod ruleName)
-            description = "Apply rule " <> T.pack ruleName <> " forward"
-
-        in ( description,
-            CodeActionKind_Refactor,
-            RunRetrieParams {..}
-            )
+      let spec = RuleForward (qualify ms_mod ruleName)
+          description = "Apply rule " <> T.pack ruleName <> " forward"
+      in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
     backwardsRewrite ruleName =
-          let spec = RuleBackward (qualify ms_mod ruleName)
-              description = "Apply rule " <> T.pack ruleName <> " backwards"
-           in ( description,
-                CodeActionKind_Refactor,
-                RunRetrieParams {..}
-              )
+      let spec = RuleBackward (qualify ms_mod ruleName)
+          description = "Apply rule " <> T.pack ruleName <> " backwards"
+        in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
 
 qualify :: Outputable mod => mod -> String -> String
 qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
