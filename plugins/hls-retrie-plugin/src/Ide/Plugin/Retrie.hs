@@ -718,14 +718,14 @@ callRetrie recorder state session spec origin binds = do
 
   return (errors, editParams)
 
-useOrFail ::
-  IdeRule r v =>
-  IdeState ->
-  String ->
-  (NormalizedFilePath -> CallRetrieError) ->
-  r ->
-  NormalizedFilePath ->
-  IO (RuleResult r)
+useOrFail
+  :: IdeRule r v
+  => IdeState
+  -> String
+  -> (NormalizedFilePath -> CallRetrieError)
+  -> r
+  -> NormalizedFilePath
+  -> IO (RuleResult r)
 useOrFail state lbl mkException rule f =
   useRuleBlocking lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
 
