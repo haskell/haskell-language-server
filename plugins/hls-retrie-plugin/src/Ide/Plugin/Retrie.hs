@@ -216,24 +216,23 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
   pluginWithIndefiniteProgress description Nothing Cancellable $ \_updater -> runExceptT $ do
     nfp <- getNormalizedFilePathE uri
     (session, _) <-
-        runActionE "Retrie.GhcSessionDeps" state $
-            useWithStaleE GhcSessionDeps
-            nfp
+      runActionE "Retrie.GhcSessionDeps" state $
+        useWithStaleE GhcSessionDeps nfp
     (_, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
     (errors, edits) <- liftIO $
-        callRetrie
-            recorder
-            state
-            (hscEnv session)
-            spec
-            nfp
-            binds
+      callRetrie
+        recorder
+        state
+        (hscEnv session)
+        spec
+        nfp
+        binds
     unless (null errors) $
-        lift $ pluginSendNotification SMethod_WindowShowMessage $
-                ShowMessageParams MessageType_Warning $
-                T.unlines $
-                    "## Found errors during rewrite:" :
-                    ["-" <> T.pack (show e) | e <- errors]
+      lift $ pluginSendNotification SMethod_WindowShowMessage $
+        ShowMessageParams MessageType_Warning $
+        T.unlines $
+          "## Found errors during rewrite:" :
+          ["-" <> T.pack (show e) | e <- errors]
     return $ ca & L.edit ?~ edits
 
 resolveInlineThis
