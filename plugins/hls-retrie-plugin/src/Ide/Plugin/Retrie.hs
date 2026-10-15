@@ -515,12 +515,12 @@ getBinds nfp = do
             ]
       return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
-suggestBindRewrites ::
-  Uri ->
-  Position ->
-  Module ->
-  HsBindLR GhcRn GhcRn ->
-  [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestBindRewrites
+  :: Uri
+  -> Position
+  -> Module
+  -> HsBindLR GhcRn GhcRn
+  -> [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName, fun_matches}
   | pos `isInsideSrcSpan` l'
   , triviallySelectable fun_matches =
@@ -537,14 +537,14 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
      in [unfoldRewrite, foldRewrite]
 suggestBindRewrites _ _ _ _ = []
 
-  -- find all the identifiers in the AST for which have source definitions
-suggestBindInlines ::
-    Uri
-    -> [HsBindLR GhcRn GhcRn]
-    -> Range
-    -> WithHieDb
-    -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
-    -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
+-- find all the identifiers in the AST for which have source definitions
+suggestBindInlines
+  :: Uri
+  -> [HsBindLR GhcRn GhcRn]
+  -> Range
+  -> WithHieDb
+  -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
+  -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
 suggestBindInlines _uri binds range hie lookupMod = do
     identifiers <- definedIdentifiers
     return $ map (\(name, siteLoc, srcLoc) ->
