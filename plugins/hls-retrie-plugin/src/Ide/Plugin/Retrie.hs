@@ -755,7 +755,8 @@ parseSpecs
   -> IO [Rewrite Universe]
 parseSpecs state origin originParsedModule originFixities specs = do
   -- retrie needs the libdir for `parseRewriteSpecs`
-  libdir <- topDir . ms_hspp_opts . msrModSummary <$> useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
+  libdir <- topDir . ms_hspp_opts . msrModSummary <$>
+    useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
   parseRewriteSpecs
     libdir
     (\_f -> return $ NoCPP originParsedModule)
