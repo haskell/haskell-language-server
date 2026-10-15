@@ -144,16 +144,16 @@ instance Pretty Log where
 
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
-  { description     :: T.Text,
-    spec            :: RewriteSpec,
-    originatingFile :: Uri
+  { description     :: T.Text
+  , spec            :: RewriteSpec
+  , originatingFile :: Uri
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 data RunRetrieInlineThisParams = RunRetrieInlineThisParams
-  { inlineIntoThisLocation :: !Location,
-    inlineFromThisLocation :: !Location,
-    inlineThisDefinition   :: !T.Text
+  { inlineIntoThisLocation :: !Location
+  , inlineFromThisLocation :: !Location
+  , inlineThisDefinition   :: !T.Text
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
