@@ -776,25 +776,30 @@ constructfromFunMatches imps fun_id fun_matches = do
   assert (not $ null urewrites) $
     return urewrites
 
-constructInlineFromIdentifer :: Data a => AnnotatedImports -> Annotated (GenLocated l a) -> GHCGHC.RealSrcSpan -> IO [Rewrite Universe]
+constructInlineFromIdentifer
+  :: Data a
+  => AnnotatedImports
+  -> Annotated (GenLocated l a)
+  -> GHCGHC.RealSrcSpan
+  -> IO [Rewrite Universe]
 constructInlineFromIdentifer imports originParsedModule originSpan = do
-    -- traceM $ s $ astA originParsedModule
-    fmap astA $ transformA originParsedModule $ \(L _ m) -> do
-        let ast = everything (<>) (First Nothing `mkQ` matcher) m
-            matcher :: HsBindLR GhcPs GhcPs
-                -> First ( GHCGHC.LocatedN GHCGHC.RdrName
-                         , GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
-                         )
-            matcher FunBind{fun_id, fun_matches}
-                -- trace (show (GHC.getLocA fun_id) <> ": " <> s fun_id) False = undefined
-                | RealSrcSpan sp _ <- GHC.getLocA fun_id
-                , sp == originSpan =
-                First $ Just (fun_id, fun_matches)
-            matcher _ = First Nothing
-        case ast of
-            First (Just (fun_id, fun_matches))
-              -> constructfromFunMatches imports fun_id fun_matches
-            _ -> return $ error "could not find source code to inline"
+  fmap astA $ transformA originParsedModule $ \(L _ m) -> do
+    let
+      ast = everything (<>) (First Nothing `mkQ` matcher) m
+      matcher
+        :: HsBindLR GhcPs GhcPs
+        -> First ( GHCGHC.LocatedN GHCGHC.RdrName
+                  , GHCGHC.MatchGroup GhcPs (GHCGHC.LocatedA (HsExpr GhcPs))
+                  )
+      matcher FunBind{fun_id, fun_matches}
+        | RealSrcSpan sp _ <- GHC.getLocA fun_id
+        , sp == originSpan =
+          First $ Just (fun_id, fun_matches)
+      matcher _ = First Nothing
+    case ast of
+      First (Just (fun_id, fun_matches)) ->
+        constructfromFunMatches imports fun_id fun_matches
+      _ -> return $ error "could not find source code to inline"
 
 -- | Group 'TextEdit's by file.
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
