@@ -609,12 +609,12 @@ suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
      in [unfoldRewrite, foldRewrite]
 suggestTypeRewrites _ _ _ = []
 
-suggestRuleRewrites ::
-  Uri ->
-  Position ->
-  GHC.Module ->
-  LRuleDecls GhcRn ->
-  [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestRuleRewrites
+  :: Uri
+  -> Position
+  -> GHC.Module
+  -> LRuleDecls GhcRn
+  -> [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
         [ [ forwardRewrite   ruleName
