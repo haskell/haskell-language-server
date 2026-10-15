@@ -666,14 +666,14 @@ instance Show CallRetrieError where
 instance Exception CallRetrieError
 
 
-callRetrie ::
-  Recorder (WithPriority Log) ->
-  IdeState ->
-  HscEnv ->
-  RewriteSpec ->
-  NormalizedFilePath ->
-  [HsBindLR GhcRn GhcRn] ->
-  IO ([CallRetrieError], WorkspaceEdit)
+callRetrie
+  :: Recorder (WithPriority Log)
+  -> IdeState
+  -> HscEnv
+  -> RewriteSpec
+  -> NormalizedFilePath
+  -> [HsBindLR GhcRn GhcRn]
+  -> IO ([CallRetrieError], WorkspaceEdit)
 callRetrie recorder state session spec origin binds = do
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   let
