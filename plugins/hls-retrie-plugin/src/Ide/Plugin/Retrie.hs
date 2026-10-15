@@ -847,13 +847,13 @@ importTextEdits _ _ _ _ = []
 -------------------------------------------------------------------------------
 -- Rule wrappers
 
-useRuleBlocking ::
-    (IdeRule k v) =>
-    String ->
-    IdeState ->
-    k ->
-    NormalizedFilePath ->
-    IO (Maybe (RuleResult k))
+useRuleBlocking
+  :: (IdeRule k v)
+  => String
+  -> IdeState
+  -> k
+  -> NormalizedFilePath
+  -> IO (Maybe (RuleResult k))
 useRuleBlocking label state rule f = runAction label state (use rule f)
 
 -------------------------------------------------------------------------------
@@ -870,39 +870,45 @@ deriving instance FromJSON RewriteSpec
 deriving instance ToJSON RewriteSpec
 
 -- | Parsed source of a file, reassociated with the given fixities.
-getCPPmodule :: Recorder (WithPriority Log) -> IdeState -> HscEnv -> FixityEnv -> FilePath -> IO (CPP AnnotatedModule, GHCGHC.ParsedSource, T.Text)
+getCPPmodule
+  :: Recorder (WithPriority Log)
+  -> IdeState
+  -> HscEnv
+  -> FixityEnv
+  -> FilePath
+  -> IO (CPP AnnotatedModule, GHCGHC.ParsedSource, T.Text)
 getCPPmodule recorder state session fixities t = do
-    -- TODO: is it safe to drop this makeAbsolute?
-    let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
-    let parseWith contents = do
-          modSummary <- msrModSummary <$>
-            useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
-          let ms' =
-                modSummary
-                  { ms_hspp_buf =
-                      Just (stringToStringBuffer contents)
-                    -- keep comments, as GetParsedModuleWithComments does
-                  , ms_hspp_opts =
-                      ms_hspp_opts modSummary
-                        `GHC.gopt_set` GHC.Opt_KeepRawTokenStream
-                        `GHC.gopt_unset` GHC.Opt_Haddock
-                  }
-          logWith recorder Info $ LogParsingModule t
-          parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
-              `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
-          transformA (fixAnns parsed) (fix fixities)
+  -- TODO: is it safe to drop this makeAbsolute?
+  let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
+  let parseWith contents = do
+        modSummary <- msrModSummary <$>
+          useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
+        let ms' =
+              modSummary
+                { ms_hspp_buf =
+                    Just (stringToStringBuffer contents)
+                  -- keep comments, as GetParsedModuleWithComments does
+                , ms_hspp_opts =
+                    ms_hspp_opts modSummary
+                      `GHC.gopt_set` GHC.Opt_KeepRawTokenStream
+                      `GHC.gopt_unset` GHC.Opt_Haddock
+                }
+        logWith recorder Info $ LogParsingModule t
+        parsed <- evalGhcEnv session (GHCGHC.parseModule ms')
+            `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
+        transformA (fixAnns parsed) (fix fixities)
 
-    contents <- do
-      mbContentsVFS <-
-        runAction "Retrie.GetFileContents" state $ getFileContents nt
-      case mbContentsVFS of
-        Just contents -> return $ Rope.toText contents
-        Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
-    pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
-    let
-      ps = GHC.pm_parsed_source pm
-      extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
-    cpp <- if LangExt.Cpp `EnumSet.member` extensions
-      then parseCPP parseWith contents
-      else NoCPP <$> transformA (fixAnns pm) (fix fixities)
-    return (cpp, ps, contents)
+  contents <- do
+    mbContentsVFS <-
+      runAction "Retrie.GetFileContents" state $ getFileContents nt
+    case mbContentsVFS of
+      Just contents -> return $ Rope.toText contents
+      Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
+  pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
+  let
+    ps = GHC.pm_parsed_source pm
+    extensions = GHC.extensionFlags (GHCGHC.ms_hspp_opts (GHCGHC.pm_mod_summary pm))
+  cpp <- if LangExt.Cpp `EnumSet.member` extensions
+    then parseCPP parseWith contents
+    else NoCPP <$> transformA (fixAnns pm) (fix fixities)
+  return (cpp, ps, contents)
