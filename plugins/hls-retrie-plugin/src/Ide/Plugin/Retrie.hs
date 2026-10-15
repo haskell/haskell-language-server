@@ -442,10 +442,10 @@ provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
           ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
           ++ [ r
-               | TyClGroup {group_tyclds} <- hs_tyclds,
-                 L (locA -> l) g <- group_tyclds,
-                 pos `isInsideSrcSpan` l,
-                 r <- suggestTypeRewrites uri ms_mod g
+             | TyClGroup {group_tyclds} <- hs_tyclds
+             , L (locA -> l) g <- group_tyclds
+             , pos `isInsideSrcSpan` l
+             , r <- suggestTypeRewrites uri ms_mod g
              ]
 
   let retrieActions =
