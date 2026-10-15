@@ -682,8 +682,8 @@ callRetrie recorder state session spec origin binds = do
 
       retrieOptions :: Retrie.Options
       retrieOptions = (defaultOptions target)
-        {Retrie.verbosity = Loud
-        ,Retrie.targetFiles = map fromNormalizedFilePath $
+        { Retrie.verbosity = Loud
+        , Retrie.targetFiles = map fromNormalizedFilePath $
             Set.toList knownFiles
         }
 
