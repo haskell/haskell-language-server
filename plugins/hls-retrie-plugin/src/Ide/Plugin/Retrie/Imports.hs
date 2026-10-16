@@ -83,7 +83,7 @@ import           Development.IDE.GHC.Compat                (lookupGRE_RdrName)
 #endif
 import           Development.IDE.GHC.Compat.ExactPrint     (d0, dn, setEntryDP)
 #if MIN_VERSION_ghc(9,11,0)
-import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP0,
+import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP,
                                                             noAnnSrcSpanDP1)
 #else
 import qualified Development.IDE.GHC.Compat.ExactPrint     as ExactPrint
@@ -102,7 +102,7 @@ import           GHC                                       (HsMatchContext,
 #endif
 import qualified GHC.Data.EnumSet                          as EnumSet
 import           GHC.Parser.Annotation                     (AnnList (..),
-                                                            DeltaPos (SameLine),
+                                                            DeltaPos (DifferentLine, SameLine),
                                                             EpAnn (EpAnn),
                                                             EpaLocation,
                                                             emptyComments)
@@ -353,7 +353,7 @@ renderImports :: [(ModuleName, ImportForm)] -> AnnotatedImports
 renderImports items = unsafeMkA (map renderImport items) 0
 
 renderImport :: (ModuleName, ImportForm) -> LImportDecl GhcPs
-renderImport (m, form) = L noAnnSrcSpanDP0 $ case form of
+renderImport (m, form) = L (noAnnSrcSpanDP (DifferentLine 1 0)) $ case form of
   ImportModule -> base { ideclExt = ext Nothing Nothing }
   ImportQualifiedAs q
     | q == m ->
@@ -411,7 +411,9 @@ anchorDP :: DeltaPos -> Anchor
 anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
 
 -- | Fresh annotations; older exactprint wants the span they stand in for.
-noAnnSrcSpanDP0, noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
-noAnnSrcSpanDP0 = ExactPrint.noAnnSrcSpanDP0 generatedSrcSpan
+noAnnSrcSpanDP :: Monoid ann => DeltaPos -> SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP = ExactPrint.noAnnSrcSpanDP generatedSrcSpan
+
+noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
 noAnnSrcSpanDP1 = ExactPrint.noAnnSrcSpanDP1 generatedSrcSpan
 #endif
