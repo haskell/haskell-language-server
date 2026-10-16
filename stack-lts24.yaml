@@ -25,7 +25,7 @@ extra-deps:
   - hie-bios-0.21.0
   - hw-fingertree-0.1.2.1
   - monad-dijkstra-0.1.1.5
-  - retrie-1.2.3
+  - retrie-2.0.0
   - unordered-containers-0.2.21
   - lsp-2.8.0.0
   - lsp-test-0.18.0.0
