@@ -18,9 +18,9 @@ module Ide.Plugin.Retrie.Imports
 
 import           Data.Foldable                             (find)
 import           Data.Generics                             (Data, everything,
-                                                            mkQ)
+                                                            extQ, mkQ)
 #if !MIN_VERSION_ghc(9,13,0)
-import           Data.Generics                             (everythingBut, extQ)
+import           Data.Generics                             (everythingBut)
 #endif
 import qualified Data.Map                                  as Map
 import qualified Data.Text                                 as T
@@ -29,6 +29,7 @@ import           Development.IDE                           hiding
 import           Development.IDE.GHC.Compat                (AvailInfo,
                                                             EpAnnImportDecl (..),
                                                             Extension (PatternSynonyms),
+                                                            FieldOcc,
                                                             GenLocated (L),
                                                             GenModule (moduleName),
                                                             GhcPs, GhcRn,
@@ -89,7 +90,8 @@ import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP,
 #else
 import qualified Development.IDE.GHC.Compat.ExactPrint     as ExactPrint
 #endif
-import           GHC                                       (MatchGroup,
+import           GHC                                       (FieldOcc (FieldOcc),
+                                                            MatchGroup,
                                                             ParsedModule (..),
                                                             ParsedSource)
 #if MIN_VERSION_ghc(9,13,0)
@@ -147,17 +149,26 @@ import           Development.IDE.GHC.Compat                (isDataOcc)
 -- the parsed module the subtree was renamed from.
 occurrences :: Data a => ParsedSource -> a -> [(Name, RdrName)]
 #if MIN_VERSION_ghc(9,13,0)
-occurrences _ = everything (++) (mkQ [] occ)
+occurrences _ = everything (++) (mkQ [] occ `extQ` field)
   where
     occ :: LIdOccP GhcRn -> [(Name, RdrName)]
     occ (L _ (WithUserRdr rdr name)) = [(name, rdr)]
+
+    field :: FieldOcc GhcRn -> [(Name, RdrName)]
+    field (FieldOcc rdr (L _ name)) = [(name, rdr)]
 #else
 -- look up the original spelling in the parsed source by span
-occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt)
+occurrences ps = everythingBut (++) (([], False) `mkQ` occ `extQ` ctxt `extQ` field)
   where
     occ :: LIdP GhcRn -> ([(Name, RdrName)], Bool)
     occ (L l name) =
       ([ (name, rdr) | Just sp <- [realSpan l], Just rdr <- [Map.lookup sp spellings] ], False)
+    field :: FieldOcc GhcRn -> ([(Name, RdrName)], Bool)
+#if MIN_VERSION_ghc(9,11,0)
+    field (FieldOcc rdr (L _ name)) = ([(name, rdr)], True)
+#else
+    field (FieldOcc name (L _ rdr)) = ([(name, rdr)], True)
+#endif
 #if MIN_VERSION_ghc(9,9,0)
     ctxt :: HsMatchContextRn -> ([(Name, RdrName)], Bool)
 #else
