@@ -141,20 +141,6 @@ import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo
 import           Development.IDE.GHC.Compat                (isDataOcc)
 #endif
 
--- TODO(simon):
--- * Unfold name -> lookup definition of name and determine necessary imports
--- * Fold name -> add import for name (retrie already implements this)
--- * Rules/Type Synonyms -> ??
-
-
--- TODO(simon)
--- * look up the provenance of the name from the defining modules GlobalRdrEnv using lookupGRE_Name
---   it can be: Importable (plain, via parent, as pattern) or Local Only (see ImportSpec)
--- * For a qualified import, check the alias isn't already in-use for a different module
--- * For a pattern synonym, check PatternSynonyms is enabled in the target
--- * If it's LocalOnly then refuse
-
--- TODO(simon): Apply with 'addRewriteImports'
 
 -- | All of the 'Name's in this subtree along with their spellings, given
 -- the parsed module the subtree was renamed from.
