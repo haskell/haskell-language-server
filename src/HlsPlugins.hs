@@ -43,6 +43,10 @@ import qualified Ide.Plugin.CaseSplit              as CaseSplit
 import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
+#if hls_retrie
+import qualified Ide.Plugin.Retrie                 as Retrie
+#endif
+
 #if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
@@ -183,6 +187,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
 #endif
+#if hls_retrie
+      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
+#endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
 #endif
@@ -239,7 +246,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
 #endif
 #if explicitFixity
-      let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId :
+      let pId = "explicit-fixity" in ExplicitFixity.descriptor pId :
 #endif
 #if explicitFields
       let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId :

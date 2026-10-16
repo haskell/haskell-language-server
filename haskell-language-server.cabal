@@ -692,6 +692,71 @@ test-suite hls-rename-plugin-tests
     , text
 
 -----------------------------
+-- retrie plugin
+-----------------------------
+
+flag retrie
+  description: Enable retrie plugin
+  default:     True
+  manual:      True
+
+common retrie
+  if flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds))
+    build-depends: haskell-language-server:hls-retrie-plugin
+    cpp-options: -Dhls_retrie
+
+library hls-retrie-plugin
+  import:           defaults, pedantic, warnings
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
+    buildable: False
+  exposed-modules:  Ide.Plugin.Retrie
+  other-modules:
+    Ide.Plugin.Retrie.Imports
+  hs-source-dirs:   plugins/hls-retrie-plugin/src
+  build-depends:
+    , aeson
+    , bytestring
+    , containers
+    , extra
+    , ghc
+    , ghc-boot-th
+    , ghcide                == 2.15.0.0
+    , hashable
+    , hls-plugin-api        == 2.15.0.0
+    , haskell-language-server:hls-refactor-plugin
+    , haskell-language-server:hls-exactprint-utils
+    , lens
+    , lsp
+    , lsp-types
+    , mtl
+    , retrie                >=2.0.0
+    , safe-exceptions
+    , stm
+    , syb
+    , text
+    , text-rope
+    , transformers
+    , unordered-containers
+
+  default-extensions:
+    DataKinds
+
+test-suite hls-retrie-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-retrie-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , containers
+    , filepath
+    , hls-plugin-api
+    , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
+    , hls-test-utils             == 2.15.0.0
+    , text
+
+-----------------------------
 -- hlint plugin
 -----------------------------
 
@@ -1299,10 +1364,7 @@ library hls-explicit-fixity-plugin
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
     , containers
-    , deepseq
-    , extra
     , ghcide                == 2.15.0.0
-    , hashable
     , hls-plugin-api        == 2.15.0.0
     , lsp                   >=2.8
     , text
@@ -1821,6 +1883,7 @@ library hls-exactprint-utils
   exposed-modules:
     Development.IDE.GHC.ExactPrint.Annotation
     Development.IDE.GHC.ExactPrint.CPP
+    Development.IDE.GHC.ExactPrint.IE
   hs-source-dirs:     hls-exactprint-utils/src
   build-depends:
     , ghc
@@ -1910,6 +1973,7 @@ library
                   , importLens
                   , caseSplit
                   , rename
+                  , retrie
                   , hlint
                   , stan
                   , signatureHelp
