@@ -13,144 +13,141 @@
 
 module Ide.Plugin.Retrie (descriptor, Log) where
 
-import           Control.Concurrent.STM                (readTVarIO)
-import           Control.Exception.Safe                (Exception (..),
-                                                        SomeException, assert,
-                                                        catch, throwIO, try)
+import           Control.Concurrent.STM               (readTVarIO)
+import           Control.Exception.Safe               (Exception (..),
+                                                       SomeException, assert,
+                                                       catch, throwIO, try)
 import           Control.Lens.Operators
-import           Control.Monad                         (filterM, forM, unless,
-                                                        when)
-import           Control.Monad.Error.Class             (MonadError (throwError))
-import           Control.Monad.IO.Class                (MonadIO (liftIO))
-import           Control.Monad.Trans.Class             (MonadTrans (lift))
-import           Control.Monad.Trans.Except            (ExceptT (..),
-                                                        runExceptT)
-import           Data.Maybe                            (fromMaybe, isJust,
-                                                        isNothing)
+import           Control.Monad                        (filterM, forM, unless,
+                                                       when)
+import           Control.Monad.Error.Class            (MonadError (throwError))
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
+import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
+import           Data.Maybe                           (fromMaybe, isJust,
+                                                       isNothing)
 
-import           Control.Monad.Trans.Maybe             (MaybeT, hoistMaybe,
-                                                        runMaybeT)
-import           Data.Aeson                            (FromJSON (..),
-                                                        ToJSON (..))
-import           Data.Bifunctor                        (second)
-import qualified Data.ByteString                       as BS
+import           Control.Monad.Trans.Maybe            (MaybeT, hoistMaybe,
+                                                       runMaybeT)
+import           Data.Aeson                           (FromJSON (..),
+                                                       ToJSON (..))
+import           Data.Bifunctor                       (second)
+import qualified Data.ByteString                      as BS
 import           Data.Data
-import           Data.Either                           (partitionEithers)
-import           Data.Foldable                         (toList)
-import           Data.Hashable                         (unhashed)
-import qualified Data.HashSet                          as Set
-import           Data.List.Extra                       (sortOn)
-import qualified Data.Map                              as Map
-import           Data.Monoid                           (First (First), getFirst)
-import qualified Data.Text                             as T
-import qualified Data.Text.Encoding                    as T
-import qualified Data.Text.Utf16.Rope.Mixed            as Rope
-import           Development.IDE                       hiding (pluginHandlers)
-import           Development.IDE.Core.Actions          (lookupMod)
+import           Data.Either                          (partitionEithers)
+import           Data.Foldable                        (toList)
+import           Data.Hashable                        (unhashed)
+import qualified Data.HashSet                         as Set
+import           Data.List.Extra                      (sortOn)
+import qualified Data.Map                             as Map
+import           Data.Monoid                          (First (First), getFirst)
+import qualified Data.Text                            as T
+import qualified Data.Text.Encoding                   as T
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
+import           Development.IDE                      hiding (pluginHandlers)
+import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.Shake            (ShakeExtras (ShakeExtras, knownTargetsVar),
-                                                        getShakeExtras,
-                                                        hiedbWriter,
-                                                        toKnownFiles, withHieDb)
-import           Development.IDE.GHC.Compat            (GRHSs (GRHSs),
-                                                        GenLocated (L), GhcPs,
-                                                        GhcRn,
-                                                        HsBindLR (FunBind, fun_matches),
-                                                        HsExpr, HsGroup (..),
-                                                        HsValBindsLR (..),
-                                                        HscEnv, ImportDecl (..),
-                                                        LHsExpr, LRuleDecls,
-                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                        OccName, Outputable,
-                                                        RuleDecl (HsRule, rd_name),
-                                                        RuleDecls (HsRules),
-                                                        TyClDecl (SynDecl, tcdLName),
-                                                        TyClGroup (..), fun_id,
-                                                        gopt_set, gopt_unset,
-                                                        locA, ms_hspp_opts,
-                                                        nameOccName, occNameFS,
-                                                        pattern RealSrcSpan,
-                                                        rds_rules, recDotDot,
-                                                        topDir, unLoc, unLocA)
-import           Development.IDE.GHC.Compat.Util       hiding (catch, toList,
-                                                        try)
-import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                        TransformT)
-import           Development.IDE.Plugin.CodeAction     (newImportInsertRange)
-import           Development.IDE.Spans.AtPoint         (LookupModule,
-                                                        nameToLocation)
-import           Development.IDE.Types.Shake           (WithHieDb)
-import           GHC                                   (ExprLStmt, GRHS (GRHS),
-                                                        GRHSs (grhssGRHSs),
-                                                        GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
-                                                        HsLocalBinds,
-                                                        HsLocalBindsLR (HsValBinds),
-                                                        HsRecFields, LIdP,
-                                                        LocatedA, LocatedN,
-                                                        Match (m_grhss),
-                                                        MatchGroup (mg_alts),
-                                                        Module, ModuleName,
-                                                        NHsValBindsLR (NValBinds),
-                                                        Name,
-                                                        NamedThing (getName),
-                                                        ParsedModule (..),
-                                                        ParsedSource, RdrName,
-                                                        RealSrcSpan,
-                                                        RenamedSource, Unit,
-                                                        extensionFlags, getLocA,
-                                                        isExternalName,
-                                                        isSubspanOf,
-                                                        parseModule)
+import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras, knownTargetsVar),
+                                                       getShakeExtras,
+                                                       hiedbWriter,
+                                                       toKnownFiles, withHieDb)
+import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
+                                                       GenLocated (L), GhcPs,
+                                                       GhcRn,
+                                                       HsBindLR (FunBind, fun_matches),
+                                                       HsExpr, HsGroup (..),
+                                                       HsValBindsLR (..),
+                                                       HscEnv, ImportDecl (..),
+                                                       LHsExpr, LRuleDecls,
+                                                       ModSummary (ModSummary, ms_hspp_buf, ms_mod),
+                                                       OccName, Outputable,
+                                                       RuleDecl (HsRule, rd_name),
+                                                       RuleDecls (HsRules),
+                                                       TyClDecl (SynDecl, tcdLName),
+                                                       TyClGroup (..), fun_id,
+                                                       gopt_set, gopt_unset,
+                                                       locA, ms_hspp_opts,
+                                                       nameOccName, occNameFS,
+                                                       pattern RealSrcSpan,
+                                                       rds_rules, recDotDot,
+                                                       topDir, unLoc, unLocA)
+import           Development.IDE.GHC.Compat.Util      hiding (catch, toList,
+                                                       try)
+import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
+                                                       TransformT)
+import           Development.IDE.Spans.AtPoint        (LookupModule,
+                                                       nameToLocation)
+import           Development.IDE.Types.Shake          (WithHieDb)
+import           GHC                                  (ExprLStmt, GRHS (GRHS),
+                                                       GRHSs (grhssGRHSs),
+                                                       GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
+                                                       HsLocalBinds,
+                                                       HsLocalBindsLR (HsValBinds),
+                                                       HsRecFields, LIdP,
+                                                       LocatedA, LocatedN,
+                                                       Match (m_grhss),
+                                                       MatchGroup (mg_alts),
+                                                       Module, ModuleName,
+                                                       NHsValBindsLR (NValBinds),
+                                                       Name,
+                                                       NamedThing (getName),
+                                                       ParsedModule (..),
+                                                       ParsedSource, RdrName,
+                                                       RealSrcSpan,
+                                                       RenamedSource, Unit,
+                                                       extensionFlags, getLocA,
+                                                       isExternalName,
+                                                       isSubspanOf, parseModule)
 #if MIN_VERSION_ghc(9,13,0)
-import           GHC                                   (LIdOccP)
+import           GHC                                  (LIdOccP)
 #endif
-import qualified GHC.Data.EnumSet                      as EnumSet
-import           GHC.Generics                          (Generic)
-import           GHC.Iface.Ext.Types                   (BindType (RegularBind),
-                                                        ContextInfo (ValBind),
-                                                        identInfo)
-import qualified GHC.LanguageExtensions.Type           as LangExt (Extension (..))
-import           Ide.Plugin.Error                      (PluginError (..),
-                                                        getNormalizedFilePathE)
-import           Ide.Plugin.Resolve                    (mkCodeActionWithResolveAndCommand)
+import qualified GHC.Data.EnumSet                     as EnumSet
+import           GHC.Generics                         (Generic)
+import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
+                                                       ContextInfo (ValBind),
+                                                       identInfo)
+import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
+import           Ide.Plugin.Error                     (PluginError (..),
+                                                       getNormalizedFilePathE)
+import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
 import           Ide.PluginUtils
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens            as L
-import           Language.LSP.Protocol.Message         as LSP
-import           Language.LSP.Protocol.Types           as LSP
-import           Language.LSP.Server                   (ProgressCancellable (Cancellable))
-import           Retrie                                (Annotated (astA),
-                                                        AnnotatedModule,
-                                                        Options, Options_ (..),
-                                                        Verbosity (Loud), apply,
-                                                        applyWithUpdate,
-                                                        applyWithUpdateAndStrategy,
-                                                        topDown)
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message        as LSP
+import           Language.LSP.Protocol.Types          as LSP
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
+import           Retrie                               (Annotated (astA),
+                                                       AnnotatedModule, Options,
+                                                       Options_ (..),
+                                                       Verbosity (Loud), apply,
+                                                       applyWithUpdate,
+                                                       applyWithUpdateAndStrategy,
+                                                       topDown)
 import           Retrie.Context
-import           Retrie.CPP                            (CPP (NoCPP), parseCPP,
-                                                        printCPP)
-import           Retrie.ExactPrint                     (AnnotatedImports, fix,
-                                                        makeDeltaAst,
-                                                        transformA, unsafeMkA)
-import           Retrie.Expr                           (mkLocatedHsVar)
-import           Retrie.Fixity                         (FixityEnv, mkFixityEnv)
-import           Retrie.Monad                          (Retrie, getGroundTerms,
-                                                        runRetrie)
-import           Retrie.Options                        (defaultOptions,
-                                                        getTargetFiles)
-import           Retrie.Replace                        (Change (..),
-                                                        Replacement (..))
+import           Retrie.CPP                           (CPP (NoCPP),
+                                                       addImportsCPP, parseCPP,
+                                                       printCPP)
+import           Retrie.ExactPrint                    (AnnotatedImports, fix,
+                                                       makeDeltaAst, transformA,
+                                                       unsafeMkA)
+import           Retrie.Expr                          (mkLocatedHsVar)
+import           Retrie.Fixity                        (FixityEnv, mkFixityEnv)
+import           Retrie.Monad                         (Retrie, getGroundTerms,
+                                                       runRetrie)
+import           Retrie.Options                       (defaultOptions,
+                                                       getTargetFiles)
+import           Retrie.Replace                       (Change (..),
+                                                       Replacement (..))
 import           Retrie.Rewrites
-import           Retrie.Rewrites.Function              (matchToRewrites)
-import           Retrie.Substitution                   (HoleVal (HoleExpr),
-                                                        foldSubst)
-import           Retrie.SYB                            (GenericQ, everything,
-                                                        extQ, listify, mkQ)
+import           Retrie.Rewrites.Function             (matchToRewrites)
+import           Retrie.Substitution                  (HoleVal (HoleExpr),
+                                                       foldSubst)
+import           Retrie.SYB                           (GenericQ, everything,
+                                                       extQ, listify, mkQ)
 import           Retrie.Types
-import           Retrie.Universe                       (Universe)
+import           Retrie.Universe                      (Universe)
 
-import           Development.IDE.GHC.Compat.ExactPrint (exactPrint)
 
 import           Ide.Plugin.Retrie.Imports
 
@@ -280,7 +277,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
-    (cpp, ps, contents) <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
+    cpp <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
     let rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) site
         inline
           | isExternalName (unLoc fun_id) =
@@ -294,7 +291,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
         Right (_,_,NoChange) ->
             refuse "Not inlined: the call site did not match the definition, or a binding there would capture one of its variables"
         Right (_,cpp',change) -> do
-            let edits = asEditMap $ asTextEdits uri ps contents cpp cpp' change
+            let edits = asEditMap $ asTextEdits uri cpp cpp' change
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
             return $ ca & L.edit ?~ wedit
   case outcome of
@@ -713,12 +710,12 @@ callRetrie recorder state session spec origin binds = do
         uri = filePathToUri $ fromNormalizedFilePath nt
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
-    (cpp, pm, contents) <- ExceptT $ try $
+    cpp <- ExceptT $ try $
       getCPPmodule recorder state session targetFixities t
     imps <- either (throwError . CannotImport nt) pure $
       extractImports tcd tct binds spec
     (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
-    return $ asTextEdits uri pm contents cpp cpp' $ case change of
+    return $ asTextEdits uri cpp cpp' $ case change of
       NoChange               -> NoChange
       Change replacements im -> Change replacements (im++[imps])
 
@@ -821,17 +818,14 @@ asEditMap =
 
 asTextEdits
   :: Uri
-  -> ParsedSource
-  -> T.Text
   -> CPP AnnotatedModule
   -> CPP AnnotatedModule
   -> Change
   -> [(Uri, TextEdit)]
-asTextEdits _ _ _ _ _ NoChange = []
-asTextEdits _ _ _ _ _ (Change [] _) = []
-asTextEdits target ps contents before after (Change reps imports) =
-  importTextEdits target ps contents imports <>
-  map (target,) (rewriteTextEdits before after reps)
+asTextEdits _ _ _ NoChange = []
+asTextEdits _ _ _ (Change [] _) = []
+asTextEdits target before after (Change reps imports) =
+  map (target,) (rewriteTextEdits before (addImportsCPP imports after) reps)
 
 rewriteTextEdits
   :: CPP AnnotatedModule
@@ -842,18 +836,6 @@ rewriteTextEdits before after reps =
   makeDiffTextEdit
     (T.pack $ printCPP [] before)
     (T.pack $ printCPP reps after)
-
-importTextEdits
-  :: Uri -> ParsedSource -> T.Text -> [AnnotatedImports] -> [(Uri, TextEdit)]
-importTextEdits uri ps contents imp
-  | not (null imp)
-  , Just (range, indent) <- newImportInsertRange ps contents
-  = let print = [(T.pack . exactPrint) i | i <- concatMap astA imp]
-        sep   = "\n" <> T.replicate indent " "
-        text  = T.concat [ p <> sep | p <- print ]
-        edit  = TextEdit range text
-    in [(uri, edit)]
-importTextEdits _ _ _ _ = []
 
 -------------------------------------------------------------------------------
 -- Rule wrappers
@@ -887,7 +869,7 @@ getCPPmodule
   -> HscEnv
   -> FixityEnv
   -> FilePath
-  -> IO (CPP AnnotatedModule, ParsedSource, T.Text)
+  -> IO (CPP AnnotatedModule)
 getCPPmodule recorder state session fixities t = do
   -- TODO: is it safe to drop this makeAbsolute?
   let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
@@ -916,10 +898,7 @@ getCPPmodule recorder state session fixities t = do
       Just contents -> return $ Rope.toText contents
       Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
   pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
-  let
-    ps = pm_parsed_source pm
-    extensions = extensionFlags (ms_hspp_opts (pm_mod_summary pm))
-  cpp <- if LangExt.Cpp `EnumSet.member` extensions
+  let extensions = extensionFlags (ms_hspp_opts (pm_mod_summary pm))
+  if LangExt.Cpp `EnumSet.member` extensions
     then parseCPP parseWith contents
     else NoCPP <$> transformA (fixAnns pm) (fix fixities)
-  return (cpp, ps, contents)
