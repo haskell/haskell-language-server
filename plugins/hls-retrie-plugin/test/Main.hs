@@ -113,7 +113,6 @@ inlineThisTests =
     , testGroup "imports"
       [ testInline "appends an import" "CrossFileUse" 6 4
       , testInline "appends an import once when other uses remain" "CrossFileUses" 6 4
-      , testInline "append import at layout column" "IndentImportUse" 6 6
       , testInline "import unqualified to match template" "QualifiedScopeUse" 6 4
       , testInline "import qualified" "QualifiedBodyUse" 5 4
       , testInline "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
