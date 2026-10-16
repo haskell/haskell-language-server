@@ -105,7 +105,7 @@ import           GHC                                  (LIdOccP)
 import qualified GHC.Data.EnumSet                     as EnumSet
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
-                                                       ContextInfo (ValBind),
+                                                       ContextInfo (RecField, ValBind),
                                                        identInfo)
 import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
 import           Ide.Plugin.Error                     (PluginError (..),
@@ -602,10 +602,14 @@ equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
     (HAR{refMap}, _) <- useWithStaleFastMT GetHieAst defFile
     -- occurrences of the name in the defining module
     let occs = Map.findWithDefault [] (Right name) refMap
-    pure $ any (any isEquation . identInfo . snd) occs
+    pure $ any (equation . identInfo . snd) occs
   where
+    -- a record field's selector is also a RegularBind
+    equation info = any isEquation info && not (any isField info)
     isEquation (ValBind RegularBind _ _) = True
     isEquation _                         = False
+    isField RecField{} = True
+    isField _          = False
 
 suggestTypeRewrites ::
   Uri ->
