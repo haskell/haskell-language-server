@@ -55,9 +55,11 @@ contextToCompleter (Stanza s _, KeyWord kw) =
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
       Just l  -> l
-contextToCompleter (TopLevel, CabalVersion) = constantCompleter ["cabal-version:"]
--- If we are at the start of a file, we should be in the toplevel stanza
-contextToCompleter (Stanza _ _, CabalVersion) = errorNoopCompleter LogNotInTopLevelStanzaAtStartOfFirstLine
+contextToCompleter (FirstLine, None) = constantCompleter ["cabal-version:"]
+contextToCompleter (FirstLine, KeyWord kw) =
+  case Map.lookup kw (cabalVersionKeyword <> cabalKeywords) of
+    Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
+    Just l  -> l
 
 -- | Takes prefix info about the previously written text
 --  and a rope (representing a file), returns the corresponding context.
@@ -139,12 +141,12 @@ findCursorContext ::
 findCursorContext cursor parentHistory prefixText fields =
   case findFieldSection cursor fields of
     Nothing
-      | cursorRow == 1 -> (TopLevel, CabalVersion)
+      | cursorRow == 1 -> (FirstLine, None)
       | otherwise -> (snd $ NE.head parentHistory, None)
     -- We found the most likely section. Now, are we starting a new section or are we completing an existing one?
     Just field@(Syntax.Field _ _) -> classifyFieldContext parentHistory cursor field
     Just section@(Syntax.Section _ args sectionFields)
-      | cursorRow == 1 -> (TopLevel, CabalVersion)
+      | cursorRow == 1 -> (FirstLine, None)
       | inSameLineAsSectionName section -> (stanzaCtx, None) -- TODO: test whether keyword in same line is parsed correctly
       | getFieldName section `elem` conditionalKeywords -> findCursorContext cursor parentHistory prefixText sectionFields -- Ignore if conditionals, they are not real sections
       | otherwise ->
@@ -167,11 +169,11 @@ classifyFieldContext :: NonEmpty (Int, StanzaContext) -> Syntax.Position -> Synt
 classifyFieldContext ctx cursor field
   -- the cursor is not indented enough to be within the field
   -- but still indented enough to be within the stanza
-  | cursorColumn <= fieldColumn && minIndent <= cursorColumn = (stanzaCtx, cabalVersionOrNone)
+  | cursorColumn <= fieldColumn && minIndent <= cursorColumn = (firstLineOrStanzaCtx, None)
   -- the cursor is not in the current stanza's context as it is not indented enough
   | cursorColumn < minIndent = findStanzaForColumn cursorColumn ctx
-  | cursorIsInFieldName = (stanzaCtx, cabalVersionOrNone)
-  | cursorIsBeforeFieldName = (stanzaCtx, cabalVersionOrNone)
+  | cursorIsInFieldName = (firstLineOrStanzaCtx, None)
+  | cursorIsBeforeFieldName = (firstLineOrStanzaCtx, None)
   | otherwise = (stanzaCtx, KeyWord (getFieldName field <> ":"))
   where
     (minIndent, stanzaCtx) = NE.head ctx
@@ -188,4 +190,4 @@ classifyFieldContext ctx cursor field
     cursorColumn = Syntax.positionCol cursor
     fieldColumn = Syntax.positionCol (getAnnotation field)
 
-    cabalVersionOrNone = if Syntax.positionRow cursor == 1 then CabalVersion else None
+    firstLineOrStanzaCtx = if Syntax.positionRow cursor == 1 then FirstLine else stanzaCtx
