@@ -102,6 +102,7 @@ import           GHC                                  (ExprLStmt, GRHS (GRHS),
 #if MIN_VERSION_ghc(9,13,0)
 import           GHC                                  (LIdOccP)
 #endif
+import           Control.Monad.IO.Unlift              (askRunInIO)
 import qualified GHC.Data.EnumSet                     as EnumSet
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
@@ -117,6 +118,8 @@ import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
 import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
+import           System.FilePath                      (takeFileName)
+
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule, Options,
                                                        Options_ (..),
@@ -150,6 +153,7 @@ import           Retrie.Universe                      (Universe)
 
 
 import           Ide.Plugin.Retrie.Imports
+
 
 data Log
   = LogParsingModule FilePath
@@ -210,7 +214,8 @@ resolveRunRetrie
   -> RunRetrieParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
 resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  pluginWithIndefiniteProgress description Nothing Cancellable $ \_updater -> runExceptT $ do
+  pluginWithIndefiniteProgress description Nothing Cancellable $ \ progress -> runExceptT $ do
+    rio <- lift askRunInIO
     nfp <- getNormalizedFilePathE uri
     (session, _) <-
       runActionE "Retrie.GhcSessionDeps" state $
@@ -219,6 +224,7 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
     (errors, edits) <- liftIO $
       callRetrie
         recorder
+        (rio . progress)
         state
         (hscEnv session)
         spec
@@ -680,13 +686,14 @@ instance Exception CallRetrieError
 
 callRetrie
   :: Recorder (WithPriority Log)
+  -> (T.Text -> IO ())
   -> IdeState
   -> HscEnv
   -> RewriteSpec
   -> NormalizedFilePath
   -> [HsBindLR GhcRn GhcRn]
   -> IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder state session spec origin binds = do
+callRetrie recorder progress state session spec origin binds = do
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   let
       -- TODO cover all workspaceFolders
@@ -712,6 +719,7 @@ callRetrie recorder state session spec origin binds = do
   results <- forM targets $ \t -> runExceptT $ do
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
         uri = filePathToUri $ fromNormalizedFilePath nt
+    lift $ progress $ T.pack $ takeFileName (fromNormalizedFilePath nt)
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     cpp <- ExceptT $ try $
