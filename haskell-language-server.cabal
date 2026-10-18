@@ -720,6 +720,7 @@ library hls-retrie-plugin
     Ide.Plugin.Retrie.Imports
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
+    , filepath
     , aeson
     , bytestring
     , containers
@@ -742,6 +743,7 @@ library hls-retrie-plugin
     , text
     , text-rope
     , transformers
+    , unliftio-core
     , unordered-containers
 
   default-extensions:
