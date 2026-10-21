@@ -49,6 +49,12 @@ runs:
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
       shell: bash
 
+    # Workaround for https://github.com/actions/runner-images/issues/14940
+    - name: Use Command Line Tools toolchain on macOS
+      if: inputs.os == 'macOS'
+      run: sudo xcode-select -s /Library/Developer/CommandLineTools
+      shell: bash
+
     # Shorten binary names as a workaround for filepath length limits in Windows,
     # but since tests are hardcoded on this workaround all platforms need it.
     # All workflows which distinguishes cache on `cabal.project` needs this.
