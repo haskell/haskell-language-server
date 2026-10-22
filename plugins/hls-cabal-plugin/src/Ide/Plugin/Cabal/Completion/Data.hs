@@ -14,7 +14,9 @@ import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
-import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
+import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer,
+                                                                 ComponentSpec (isRequired, name),
+                                                                 defCS, optCS)
 import           Ide.Plugin.Cabal.Completion.Types
 import           Ide.Plugin.Cabal.LicenseSuggest                (licenseNames)
 import           Language.Haskell.Extension
@@ -33,116 +35,183 @@ data TopLevelStanza
 -- Completion Data
 -- ----------------------------------------------------------------
 
+specToMap :: [(ComponentSpec, b)] -> Map T.Text b
+specToMap = Map.fromList . map (\(c, x) -> (name c, x))
+
+
+specToWeights :: [(ComponentSpec, b)] -> Map T.Text Double
+specToWeights = Map.fromList . map (\(c, _) -> (name c, if isRequired c then 1 else 0))
+
 supportedCabalVersions :: [CabalSpecVersion]
 supportedCabalVersions = [CabalSpecV2_2 .. maxBound]
 
 -- | Keyword for cabal version; required to be the top line in a cabal file
 cabalVersionKeyword :: Map KeyWordName Completer
-cabalVersionKeyword =
-  Map.singleton "cabal-version:" $
+cabalVersionKeyword = Map.singleton (name $ fst cabalVersionKeywordSpec) (snd cabalVersionKeywordSpec)
+
+
+cabalVersionKeywordWeight :: Map KeyWordName Double
+cabalVersionKeywordWeight = specToWeights [cabalVersionKeywordSpec]
+
+cabalVersionKeywordSpec :: (ComponentSpec, Completer)
+cabalVersionKeywordSpec =
+  ((optCS "cabal-version:"),
     constantCompleter $
       -- We only suggest cabal versions newer than 2.2
       -- since we don't recommend using older ones.
-      map (T.pack . showCabalSpecVersion) supportedCabalVersions
+      map (T.pack . showCabalSpecVersion) supportedCabalVersions)
 
 -- | Top level keywords of a cabal file.
 --
 -- TODO: we could add descriptions of field values and
 -- then show them when inside the field's context
 cabalKeywords :: Map KeyWordName Completer
-cabalKeywords =
-  Map.fromList
-    [ ("name:", nameCompleter),
-      ("version:", noopCompleter),
-      ("build-type:", constantCompleter (fmap (T.pack . show) knownBuildTypes)),
-      ("license:", weightedConstantCompleter licenseNames weightedLicenseNames),
-      ("license-file:", filePathCompleter),
-      ("license-files:", filePathCompleter),
-      ("copyright:", noopCompleter),
-      ("author:", noopCompleter),
-      ("maintainer:", noopCompleter), -- email address, use git config?
-      ("stability:", noopCompleter),
-      ("homepage:", noopCompleter),
-      ("bug-reports:", noopCompleter),
-      ("package-url:", noopCompleter),
-      ("synopsis:", noopCompleter),
-      ("description:", noopCompleter),
-      ("category:", noopCompleter),
-      ("tested-with:", constantCompleter ["GHC"]),
-      ("data-files:", filePathCompleter),
-      ("data-dir:", directoryCompleter),
-      ("extra-source-files:", filePathCompleter),
-      ("extra-doc-files:", filePathCompleter),
-      ("extra-tmp-files:", filePathCompleter)
+cabalKeywords = specToMap cabalKeywordSpecs
+
+
+cabalKeywordWeights :: Map T.Text Double
+cabalKeywordWeights = specToWeights cabalKeywordSpecs
+
+cabalKeywordSpecs :: [(ComponentSpec, Completer)]
+cabalKeywordSpecs =
+    [ (defCS "name:", nameCompleter),
+      (defCS "version:", noopCompleter),
+      (optCS "build-type:", constantCompleter (fmap (T.pack . show) knownBuildTypes)),
+      (optCS "license:", weightedConstantCompleter licenseNames weightedLicenseNames),
+      (defCS "license-file:", filePathCompleter),
+      (defCS "license-files:", filePathCompleter),
+      (defCS "copyright:", noopCompleter),
+      (defCS "author:", noopCompleter),
+      (defCS "maintainer:", noopCompleter), -- email address, use git config?
+      (defCS "stability:", noopCompleter),
+      (defCS "homepage:", noopCompleter),
+      (defCS "bug-reports:", noopCompleter),
+      (defCS "package-url:", noopCompleter),
+      (defCS "synopsis:", noopCompleter),
+      (defCS "description:", noopCompleter),
+      (defCS "category:", noopCompleter),
+      (defCS "tested-with:", constantCompleter [ "GHC"]),
+      (defCS "data-files:", filePathCompleter),
+      (optCS "data-dir:", directoryCompleter),
+      (defCS "extra-source-files:", filePathCompleter),
+      (defCS "extra-doc-files:", filePathCompleter),
+      (defCS "extra-tmp-files:", filePathCompleter)
     ]
 
+
 -- | Map, containing all stanzas in a cabal file as keys,
---  and lists of their possible nested keywords as values.
-stanzaKeywordMap :: Map StanzaType (Map KeyWordName Completer)
-stanzaKeywordMap =
-  Map.fromList
-    [ ("library", libraryFields <> libExecTestBenchCommons Library),
-      ("executable", executableFields <> libExecTestBenchCommons Executable),
-      ("test-suite", testSuiteFields <> libExecTestBenchCommons TestSuite),
-      ("benchmark", benchmarkFields <> libExecTestBenchCommons Benchmark),
-      ("foreign-library", foreignLibraryFields <> libExecTestBenchCommons ForeignLib),
-      ("common", libExecTestBenchCommons Library),
-      ("common", libExecTestBenchCommons Common),
-      ("flag", flagFields),
-      ("source-repository", sourceRepositoryFields),
-      ("custom-setup", customSetupFields)
+--  and Maps of their possible nested keywords as values.
+stanzaKeywordMapMap :: Map StanzaType (Map KeyWordName Completer)
+stanzaKeywordMapMap = specToMap $ map (\(a,b) -> (a, specToMap b)) stanzaKeywordSpec
+
+
+-- | Map, containing weights for fields nested in stanza fields
+stanzaKeywordWeights :: Map StanzaType (Map KeyWordName Double)
+stanzaKeywordWeights = Map.map specToWeights stanzaKeywordMap
+
+-- | Map, containing weights for top level stanzas
+stanzaWeights :: Map StanzaType Double
+stanzaWeights = specToWeights stanzaKeywordSpec
+
+-- | Map, containing all stanzas in a cabal file as keys,
+--  and lists of their possible nested specs as values.
+stanzaKeywordMap :: Map StanzaType [(ComponentSpec, Completer)]
+stanzaKeywordMap = specToMap stanzaKeywordSpec
+
+stanzaKeywordSpec :: [(ComponentSpec, [(ComponentSpec, Completer)])]
+stanzaKeywordSpec =
+    [ (defCS "library", libraryFieldsSpec <> libExecTestBenchCommonsSpec Library),
+      (defCS "executable", executableFieldsSpec <> libExecTestBenchCommonsSpec Executable),
+      (defCS "test-suite", testSuiteFieldsSpec <> libExecTestBenchCommonsSpec TestSuite),
+      (defCS "benchmark", benchmarkFieldsSpec <> libExecTestBenchCommonsSpec Benchmark),
+      (defCS "foreign-library", foreignLibraryFieldsSpec <> libExecTestBenchCommonsSpec ForeignLib),
+      (defCS "common", libExecTestBenchCommonsSpec Library),
+      (defCS "common", libExecTestBenchCommonsSpec Common),
+      (defCS "flag", flagFieldsSpec),
+      (defCS "source-repository", sourceRepositoryFieldsSpec),
+      (defCS "custom-setup", customSetupFieldsSpec)
     ]
 
 libraryFields :: Map KeyWordName Completer
-libraryFields =
-  Map.fromList
-    [ ("exposed-modules:", modulesCompleter sourceDirsExtractionLibrary),
-      ("virtual-modules:", noopCompleter),
-      ("exposed:", constantCompleter ["True", "False"]),
-      ("visibility:", constantCompleter ["private", "public"]),
-      ("reexported-modules:", noopCompleter),
-      ("signatures:", noopCompleter),
-      ("other-modules:", modulesCompleter sourceDirsExtractionLibrary)
+libraryFields = specToMap libraryFieldsSpec
+
+libraryFieldsWeights :: Map KeyWordName Double
+libraryFieldsWeights = specToWeights libraryFieldsSpec
+
+libraryFieldsSpec :: [(ComponentSpec, Completer)]
+libraryFieldsSpec =
+    [ (defCS "exposed-modules:", modulesCompleter sourceDirsExtractionLibrary),
+      (defCS "virtual-modules:", noopCompleter),
+      (defCS "exposed:", constantCompleter ["True", "False"]),
+      (defCS "visibility:", constantCompleter ["private", "public"]),
+      (defCS "reexported-modules:", noopCompleter),
+      (defCS "signatures:", noopCompleter),
+      (defCS "other-modules:", modulesCompleter sourceDirsExtractionLibrary)
     ]
 
 executableFields :: Map KeyWordName Completer
-executableFields =
-  Map.fromList
-    [ ("main-is:", mainIsCompleter sourceDirsExtractionExecutable),
-      ("scope:", constantCompleter ["public", "private"]),
-      ("other-modules:", modulesCompleter sourceDirsExtractionExecutable)
+executableFields = specToMap executableFieldsSpec
+
+executableFieldsWeights :: Map KeyWordName Double
+executableFieldsWeights = specToWeights executableFieldsSpec
+
+executableFieldsSpec :: [(ComponentSpec, Completer)]
+executableFieldsSpec =
+    [ (optCS "main-is:", mainIsCompleter sourceDirsExtractionExecutable),
+      (defCS "scope:", constantCompleter ["public", "private"]),
+      (defCS "other-modules:", modulesCompleter sourceDirsExtractionExecutable)
     ]
 
 testSuiteFields :: Map KeyWordName Completer
-testSuiteFields =
-  Map.fromList
-    [ ("type:", constantCompleter ["exitcode-stdio-1.0", "detailed-0.9"]),
-      ("main-is:", mainIsCompleter sourceDirsExtractionTestSuite),
-      ("other-modules:", modulesCompleter sourceDirsExtractionTestSuite)
+testSuiteFields = specToMap testSuiteFieldsSpec
+
+testSuiteFieldsWeights :: Map KeyWordName Double
+testSuiteFieldsWeights = specToWeights testSuiteFieldsSpec
+
+
+testSuiteFieldsSpec :: [(ComponentSpec, Completer)]
+testSuiteFieldsSpec =
+    [ (optCS "type:", constantCompleter ["exitcode-stdio-1.0", "detailed-0.9"]),
+      (defCS "main-is:", mainIsCompleter sourceDirsExtractionTestSuite),
+      (defCS "other-modules:", modulesCompleter sourceDirsExtractionTestSuite)
     ]
 
 benchmarkFields :: Map KeyWordName Completer
-benchmarkFields =
-  Map.fromList
-    [ ("type:", noopCompleter),
-      ("main-is:", mainIsCompleter sourceDirsExtractionBenchmark),
-      ("other-modules:", modulesCompleter sourceDirsExtractionBenchmark)
+benchmarkFields = specToMap benchmarkFieldsSpec
+
+
+benchmarkFieldsWeights :: Map KeyWordName Double
+benchmarkFieldsWeights = specToWeights benchmarkFieldsSpec
+
+benchmarkFieldsSpec :: [(ComponentSpec, Completer)]
+benchmarkFieldsSpec =
+    [ (defCS "type:", noopCompleter),
+      (defCS "main-is:", mainIsCompleter sourceDirsExtractionBenchmark),
+      (defCS "other-modules:", modulesCompleter sourceDirsExtractionBenchmark)
     ]
 
 foreignLibraryFields :: Map KeyWordName Completer
-foreignLibraryFields =
-  Map.fromList
-    [ ("type:", constantCompleter ["native-static", "native-shared"]),
-      ("options:", constantCompleter ["standalone"]),
-      ("mod-def-file:", filePathCompleter),
-      ("lib-version-info:", noopCompleter),
-      ("lib-version-linux:", noopCompleter)
+foreignLibraryFields = specToMap foreignLibraryFieldsSpec
+
+
+foreignLibraryFieldsWeights :: Map KeyWordName Double
+foreignLibraryFieldsWeights = specToWeights foreignLibraryFieldsSpec
+
+foreignLibraryFieldsSpec :: [(ComponentSpec, Completer)]
+foreignLibraryFieldsSpec =
+    [ (defCS "type:", constantCompleter ["native-static", "native-shared"]),
+      (defCS "options:", constantCompleter ["standalone"]),
+      (defCS "mod-def-file:", filePathCompleter),
+      (defCS "lib-version-info:", noopCompleter),
+      (defCS "lib-version-linux:", noopCompleter)
     ]
 
 sourceRepositoryFields :: Map KeyWordName Completer
-sourceRepositoryFields =
-  Map.fromList
-    [ ( "type:",
+sourceRepositoryFields = specToMap sourceRepositoryFieldsSpec
+
+sourceRepositoryFieldsSpec :: [(ComponentSpec, Completer)]
+sourceRepositoryFieldsSpec =
+    [ (defCS "type:",
         constantCompleter
           [ "darcs",
             "git",
@@ -156,66 +225,78 @@ sourceRepositoryFields =
             "monotone"
           ]
       ),
-      ("location:", noopCompleter),
-      ("module:", noopCompleter),
-      ("branch:", noopCompleter),
-      ("tag:", noopCompleter),
-      ("subdir:", directoryCompleter)
+      (defCS "location:", noopCompleter),
+      (defCS "module:", noopCompleter),
+      (defCS "branch:", noopCompleter),
+      (defCS "tag:", noopCompleter),
+      (defCS "subdir:", directoryCompleter)
     ]
 
 flagFields :: Map KeyWordName Completer
-flagFields =
-  Map.fromList
-    [ ("description:", noopCompleter),
-      ("default:", constantCompleter ["True", "False"]),
-      ("manual:", constantCompleter ["False", "True"]),
-      ("lib-def-file:", noopCompleter),
-      ("lib-version-info:", noopCompleter),
-      ("lib-version-linux:", noopCompleter)
+flagFields = specToMap flagFieldsSpec
+
+
+flagFieldsWeights :: Map KeyWordName Double
+flagFieldsWeights = specToWeights flagFieldsSpec
+
+flagFieldsSpec :: [(ComponentSpec, Completer)]
+flagFieldsSpec =
+    [ (defCS "description:", noopCompleter),
+      (defCS "default:", constantCompleter ["True", "False"]),
+      (defCS "manual:", constantCompleter ["False", "True"]),
+      (defCS "lib-def-file:", noopCompleter),
+      (defCS "lib-version-info:", noopCompleter),
+      (defCS "lib-version-linux:", noopCompleter)
     ]
 
 libExecTestBenchCommons :: TopLevelStanza -> Map KeyWordName Completer
-libExecTestBenchCommons st =
-  Map.fromList
-    [ ("import:", importCompleter),
-      ("build-depends:", noopCompleter),
-      ("hs-source-dirs:", directoryCompleter),
-      ("default-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
-      ("other-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
-      ("default-language:", defaultLanguageCompleter),
-      ("other-languages:", noopCompleter),
-      ("build-tool-depends:", noopCompleter),
-      ("buildable:", constantCompleter ["True", "False"]),
-      ("ghc-options:", constantCompleter ghcOptions),
-      ("ghc-prof-options:", constantCompleter ghcOptions),
-      ("ghc-shared-options:", constantCompleter ghcOptions),
-      ("ghcjs-options:", constantCompleter ghcOptions),
-      ("ghcjs-prof-options:", constantCompleter ghcOptions),
-      ("ghcjs-shared-options:", constantCompleter ghcOptions),
-      ("includes:", filePathCompleter),
-      ("install-includes:", filePathCompleter),
-      ("include-dirs:", directoryCompleter),
-      ("autogen-includes:", filePathCompleter),
-      ("autogen-modules:", moduleCompleterByTopLevelStanza),
-      ("c-sources:", filePathCompleter),
-      ("cxx-sources:", filePathCompleter),
-      ("asm-sources:", filePathCompleter),
-      ("cmm-sources:", filePathCompleter),
-      ("js-sources:", filePathCompleter),
-      ("extra-libraries:", noopCompleter),
-      ("extra-ghci-libraries:", noopCompleter),
-      ("extra-bundled-libraries:", noopCompleter),
-      ("extra-lib-dirs:", directoryCompleter),
-      ("cc-options:", noopCompleter),
-      ("cpp-options:", noopCompleter),
-      ("cxx-options:", noopCompleter),
-      ("cmm-options:", noopCompleter),
-      ("asm-options:", noopCompleter),
-      ("ld-options:", noopCompleter),
-      ("pkgconfig-depends:", noopCompleter),
-      ("frameworks:", noopCompleter),
-      ("extra-framework-dirs:", directoryCompleter),
-      ("mixins:", noopCompleter)
+libExecTestBenchCommons = specToMap . libExecTestBenchCommonsSpec
+
+
+libExecTestBenchCommonsWeights :: TopLevelStanza -> Map KeyWordName Double
+libExecTestBenchCommonsWeights = specToWeights . libExecTestBenchCommonsSpec
+
+libExecTestBenchCommonsSpec :: TopLevelStanza -> [(ComponentSpec, Completer)]
+libExecTestBenchCommonsSpec st =
+    [ (defCS "import:", importCompleter),
+      (defCS "build-depends:", noopCompleter),
+      (defCS "hs-source-dirs:", directoryCompleter),
+      (defCS "default-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
+      (defCS "other-extensions:", constantCompleter $ map (T.pack . prettyShow) allExtensions),
+      (optCS "default-language:", defaultLanguageCompleter),
+      (defCS "other-languages:", noopCompleter),
+      (defCS "build-tool-depends:", noopCompleter),
+      (defCS "buildable:", constantCompleter ["True", "False"]),
+      (defCS "ghc-options:", constantCompleter ghcOptions),
+      (defCS "ghc-prof-options:", constantCompleter ghcOptions),
+      (defCS "ghc-shared-options:", constantCompleter ghcOptions),
+      (defCS "ghcjs-options:", constantCompleter ghcOptions),
+      (defCS "ghcjs-prof-options:", constantCompleter ghcOptions),
+      (defCS "ghcjs-shared-options:", constantCompleter ghcOptions),
+      (defCS "includes:", filePathCompleter),
+      (defCS "install-includes:", filePathCompleter),
+      (defCS "include-dirs:", directoryCompleter),
+      (defCS "autogen-includes:", filePathCompleter),
+      (defCS "autogen-modules:", moduleCompleterByTopLevelStanza),
+      (defCS "c-sources:", filePathCompleter),
+      (defCS "cxx-sources:", filePathCompleter),
+      (defCS "asm-sources:", filePathCompleter),
+      (defCS "cmm-sources:", filePathCompleter),
+      (defCS "js-sources:", filePathCompleter),
+      (defCS "extra-libraries:", noopCompleter),
+      (defCS "extra-ghci-libraries:", noopCompleter),
+      (defCS "extra-bundled-libraries:", noopCompleter),
+      (defCS "extra-lib-dirs:", directoryCompleter),
+      (defCS "cc-options:", noopCompleter),
+      (defCS "cpp-options:", noopCompleter),
+      (defCS "cxx-options:", noopCompleter),
+      (defCS "cmm-options:", noopCompleter),
+      (defCS "asm-options:", noopCompleter),
+      (defCS "ld-options:", noopCompleter),
+      (defCS "pkgconfig-depends:", noopCompleter),
+      (defCS "frameworks:", noopCompleter),
+      (defCS "extra-framework-dirs:", directoryCompleter),
+      (defCS "mixins:", noopCompleter)
     ]
   where
     --
@@ -239,12 +320,18 @@ libExecTestBenchCommons st =
         noopCompleter
 
 customSetupFields :: Map KeyWordName Completer
-customSetupFields =
-  Map.fromList
-    [ ("setup-depends:", noopCompleter)
-    , ("build-depends:", noopCompleter)
-    , ("build-tools:", noopCompleter)
-    , ("default-language:", defaultLanguageCompleter)
+customSetupFields = specToMap customSetupFieldsSpec
+
+
+customSetupFieldsWeights :: Map KeyWordName Double
+customSetupFieldsWeights = specToWeights customSetupFieldsSpec
+
+customSetupFieldsSpec :: [(ComponentSpec, Completer)]
+customSetupFieldsSpec =
+    [ (defCS "setup-depends:", noopCompleter)
+    , (defCS "build-depends:", noopCompleter)
+    , (defCS "build-tools:", noopCompleter)
+    , (defCS "default-language:", defaultLanguageCompleter)
     ]
 
 -- | Returns all possible language extensions including disabled ones.
