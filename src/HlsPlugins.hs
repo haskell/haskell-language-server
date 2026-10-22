@@ -23,6 +23,9 @@ import qualified Ide.Plugin.CallHierarchy          as CallHierarchy
 #if hls_cabal
 import qualified Ide.Plugin.Cabal                  as Cabal
 #endif
+#if hls_cabalproject
+import qualified Ide.Plugin.CabalProject           as CabalProject
+#endif
 #if hls_class
 import qualified Ide.Plugin.Class                  as Class
 #endif
@@ -155,6 +158,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_cabal
       let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
       let caId = "cabalHaskellIntegration" in Cabal.haskellInteractionDescriptor (pluginRecorder caId) caId :
+#endif
+#if hls_cabalproject
+      let pId = "cabal-project" in CabalProject.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_pragmas
       Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :
