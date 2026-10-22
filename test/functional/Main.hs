@@ -1,12 +1,12 @@
 module Main where
 
-import Config
-import ConfigSchema
-import Format
-import FunctionalBadProject
-import HieBios
-import Progress
-import Test.Hls
+import           Config
+import           ConfigSchema
+import           Format
+import           FunctionalBadProject
+import           HieBios
+import           Progress
+import           Test.Hls
 
 main :: IO ()
 main = defaultTestRunner $ dependentTestGroup "haskell-language-server" AllFinish
