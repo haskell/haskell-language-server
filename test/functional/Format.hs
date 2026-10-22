@@ -35,22 +35,22 @@ providerTests = testGroup "lsp formatting provider"
 
     , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
-        formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
-        formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
-        formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
 
         doc <- openDoc "Format.hs" "haskell"
 
         setHlsConfig (formatLspConfig "ormolu")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
         setHlsConfig (formatLspConfig "fourmolu")
         formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+        formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
         setHlsConfig (formatLspConfig "ormolu")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
     ]
 
