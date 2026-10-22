@@ -52,11 +52,36 @@ module Test.Hls
     waitForProgressBegin,
     waitForTypecheck,
     waitForAction,
+    getInterfaceFilesDir,
+    garbageCollectDirtyKeys,
+    getFilesOfInterest,
+    getStoredKeys,
+    waitForCustomMessage,
+    waitForGC,
+    configureCheckProject,
+    isReferenceReady,
+    referenceReady,
     hlsConfigToClientConfig,
     setHlsConfig,
     getLastBuildKeys,
     waitForKickDone,
     waitForKickStart,
+    -- * Diagnostic assertions
+    Cursor,
+    cursorPosition,
+    ExpectedDiagnostic,
+    ExpectedDiagnosticWithTag,
+    requireDiagnostic,
+    standardizeQuotes,
+    diagnostic,
+    expectDiagnostics,
+    expectDiagnosticsWithTags,
+    expectCurrentDiagnostics,
+    checkDiagnosticsForDoc,
+    expectNoMoreDiagnostics,
+    expectMessages,
+    flushMessages,
+    canonicalizeUri,
     -- * Plugin descriptor helper functions for tests
     PluginTestDescriptor,
     hlsPluginTestRecorder,
@@ -78,9 +103,10 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async                 (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
-import           Control.Lens                             ((^.))
+import           Control.Lens                             (_1, traverseOf, (^.))
 import           Control.Lens.Extras                      (is)
-import           Control.Monad                            (guard, unless, void)
+import           Control.Monad                            (guard, unless, void,
+                                                           (>=>))
 import           Control.Monad.Extra                      (forM)
 import           Control.Monad.IO.Class
 import           Control.Monad.Primitive                  (keepAlive)
@@ -88,10 +114,12 @@ import           Data.Aeson                               (Result (Success),
                                                            Value (Null),
                                                            fromJSON, toJSON)
 import qualified Data.Aeson                               as A
+import           Data.Bifunctor                           (second)
 import           Data.ByteString.Lazy                     (ByteString)
 import           Data.Default                             (Default, def)
 import qualified Data.Map                                 as M
-import           Data.Maybe                               (fromMaybe, mapMaybe)
+import           Data.Maybe                               (fromJust, fromMaybe,
+                                                           mapMaybe)
 import           Data.Proxy                               (Proxy (Proxy))
 import qualified Data.Text                                as T
 import qualified Data.Text.Lazy                           as TL
@@ -104,7 +132,7 @@ import           Development.IDE                          (IdeState,
 import           Development.IDE.Main                     hiding (Log)
 import qualified Development.IDE.Main                     as IDEMain
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo)
-import           Development.IDE.Plugin.Test              (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test              (TestRequest (..),
                                                            WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test              as Test
 import           Development.IDE.Session                  (SessionLoadingOptions (..),
@@ -112,6 +140,7 @@ import           Development.IDE.Session                  (SessionLoadingOptions
 import           Development.IDE.Session.Ghc              (getCacheDirsIn)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
+import           GHC.Stack                                (HasCallStack)
 import           GHC.TypeLits
 import           Ide.Logger                               (Pretty (pretty),
                                                            Priority (..),
@@ -134,6 +163,7 @@ import qualified Language.LSP.Protocol.Message            as LSP
 import           Language.LSP.Protocol.Types              hiding (Null)
 import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Test
+import qualified Language.LSP.Test                        as LspTest
 import           Prelude                                  hiding (log)
 import           System.Directory                         (canonicalizePath,
                                                            createDirectoryIfMissing,
@@ -146,6 +176,7 @@ import           System.IO.Extra                          (newTempDirWithin)
 import           System.IO.Unsafe                         (unsafePerformIO)
 import           System.Process.Extra                     (createPipe)
 import           System.Time.Extra
+import           Test.Hls.Diagnostic
 import qualified Test.Hls.FileSystem                      as FS
 import           Test.Hls.FileSystem
 import           Test.Hls.TestEnv                         (getTestRootDir,
@@ -932,8 +963,8 @@ waitForBuildQueue = do
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                    -> return 0
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
-callTestPlugin cmd = do
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) b)
+tryCallTestPlugin cmd = do
     let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
     TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
@@ -943,15 +974,63 @@ callTestPlugin cmd = do
         A.Error err -> Left $ TResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
         A.Success a -> pure a
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) WaitForIdeRuleResult)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (TResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                       -> pure a
+
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-waitForTypecheck :: TextDocumentIdentifier -> Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) Bool)
-waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
 
 getLastBuildKeys :: Session (Either (TResponseError @ClientToServer (Method_CustomMethod "test")) [T.Text])
-getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
+getLastBuildKeys = tryCallTestPlugin GetBuildKeysBuilt
+
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
+getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]
+garbageCollectDirtyKeys parents age = callTestPlugin (GarbageCollectDirtyKeys parents age)
+
+getStoredKeys :: Session [T.Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
+
+waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
+waitForCustomMessage msg pred =
+    skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params = value})
+            | symbolVal p == T.unpack msg -> pred value
+        _ -> Nothing
+
+waitForGC :: Session [T.Text]
+waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
+    case A.fromJSON v of
+        A.Success x -> Just x
+        _           -> Nothing
+
+configureCheckProject :: Bool -> Session ()
+configureCheckProject overrideCheckProject = setConfigSection "haskell" (toJSON $ def{checkProject = overrideCheckProject})
+
+-- | Pattern match a message from ghcide indicating that a file has been indexed
+isReferenceReady :: FilePath -> Session ()
+isReferenceReady p = void $ referenceReady (equalFilePath p)
+
+referenceReady :: (FilePath -> Bool) -> Session FilePath
+referenceReady pred = satisfyMaybe $ \case
+  FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params})
+    | A.Success fp <- A.fromJSON _params
+    , pred fp
+    , symbolVal p == "ghcide/reference/ready"
+    -> Just fp
+  _ -> Nothing
 
 hlsConfigToClientConfig :: Config -> A.Object
 hlsConfigToClientConfig config = [("haskell", toJSON config)]
@@ -997,3 +1076,130 @@ kick proxyMsg = do
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other
+
+expectedDiagnosticWithNothing :: ExpectedDiagnostic -> ExpectedDiagnosticWithTag
+expectedDiagnosticWithNothing (ds, c, t, code) = (ds, c, t, code, Nothing)
+
+requireDiagnosticM
+    :: (Foldable f, Show (f Diagnostic), HasCallStack)
+    => f Diagnostic
+    -> ExpectedDiagnosticWithTag
+    -> Assertion
+requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
+    Nothing  -> pure ()
+    Just err -> assertFailure err
+
+-- |wait for @timeout@ seconds and report an assertion failure
+-- if any diagnostic messages arrive in that period
+expectNoMoreDiagnostics :: HasCallStack => Seconds -> Session ()
+expectNoMoreDiagnostics timeout =
+  expectMessages SMethod_TextDocumentPublishDiagnostics timeout $ \diagsNot -> do
+    let fileUri = diagsNot ^. L.params . L.uri
+        actual = diagsNot ^. L.params . L.diagnostics
+    unless (null actual) $ liftIO $
+      assertFailure $
+        "Got unexpected diagnostics for " <> show fileUri
+          <> " got "
+          <> show actual
+
+expectMessages :: SMethod m -> Seconds -> (TServerMessage m -> Session ()) -> Session ()
+expectMessages m timeout handle = do
+    -- Give any further diagnostic messages time to arrive.
+    liftIO $ sleep timeout
+    -- Send a dummy message to provoke a response from the server.
+    -- This guarantees that we have at least one message to
+    -- process, so message won't block or timeout.
+    let cm = SMethod_CustomMethod (Proxy @"test")
+    i <- sendRequest cm $ A.toJSON GetShakeSessionQueueCount
+    go cm i
+  where
+    go cm i = handleMessages
+      where
+        handleMessages = (LspTest.message m >>= handle) <|> (void $ responseForId cm i) <|> ignoreOthers
+        ignoreOthers = void anyMessage >> handleMessages
+
+flushMessages :: Session ()
+flushMessages = do
+    let cm = SMethod_CustomMethod (Proxy @"non-existent-method")
+    i <- sendRequest cm A.Null
+    void (responseForId cm i) <|> ignoreOthers cm i
+    where
+        ignoreOthers cm i = skipManyTill anyMessage (responseForId cm i) >> flushMessages
+
+-- | It is not possible to use 'expectDiagnostics []' to assert the absence of diagnostics,
+--   only that existing diagnostics have been cleared.
+--
+--   Rather than trying to assert the absence of diagnostics, introduce an
+--   expected diagnostic (e.g. a redundant import) and assert the singleton diagnostic.
+expectDiagnostics :: HasCallStack => [(FilePath, [ExpectedDiagnostic])] -> Session ()
+expectDiagnostics
+  = expectDiagnosticsWithTags
+  . map (second (map expectedDiagnosticWithNothing))
+
+unwrapDiagnostic :: TServerMessage Method_TextDocumentPublishDiagnostics -> (Uri, [Diagnostic])
+unwrapDiagnostic diagsNot = (diagsNot ^. L.params . L.uri, diagsNot ^. L.params . L.diagnostics)
+
+expectDiagnosticsWithTags :: HasCallStack => [(String, [ExpectedDiagnosticWithTag])] -> Session ()
+expectDiagnosticsWithTags expected = do
+    let toSessionPath = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
+        next = unwrapDiagnostic <$> skipManyTill anyMessage diagnostic
+    expected' <- M.fromListWith (<>) <$> traverseOf (traverse . _1) toSessionPath expected
+    expectDiagnosticsWithTags' next expected'
+
+expectDiagnosticsWithTags' ::
+  (HasCallStack, MonadIO m) =>
+  m (Uri, [Diagnostic]) ->
+  M.Map NormalizedUri [ExpectedDiagnosticWithTag] ->
+  m ()
+expectDiagnosticsWithTags' next m | null m = do
+    (_,actual) <- next
+    case actual of
+        [] ->
+            return ()
+        _ ->
+            liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
+
+expectDiagnosticsWithTags' next expected = go expected
+  where
+    go m
+      | M.null m = pure ()
+      | otherwise = do
+        (fileUri, actual) <- next
+        canonUri <- liftIO $ toNormalizedUri <$> canonicalizeUri fileUri
+        case M.lookup canonUri m of
+          Nothing -> do
+            liftIO $
+              assertFailure $
+                "Got diagnostics for " <> show fileUri
+                  <> " but only expected diagnostics for "
+                  <> show (M.keys m)
+                  <> " got "
+                  <> show actual
+          Just expected -> do
+            liftIO $ mapM_ (requireDiagnosticM actual) expected
+            liftIO $
+              unless (length expected == length actual) $
+                assertFailure $
+                  "Incorrect number of diagnostics for " <> show fileUri
+                    <> ", expected "
+                    <> show expected
+                    <> " but got "
+                    <> show actual
+            go $ M.delete canonUri m
+
+expectCurrentDiagnostics :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> Session ()
+expectCurrentDiagnostics doc expected = do
+    diags <- getCurrentDiagnostics doc
+    checkDiagnosticsForDoc doc expected diags
+
+checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [ExpectedDiagnostic] -> [Diagnostic] -> Session ()
+checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
+    let expected' = M.singleton nuri (map expectedDiagnosticWithNothing expected)
+        nuri = toNormalizedUri _uri
+    expectDiagnosticsWithTags' (return (_uri, obtained)) expected'
+
+canonicalizeUri :: Uri -> IO Uri
+canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
+
+diagnostic :: Session (TNotificationMessage Method_TextDocumentPublishDiagnostics)
+diagnostic = LspTest.message SMethod_TextDocumentPublishDiagnostics

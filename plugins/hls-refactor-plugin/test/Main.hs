@@ -24,7 +24,6 @@ import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
-import           Development.IDE.Test
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Language.LSP.Protocol.Lens               as L

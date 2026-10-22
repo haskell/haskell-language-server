@@ -39,7 +39,6 @@ import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
 import qualified Data.Text                   as T
 import           Development.IDE             (Pretty)
-import           Development.IDE.Test        (canonicalizeUri)
 import           Ide.Types                   (defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (..))
