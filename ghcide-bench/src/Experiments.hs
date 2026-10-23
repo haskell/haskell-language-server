@@ -755,9 +755,9 @@ setup = do
         return path
 
   checkExampleModulesExist benchDir (example ?config)
-  case (buildTool ?config, exampleDetails (example ?config)) of
-      (Cabal, ExampleHackage{}) -> buildCabalExample benchDir
-      _                         -> return ()
+  -- case (buildTool ?config, exampleDetails (example ?config)) of
+  --     (Cabal, ExampleHackage{}) -> buildCabalExample benchDir
+  --     _                         -> return ()
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
