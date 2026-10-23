@@ -76,17 +76,6 @@ jobs:
         # not it is a merge commit, so this is how we do that.
         ref: "${{ github.event.pull_request.head.sha }}"
 
-    - name: Restore cache
-      id: cache-restore
-      uses: actions/cache/restore@v6
-      with:
-        path: |
-          dist-newstyle
-          bench/example
-          ~/.cabal
-        key: ${{ runner.os }}-${{ matrix.ghc }}-bench
-
-
     - run: git fetch origin master # check the master branch for benchmarking
 
     - uses: ./.github/actions/setup-build
@@ -108,13 +97,4 @@ jobs:
     - name: Display results
       run: .github/bench.hs results.csv rts-stats
 
-    - name: Save cache
-      id: cache-save
-      uses: actions/cache/save@v6
-      with:
-        path: |
-          dist-newstyle
-          bench/example
-          ~/.cabal
-        key: ${{ runner.os }}-${{ matrix.ghc }}-bench
 
