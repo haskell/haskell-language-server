@@ -88,13 +88,27 @@ jobs:
     # for dependency resolution failure
     - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
+    - name: Build hls
+      run: cabal build exe:haskell-language-server
+
     - name: Build
       run: cabal build exe:ghcide-bench
 
     - name: Bench
-      run: cabal run ghcide-bench -- --example-name cabal --samples 10 --no-clean --rts-profiling rts-stats --csv results.csv
+      run: cabal run ghcide-bench -- --example-name cabal --samples 10 --no-clean --rts-profiling rts-stats --csv results.csv --ghcide $(cabal list-bin exe:haskell-language-server)
 
     - name: Display results
       run: .github/bench.hs results.csv rts-stats
 
 
+  bench_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, bench]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1
