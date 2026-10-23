@@ -5,24 +5,20 @@
 module Main (main) where
 
 import           Control.Lens                ((^.))
-import           Data.Aeson                  (KeyValue ((.=)))
 import           Data.Functor                (void)
-import qualified Data.Map                    as M
 import           Data.Text                   (Text, pack)
 import qualified Data.Text.IO                as TIO
 import           Development.IDE.Test        (referenceReady)
-import           Ide.Plugin.Config
-import qualified Ide.Plugin.Rename           as Rename
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types (Null (Null))
+import           RenameFile                  (renameFileTests)
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.FileSystem
+import           Util
 
 main :: IO ()
 main = defaultTestRunner tests
-
-renamePlugin :: PluginTestDescriptor Rename.Log
-renamePlugin = mkPluginTestDescriptor Rename.descriptor "rename"
 
 tests :: TestTree
 tests = testGroup "Rename"
@@ -30,44 +26,45 @@ tests = testGroup "Rename"
     , renameTests
     , moduleNameTests
     , crossModuleTests
+    , renameFileTests
     ]
 
 prepareRenameTests :: TestTree
 prepareRenameTests = testGroup "PrepareRename"
-    [ testCase "Module name (not yet renameable)" $ runRenameSession "" $ do
+    [ testCase "Module name (not yet renameable)" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 0 9)
         liftIO $ result @?= InR Null
 
-    , testCase "Function name" $ runRenameSession "" $ do
+    , testCase "Function name" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 8 1)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 8 0) (Position 8 3))))
 
-    , testCase "Imported function name" $ runRenameSession "" $ do
+    , testCase "Imported function name" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 10 16)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 10 14) (Position 10 19))))
 
-    , testCase "Non-renameable position" $ runRenameSession "" $ do
+    , testCase "Non-renameable position" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 6 23)
         liftIO $ result @?= InR Null
 
-    , testCase "Operator" $ runRenameSession "" $ do
+    , testCase "Operator" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 10 7)
         liftIO $ result @?=
             InL (PrepareRenameResult (InL (Range (Position 10 6) (Position 10 9))))
 
-    , testCase "Built-in operator" $ runRenameSession "" $ do
+    , testCase "Built-in operator" $ runRenameSession (projectDir ["PrepareRename.hs", "Foo.hs"]) $ do
         doc <- openDoc "PrepareRename.hs" "haskell"
         void waitForBuildQueue
         result <- prepareRename doc (Position 13 7)
@@ -129,7 +126,7 @@ renameTests = testGroup "Identifier"
                 Nothing
         renameExpectError expectedError doc (Position 0 10) "ImpossibleRename"
 
-    , testCase "fails when module does not compile" $ runRenameSession "" $ do
+    , testCase "fails when module does not compile" $ runRenameSession (projectDir ["FunctionArgument.hs"]) $ do
         doc <- openDoc "FunctionArgument.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "typecheck"
 
@@ -172,7 +169,7 @@ crossModuleTests :: TestTree
 crossModuleTests =
     testGroup
         "CrossModule"
-        [ testCase "Term used in two modules" $ runRenameSession "" $ do
+        [ testCase "Term used in two modules" $ runRenameSession (projectDir ["CrossModuleDefinition.hs", "CrossModuleUsage.hs"]) $ do
             defDoc <- openDoc "CrossModuleDefinition.hs" "haskell"
             useDoc <- openDoc "CrossModuleUsage.hs" "haskell"
             void $ skipManyTill anyMessage $ referenceReady (((==) "CrossModuleUsage.hs") . takeFileName)
@@ -204,23 +201,23 @@ moduleNameTests =
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
-  , goldenWithModuleName "Fix wrong module name in nested directory" "subdir/TWrongModuleName" $ \doc -> do
+  , goldenWithModuleName' "Fix wrong module name in nested directory" subdirVFT "subdir/TWrongModuleName" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Should not show code lens if the module name is correct" $
-      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+      runSessionWithServerInTmpDir def renamePlugin (mkModNameVFT [directCradle ["CorrectName"], copy "CorrectName.hs"]) $ do
         doc <- openDoc "CorrectName.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
         closeDoc doc
   -- https://github.com/haskell/haskell-language-server/issues/3047
-  , goldenWithModuleName "Fix#3047" "canonicalize/Lib/A" $ \doc -> do
+  , goldenWithModuleName' "Fix#3047" canonicalVFT "canonicalize/Lib/A" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Keep stale lens even if parse failed" $ do
-      runSessionWithServer def renamePlugin modNameTestDataDir $ do
+      runSessionWithServerInTmpDir def renamePlugin (mkModNameVFT [directCradle ["Stale"], copy "Stale.hs"]) $ do
         doc <- openDoc "Stale.hs" "haskell"
         oldLens <- getCodeLenses doc
         let edit = TextEdit (mkRange 1 0 1 0) "f ="
@@ -229,17 +226,9 @@ moduleNameTests =
         liftIO $ newLens @?= oldLens
         closeDoc doc
   ]
-
-goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithModuleName title path = goldenWithHaskellDoc def renamePlugin title modNameTestDataDir path "expected" "hs"
-
-modNameTestDataDir :: FilePath
-modNameTestDataDir = testDataDir </> "mod_name"
-
-goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRename title path act =
-    goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
-       renamePlugin title testDataDir path "expected" "hs" act
+  where
+    subdirVFT = [directCradle ["-i./subdir","TWrongModuleName"], directory "subdir" [copy "subdir/TWrongModuleName.hs"]]
+    canonicalVFT = [directCradle ["-i./canonicalize","Lib.A"], directory "canonicalize" [directory "Lib" [copy "canonicalize/Lib/A.hs"]]]
 
 -- NOTE: This should eventually be moved upstream to lsp-test (see
 -- https://github.com/haskell/lsp/issues/636).
@@ -259,9 +248,6 @@ renameExpectError expectedError doc pos newName = do
     Right _ -> liftIO $ assertFailure $ "Was expecting " <> show expectedError <> ", got success"
     Left actualError -> liftIO $ assertEqual "ResponseError" expectedError actualError
 
-testDataDir :: FilePath
-testDataDir = "plugins" </> "hls-rename-plugin" </> "test" </> "testdata"
-
 -- | Attempts to renames the term at the specified position, expecting a failure
 expectRenameError ::
   TextDocumentIdentifier ->
@@ -275,11 +261,3 @@ expectRenameError doc pos newName = do
     Left err -> pure err
     Right _ -> liftIO $ assertFailure $
       "Got unexpected successful rename response for " <> show (doc ^. L.uri)
-
-runRenameSession :: FilePath -> Session a -> IO a
-runRenameSession subdir = failIfSessionTimeout
-  .  runSessionWithTestConfig def
-  { testDirLocation = Left $ testDataDir </> subdir
-  , testPluginDescriptor = renamePlugin
-  , testConfigCaps = codeActionNoResolveCaps }
-  . const
