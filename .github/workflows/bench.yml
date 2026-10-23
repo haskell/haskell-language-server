@@ -95,7 +95,7 @@ jobs:
       run: cabal build exe:ghcide-bench
 
     - name: Bench
-      run: cabal run ghcide-bench -- --example-name cabal --samples 10 --no-clean --rts-profiling rts-stats --csv results.csv --ghcide $(cabal list-bin exe:haskell-language-server)
+      run: cabal run ghcide-bench -- --example-name cabal --samples 10 --no-clean --rts-profiling rts-stats --csv results.csv --ghcide $(cabal list-bin exe:haskell-language-server) --verbose
 
     - name: Display results
       run: .github/bench.hs results.csv rts-stats
