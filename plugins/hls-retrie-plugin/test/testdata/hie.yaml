@@ -1,0 +1,11 @@
+cradle:
+    direct:
+      arguments:
+        - Class.hs
+        - Identity.hs
+        - Imported.hs
+        - Nested.hs
+        - NestedLet.hs
+        - NestedNested.hs
+        - NestedWhere.hs
+        - Operator.hs
