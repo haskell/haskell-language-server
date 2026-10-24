@@ -14,6 +14,11 @@ import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags              (requiresFourmoluPlugin,
                                               requiresOrmoluPlugin)
+import System.FilePath.Posix ((</>))
+import qualified Data.Map as M
+import qualified Data.Aeson.KeyMap as KM
+import Data.Aeson ((.=))
+import qualified Ide.Plugin.Ormolu as Ormolu
 
 tests :: TestTree
 tests = testGroup "format document"
@@ -32,6 +37,31 @@ providerTests = testGroup "lsp formatting provider"
             (InR ErrorCodes_InvalidRequest) | "No plugin" `T.isPrefixOf` message -> pure ()
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
+
+    , testCase "error message contains stderr output" $ do
+        let cliConfig = def {
+                formattingProvider = "ormolu",
+                plugins = M.fromList [("ormolu", def { plcConfig = KM.fromList ["external" .= True] })]
+            }
+            testDataDir = "plugins" </> "hls-ormolu-plugin" </> "test" </> "testdata"
+            ormoluPlugin = mkPluginTestDescriptor Ormolu.descriptor "ormolu"
+        runSessionWithServer cliConfig ormoluPlugin testDataDir $ do
+            doc <- openDoc "FormatError.hs" "haskell"
+            void waitForBuildQueue
+            resp <- request SMethod_TextDocumentFormatting $
+                DocumentFormattingParams Nothing doc (FormattingOptions 4 True Nothing Nothing Nothing)
+            liftIO $ case resp ^. L.result of
+                 Left err -> do
+                     let msg = err ^. L.message
+                     -- Verify the error message structure:
+                     -- 1. Contains the exit code prefix (base message intact)
+                     assertBool ("Expected exit code prefix, got: " <> T.unpack msg)
+                         ("failed with exit code" `T.isInfixOf` msg)
+                     -- 2. Contains a stable parse-error phrase from formatter stderr
+                     assertBool ("Expected parse error details from stderr, got: " <> T.unpack msg)
+                         ("parse error on input" `T.isInfixOf` msg)
+                 Right _ ->
+                     assertFailure "Expected formatting to fail on unparsable file"
 
     , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
