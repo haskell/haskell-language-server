@@ -17,6 +17,11 @@ import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags              (requiresFourmoluPlugin,
                                               requiresOrmoluPlugin)
+import qualified Test.Hls.FileSystem        as FS
+#if defined(hls_ormolu)
+import System.FilePath.Posix ((</>))
+import qualified Ide.Plugin.Ormolu as Ormolu
+#endif
 
 tests :: TestTree
 tests = testGroup "format document"
@@ -25,7 +30,8 @@ tests = testGroup "format document"
 
 providerTests :: TestTree
 providerTests = testGroup "lsp formatting provider"
-    [ testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
+    [ -- TODO: This requires niether plugin to be available
+      testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
         doc <- openDoc "Format.hs" "haskell"
         resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
@@ -36,6 +42,7 @@ providerTests = testGroup "lsp formatting provider"
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
+    -- TODO: This requires both plugins to be available
     , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
 
@@ -55,6 +62,30 @@ providerTests = testGroup "lsp formatting provider"
         formatDoc doc def
         formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
+
+#if defined(hls_ormolu)
+    -- TODO: This is replicating the beginning of the previous test, but using
+    -- `runSessionWithServerInTmpDir` instad of `runSessionWithConfig`. The issue is that
+    -- `runSessionWithServerInTmpDir` accepts a single plugin, so we can't currently use it
+    -- to do a cross test like the previous one. However, it looks like
+    -- `runSessionWithTestConfig`, which `runSessionWithServerInTmpDir`
+    -- delegates to, doesn't really need to operate on a single plugin, it
+    -- looks like it could easily accept multiple plugins (see
+    -- hls-test-utils/src/Test/Hls.hs:832).
+    , testCase "gimme a name" $ do
+        let testDataDir = "test" </> "testdata" </> "format"
+            filePath = "Format.hs"
+            tree = FS.mkVirtualFileTree testDataDir
+                 $ FS.simpleCabalProject' [FS.copy filePath]
+            ormoluPlugin = mkPluginTestDescriptor Ormolu.descriptor "ormolu"
+        runSessionWithServerInTmpDir def ormoluPlugin tree $ do
+            doc <- openDoc filePath LanguageKind_Haskell
+            setIgnoringConfigurationRequests False
+            setHlsConfig (formatLspConfig "ormolu")
+            formatDoc doc def
+            formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
+            documentContents doc >>= liftIO . (@?= formattedOrmolu)
+#endif
     ]
 
 formatLspConfig :: T.Text -> Config
