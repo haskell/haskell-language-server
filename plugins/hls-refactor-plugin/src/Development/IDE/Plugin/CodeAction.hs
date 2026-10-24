@@ -988,16 +988,18 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-suggestRemoveDuplicateQualified :: [FileDiagnostic] -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveDuplicateQualified diags contents Diagnostic{_range=_range, _message}
+suggestRemoveDuplicateQualified :: Maybe DynFlags -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveDuplicateQualified mbDf contents Diagnostic{_range=_range, _message}
     | "Multiple occurrences of 'qualified'" `T.isInfixOf` _message
     , Just edit <- redundantQualifiedEdit
     = [("Remove redundant 'qualified'", [edit])]
     | otherwise = []
   where
-    qualifiedPostEnabled = not $ any mentionsImportQualifiedPost diags
-    mentionsImportQualifiedPost fd = case fdLspDiagnostic fd of
-      Diagnostic{_message = m} -> "ImportQualifiedPost" `T.isInfixOf` m
+    usePost = case mbDf of
+      Just df -> case qualifiedImportStyle df of
+        QualifiedImportPostfix -> True
+        QualifiedImportPrefix  -> False
+      Nothing -> False
     redundantQualifiedEdit = do
       let Position startLine _ = _start _range
       line <- listToMaybe $ drop (fromIntegral startLine) $ T.lines contents
@@ -1005,16 +1007,15 @@ suggestRemoveDuplicateQualified diags contents Diagnostic{_range=_range, _messag
         a : b : _ -> Just (a, b)
         _         -> Nothing
       let (colStart, colEnd)
-            | qualifiedPostEnabled = preQual
-            | otherwise            = postQual
+            | usePost  = preQual
+            | otherwise = postQual
           baseRange = Range (Position startLine (fromIntegral colStart)) (Position startLine (fromIntegral colEnd))
           trailing = T.takeWhile isSpace (T.drop colEnd line)
           leading  = T.takeWhileEnd isSpace (T.take colStart line)
           editRange
-            | qualifiedPostEnabled = baseRange { _end = Position startLine (fromIntegral (colEnd + T.length trailing)) }
-            | otherwise            = baseRange { _start = Position startLine (fromIntegral (colStart - T.length leading)) }
+            | usePost   = baseRange { _end = Position startLine (fromIntegral (colEnd + T.length trailing)) }
+            | otherwise = baseRange { _start = Position startLine (fromIntegral (colStart - T.length leading)) }
       pure $ TextEdit editRange ""
-
 qualifiedOccurrences :: T.Text -> [(Int, Int)]
 qualifiedOccurrences = go 0
   where
