@@ -177,6 +177,7 @@ iePluginDescriptor recorder plId =
   let old =
         mkGhcideCAsPlugin
           [ wrap suggestModuleTypo
+          , wrap suggestRemoveDuplicateQualified
           , wrap suggestFixConstructorImport
           , wrap suggestExtendImport
           , wrap suggestImportDisambiguation
@@ -986,6 +987,67 @@ suggestModuleTypo Diagnostic{_range=_range,..}
     extractModule line = case T.words line of
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
+
+suggestRemoveDuplicateQualified :: Maybe DynFlags -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveDuplicateQualified mbDf contents' Diagnostic{_range=_range, _message}
+    | "Multiple occurrences of 'qualified'" `T.isInfixOf` _message
+    , Just contents <- contents'
+    , Just edit <- redundantQualifiedEdit contents
+    = [("Remove redundant 'qualified'", [edit])]
+    | otherwise = []
+  where
+    usePost = case mbDf of
+      Just df -> xopt Lang.ImportQualifiedPost df
+      -- The module could not be parsed and no DynFlags were available, so
+      -- fall back to the LANGUAGE/OPTIONS_GHC pragmas in the file itself.
+      Nothing -> maybe False importQualifiedPostFromPragmas contents'
+    redundantQualifiedEdit contents = do
+      let Position startLine _ = _start _range
+      line <- listToMaybe $ drop (fromIntegral startLine) $ T.lines contents
+      (preQual, postQual) <- case qualifiedOccurrences line of
+        a : b : _ -> Just (a, b)
+        _         -> Nothing
+      let (colStart, colEnd)
+            | usePost  = preQual
+            | otherwise = postQual
+          baseRange = Range (Position startLine (fromIntegral colStart)) (Position startLine (fromIntegral colEnd))
+          trailing = T.takeWhile isSpace (T.drop colEnd line)
+          leading  = T.takeWhileEnd isSpace (T.take colStart line)
+          editRange
+            | usePost   = baseRange { _end = Position startLine (fromIntegral (colEnd + T.length trailing)) }
+            | otherwise = baseRange { _start = Position startLine (fromIntegral (colStart - T.length leading)) }
+      pure $ TextEdit editRange ""
+importQualifiedPostFromPragmas :: T.Text -> Bool
+importQualifiedPostFromPragmas contents =
+    case enabledStates of
+        []     -> False
+        states -> last states
+  where
+    enabledStates =
+        [ token /= "NoImportQualifiedPost"
+        | line <- T.lines contents
+        , "{-# LANGUAGE" `T.isInfixOf` line || "{-# OPTIONS_GHC" `T.isInfixOf` line
+        , token <- map T.unpack $ extensionsIn line
+        , token == "ImportQualifiedPost" || token == "NoImportQualifiedPost"
+        ]
+    extensionsIn =
+        T.split (\c -> not (isAlphaNum c || c == '_' || c == '-')) . T.replace "-X" ""
+
+qualifiedOccurrences :: T.Text -> [(Int, Int)]
+qualifiedOccurrences = go 0
+  where
+    kw = "qualified"
+    kwLen = T.length kw
+    go off t = case T.breakOn kw t of
+      (_, rest) | T.null rest -> []
+      (pre, rest) ->
+        let start = off + T.length pre
+            after = T.drop kwLen rest
+            boundedBefore = T.null pre || not (isIdentChar (T.last pre))
+            boundedAfter  = T.null after || not (isIdentChar (T.head after))
+            found = if boundedBefore && boundedAfter then ((start, start + kwLen) :) else id
+        in found (go (start + kwLen) after)
+    isIdentChar c = isAlphaNum c || c == '_'
 
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, CodeActionPreferred, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
