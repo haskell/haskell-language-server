@@ -988,14 +988,13 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-suggestRemoveDuplicateQualified :: Maybe DynFlags -> Maybe DynFlags -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveDuplicateQualified mbDfFromModule mbDfFromSession contents Diagnostic{_range=_range, _message}
+suggestRemoveDuplicateQualified :: Maybe DynFlags -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveDuplicateQualified mbDf contents Diagnostic{_range=_range, _message}
     | "Multiple occurrences of 'qualified'" `T.isInfixOf` _message
     , Just edit <- redundantQualifiedEdit
     = [("Remove redundant 'qualified'", [edit])]
     | otherwise = []
   where
-    mbDf = mbDfFromModule <|> mbDfFromSession
     usePost = case mbDf of
       Just df -> case qualifiedImportStyle df of
         QualifiedImportPostfix -> True
