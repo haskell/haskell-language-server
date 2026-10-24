@@ -997,10 +997,10 @@ suggestRemoveDuplicateQualified mbDf contents' Diagnostic{_range=_range, _messag
     | otherwise = []
   where
     usePost = case mbDf of
-      Just df -> case qualifiedImportStyle df of
-        QualifiedImportPostfix -> True
-        QualifiedImportPrefix  -> False
-      Nothing -> False
+      Just df -> xopt Lang.ImportQualifiedPost df
+      -- The module could not be parsed and no DynFlags were available, so
+      -- fall back to the LANGUAGE/OPTIONS_GHC pragmas in the file itself.
+      Nothing -> maybe False importQualifiedPostFromPragmas contents'
     redundantQualifiedEdit contents = do
       let Position startLine _ = _start _range
       line <- listToMaybe $ drop (fromIntegral startLine) $ T.lines contents
@@ -1017,6 +1017,22 @@ suggestRemoveDuplicateQualified mbDf contents' Diagnostic{_range=_range, _messag
             | usePost   = baseRange { _end = Position startLine (fromIntegral (colEnd + T.length trailing)) }
             | otherwise = baseRange { _start = Position startLine (fromIntegral (colStart - T.length leading)) }
       pure $ TextEdit editRange ""
+importQualifiedPostFromPragmas :: T.Text -> Bool
+importQualifiedPostFromPragmas contents =
+    case enabledStates of
+        []     -> False
+        states -> last states
+  where
+    enabledStates =
+        [ token /= "NoImportQualifiedPost"
+        | line <- T.lines contents
+        , "{-# LANGUAGE" `T.isInfixOf` line || "{-# OPTIONS_GHC" `T.isInfixOf` line
+        , token <- map T.unpack $ extensionsIn line
+        , token == "ImportQualifiedPost" || token == "NoImportQualifiedPost"
+        ]
+    extensionsIn =
+        T.split (\c -> not (isAlphaNum c || c == '_' || c == '-')) . T.replace "-X" ""
+
 qualifiedOccurrences :: T.Text -> [(Int, Int)]
 qualifiedOccurrences = go 0
   where
