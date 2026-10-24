@@ -251,6 +251,12 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
+instance ToCodeAction r => ToCodeAction (Maybe HscEnvEq -> r) where
+  toCodeAction = toCodeAction1 caaGhcSession
+
+instance ToCodeAction r => ToCodeAction (HscEnvEq -> r) where
+  toCodeAction = toCodeAction2 caaGhcSession
+
 instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 

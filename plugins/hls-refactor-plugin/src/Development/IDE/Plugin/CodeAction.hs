@@ -988,10 +988,11 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-suggestRemoveDuplicateQualified :: Maybe DynFlags -> T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveDuplicateQualified mbDf contents Diagnostic{_range=_range, _message}
+suggestRemoveDuplicateQualified :: Maybe DynFlags -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveDuplicateQualified mbDf contents' Diagnostic{_range=_range, _message}
     | "Multiple occurrences of 'qualified'" `T.isInfixOf` _message
-    , Just edit <- redundantQualifiedEdit
+    , Just contents <- contents'
+    , Just edit <- redundantQualifiedEdit contents
     = [("Remove redundant 'qualified'", [edit])]
     | otherwise = []
   where
@@ -1000,7 +1001,7 @@ suggestRemoveDuplicateQualified mbDf contents Diagnostic{_range=_range, _message
         QualifiedImportPostfix -> True
         QualifiedImportPrefix  -> False
       Nothing -> False
-    redundantQualifiedEdit = do
+    redundantQualifiedEdit contents = do
       let Position startLine _ = _start _range
       line <- listToMaybe $ drop (fromIntegral startLine) $ T.lines contents
       (preQual, postQual) <- case qualifiedOccurrences line of
