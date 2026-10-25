@@ -123,7 +123,7 @@ codeActionTests = testGroup
       Prelude.flip inspectCodeAction [title]
   , goldenWithClass "Inside `do`" "TInsideDo" $
       Prelude.flip inspectCodeAction [title]
-  , goldenWithRange "Split pattern inside Just _" "TSplitJustUnderscore" $
+  , goldenWithRangeSplit "Split pattern inside Just _" "TSplitJustUnderscore" $
       Range (Position 1 17) (Position 1 18)
 
   -- Nested case expressions
@@ -295,6 +295,13 @@ goldenWithRange :: TestName -> FilePath -> Range -> TestTree
 goldenWithRange title path range =
   goldenWithHaskellDocInTmpDir def caseSplitPlugin title (mkFs $ FS.directProject (path <.> "hs")) path "expected" "hs" $ \doc -> do
     _ <- waitForDiagnosticsFrom doc
+    [action] <- concatMap (^.. _CACodeAction) <$> getCodeActions doc range
+    executeCodeAction action
+
+goldenWithRangeSplit :: TestName -> FilePath -> Range -> TestTree
+goldenWithRangeSplit title path range =
+  goldenWithHaskellDocInTmpDir def caseSplitPlugin title (mkFs $ FS.directProject (path <.> "hs")) path "expected" "hs" $ \doc -> do
+    void waitForBuildQueue
     [action] <- concatMap (^.. _CACodeAction) <$> getCodeActions doc range
     executeCodeAction action
 
