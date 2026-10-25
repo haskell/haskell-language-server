@@ -16,7 +16,9 @@ import           System.Directory          hiding (findFile)
 import           System.FilePath
 import           System.IO.Error
 
-import           Colog.Core                (LogAction (..), WithSeverity (..))
+import           Colog.Core                (LogAction (..), Severity (..),
+                                            WithSeverity (..), (<&))
+import qualified Data.Text                 as Text
 import           HIE.Bios.Config
 import           HIE.Bios.Cradle           (defaultCradle, getCradle)
 import           HIE.Bios.Types            hiding (ActionName (..))
@@ -32,8 +34,12 @@ loadImplicitCradle l wfile = do
            | otherwise = takeDirectory wfile
   cfg <- runMaybeT (implicitConfig wdir)
   case cfg of
-    Just bc -> getCradle l absurd bc
-    Nothing -> return $ defaultCradle l wdir
+    Just bc@(cc, dir) -> do
+      l <& WithSeverity (LogAny $ Text.pack $ "Implicit cradle: " ++ show cc ++ " in " ++ dir) Info
+      getCradle l absurd bc
+    Nothing -> do
+      l <& WithSeverity (LogAny $ Text.pack $ "No implicit cradle found, using default cradle in " ++ wdir) Info
+      return $ defaultCradle l wdir
 
 -- | Wraps up the cradle inferred by @inferCradleTree@ as a @CradleConfig@ with no dependencies
 implicitConfig :: FilePath -> MaybeT IO (CradleConfig a, FilePath)
