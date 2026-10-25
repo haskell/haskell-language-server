@@ -2127,7 +2127,7 @@ benchmark benchmark
       , lens
       , lens-aeson
       , shake
-      , shake-bench == 0.2.*
+      , shake-bench == 0.3.*
       , text
       , yaml
 
