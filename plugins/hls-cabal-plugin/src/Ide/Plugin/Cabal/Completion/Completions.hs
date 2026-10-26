@@ -34,7 +34,7 @@ contextToCompleter :: Context -> Completer
 contextToCompleter (TopLevel, None) =
   snippetCompleter
     <> ( constantCompleter $
-           Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
+           Map.keys cabalKeywords ++ Map.keys stanzaKeywordMap
        )
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
@@ -55,6 +55,11 @@ contextToCompleter (Stanza s _, KeyWord kw) =
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
       Just l  -> l
+contextToCompleter (FirstLine, None) = constantCompleter ["cabal-version:"]
+contextToCompleter (FirstLine, KeyWord kw) =
+  case Map.lookup kw (cabalVersionKeyword <> cabalKeywords) of
+    Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
+    Just l  -> l
 
 -- | Takes prefix info about the previously written text
 --  and a rope (representing a file), returns the corresponding context.
@@ -135,10 +140,13 @@ findCursorContext ::
   Context
 findCursorContext cursor parentHistory prefixText fields =
   case findFieldSection cursor fields of
-    Nothing -> (snd $ NE.head parentHistory, None)
+    Nothing
+      | cursorRow == 1 -> (FirstLine, None)
+      | otherwise -> (snd $ NE.head parentHistory, None)
     -- We found the most likely section. Now, are we starting a new section or are we completing an existing one?
     Just field@(Syntax.Field _ _) -> classifyFieldContext parentHistory cursor field
     Just section@(Syntax.Section _ args sectionFields)
+      | cursorRow == 1 -> (FirstLine, None)
       | inSameLineAsSectionName section -> (stanzaCtx, None) -- TODO: test whether keyword in same line is parsed correctly
       | getFieldName section `elem` conditionalKeywords -> findCursorContext cursor parentHistory prefixText sectionFields -- Ignore if conditionals, they are not real sections
       | otherwise ->
@@ -150,6 +158,8 @@ findCursorContext cursor parentHistory prefixText fields =
         stanzaCtx = snd $ NE.head parentHistory
         conditionalKeywords = ["if", "elif", "else"]
 
+        cursorRow = Syntax.positionRow cursor
+
 -- | Finds the cursor's context, where the cursor is already found to be in a specific field
 --
 -- Due to the way the field context is recognised for incomplete cabal files,
@@ -159,11 +169,11 @@ classifyFieldContext :: NonEmpty (Int, StanzaContext) -> Syntax.Position -> Synt
 classifyFieldContext ctx cursor field
   -- the cursor is not indented enough to be within the field
   -- but still indented enough to be within the stanza
-  | cursorColumn <= fieldColumn && minIndent <= cursorColumn = (stanzaCtx, None)
+  | cursorColumn <= fieldColumn && minIndent <= cursorColumn = (firstLineOrStanzaCtx, None)
   -- the cursor is not in the current stanza's context as it is not indented enough
   | cursorColumn < minIndent = findStanzaForColumn cursorColumn ctx
-  | cursorIsInFieldName = (stanzaCtx, None)
-  | cursorIsBeforeFieldName = (stanzaCtx, None)
+  | cursorIsInFieldName = (firstLineOrStanzaCtx, None)
+  | cursorIsBeforeFieldName = (firstLineOrStanzaCtx, None)
   | otherwise = (stanzaCtx, KeyWord (getFieldName field <> ":"))
   where
     (minIndent, stanzaCtx) = NE.head ctx
@@ -179,3 +189,5 @@ classifyFieldContext ctx cursor field
 
     cursorColumn = Syntax.positionCol cursor
     fieldColumn = Syntax.positionCol (getAnnotation field)
+
+    firstLineOrStanzaCtx = if Syntax.positionRow cursor == 1 then FirstLine else stanzaCtx
