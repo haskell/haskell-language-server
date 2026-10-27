@@ -2058,7 +2058,6 @@ test-suite func-test
     , lsp-types
     , text
     , unordered-containers
-    , haskell-language-server:hls-ormolu-plugin
 
   hs-source-dirs:     test/functional test/utils
 
@@ -2083,6 +2082,7 @@ test-suite func-test
     cpp-options: -Dhls_fourmolu
   if flag(ormolu)
     cpp-options: -Dhls_ormolu
+    build-depends: haskell-language-server:hls-ormolu-plugin
 
 test-suite wrapper-test
   import:             defaults
