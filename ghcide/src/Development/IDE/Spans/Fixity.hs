@@ -15,7 +15,8 @@ lookupFixities hscEnv tcGblEnv names
     = liftIO
     $ fmap (fromMaybe M.empty . snd)
     $ initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1)
-    $ M.traverseMaybeWithKey (\_ v -> v)
+    $ fmap (M.mapMaybe id)
+    $ sequenceA
     $ M.fromSet lookupFixity names
   where
     lookupFixity name = do
