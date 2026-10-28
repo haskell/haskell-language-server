@@ -1,0 +1,3 @@
+cradle:
+  direct:
+    arguments: ["-hide-all-packages", "-package", "base"]
