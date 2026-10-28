@@ -34,3 +34,15 @@ data CompleterData = CompleterData
     -- | The matcher that'll be used to rank the texts against the pattern.
     matcher                :: Matcher Text
   }
+
+
+-- | Specification for keyword fields in Cabal
+data ComponentSpec = ComponentSpec { name :: T.Text, isRequired :: Bool }
+
+-- | Create Fieldspec for a required field
+defCS :: T.Text -> ComponentSpec
+defCS k = ComponentSpec k False
+-- | Create Fieldspec for an optional field
+optCS :: KeyWordName -> ComponentSpec
+optCS k = ComponentSpec k True
+
