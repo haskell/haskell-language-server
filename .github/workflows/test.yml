@@ -183,6 +183,11 @@ jobs:
         name: Test hls-fourmolu-plugin
         run: cabal test ${CABAL_ARGS} hls-fourmolu-plugin-tests || cabal test ${CABAL_ARGS} hls-fourmolu-plugin-tests
 
+      # Tilia's ghc-lib-parser only fits the build plan from GHC 9.14 on
+      - if: matrix.test && matrix.ghc == '9.14'
+        name: Test hls-tilia-plugin
+        run: cabal test ${CABAL_ARGS} hls-tilia-plugin-tests || cabal test ${CABAL_ARGS} hls-tilia-plugin-tests
+
       - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite
         run: cabal test ${CABAL_ARGS} hls-explicit-imports-plugin-tests || cabal test ${CABAL_ARGS} hls-explicit-imports-plugin-tests
