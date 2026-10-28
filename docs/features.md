@@ -144,6 +144,7 @@ The default Haskell code formatter is `ormolu`, and the Haskell formatter can be
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
+| Tilia           | `hls-tilia-plugin`           |
 
 ---
 
