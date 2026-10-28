@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
@@ -14,11 +15,13 @@ import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags              (requiresFourmoluPlugin,
                                               requiresOrmoluPlugin)
+#if defined(ormolu)
 import System.FilePath.Posix ((</>))
 import qualified Data.Map as M
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson ((.=))
 import qualified Ide.Plugin.Ormolu as Ormolu
+#endif
 
 tests :: TestTree
 tests = testGroup "format document"
@@ -38,6 +41,7 @@ providerTests = testGroup "lsp formatting provider"
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
+#if defined(ormolu)
     , testCase "error message contains stderr output" $ do
         let cliConfig = def {
                 formattingProvider = "ormolu",
@@ -62,6 +66,7 @@ providerTests = testGroup "lsp formatting provider"
                          ("parse error on input" `T.isInfixOf` msg)
                  Right _ ->
                      assertFailure "Expected formatting to fail on unparsable file"
+#endif
 
     , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
         void configurationRequest
