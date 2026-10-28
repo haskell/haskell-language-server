@@ -68,12 +68,21 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
                 _ -> pure mempty
         caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions
         caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
+        caaModSummary <- onceIO $ runRule GetModSummary
         caaContents <-
             onceIO $
             runRule GetFileContents <&> \case
                 Just (_, mbContents) -> fmap Rope.toText mbContents
                 Nothing       -> Nothing
-        caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
+        caaDf <- onceIO $ do
+            mbParsedModule <- caaParsedModule
+            case mbParsedModule of
+                Just pm -> pure $ Just (ms_hspp_opts (pm_mod_summary pm))
+                -- The module may fail to parse (e.g. malformed imports). In
+                -- that case use the flags from the module summary, which are
+                -- computed without parsing the module.
+                Nothing ->
+                    fmap (ms_hspp_opts . msrModSummary) <$> caaModSummary
         caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
         caaTmr <- onceIO $ runRule TypeCheck
         caaHar <- onceIO $ runRule GetHieAst
@@ -143,6 +152,7 @@ data CodeActionArgs = CodeActionArgs
     caaGhcSession   :: IO (Maybe HscEnvEq),
     caaIdeOptions   :: IO IdeOptions,
     caaParsedModule :: IO (Maybe ParsedModule),
+    caaModSummary   :: IO (Maybe ModSummaryResult),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
     caaAnnSource    :: IO (Maybe ParsedSource),
