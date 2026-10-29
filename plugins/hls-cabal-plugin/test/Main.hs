@@ -22,7 +22,6 @@ import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import qualified Data.Text.IO                    as Text
 import           Definition                      (gotoDefinitionTests)
-import           Development.IDE.Test
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import           Language.LSP.Protocol.Lens      (HasRange (..))
