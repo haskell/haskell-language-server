@@ -2078,9 +2078,9 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(fourmolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
-  if flag(ormolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
+  if flag(ormolu)
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test
@@ -2127,7 +2127,7 @@ benchmark benchmark
       , lens
       , lens-aeson
       , shake
-      , shake-bench == 0.2.*
+      , shake-bench == 0.3.*
       , text
       , yaml
 
