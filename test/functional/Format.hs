@@ -59,7 +59,7 @@ providerTests = testGroup "lsp formatting provider"
                      -- Verify the error message structure:
                      -- 1. Contains the exit code prefix (base message intact)
                      assertBool ("Expected exit code prefix, got: " <> T.unpack msg)
-                         ("failed with exit code" `T.isInfixOf` msg)
+                         ("ormoluCmd: OrmoluParsingFailed" `T.isInfixOf` msg)
                      -- 2. Contains a stable parse-error phrase from formatter stderr
                      assertBool ("Expected parse error details from stderr, got: " <> T.unpack msg)
                          ("parse error on input" `T.isInfixOf` msg)
