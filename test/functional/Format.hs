@@ -15,7 +15,7 @@ import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags              (requiresFourmoluPlugin,
                                               requiresOrmoluPlugin)
-#if defined(ormolu)
+#if defined(hls_ormolu)
 import System.FilePath.Posix ((</>))
 import qualified Data.Map as M
 import qualified Data.Aeson.KeyMap as KM
@@ -41,11 +41,10 @@ providerTests = testGroup "lsp formatting provider"
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-#if defined(ormolu)
+#if defined(hls_ormolu)
     , testCase "error message contains stderr output" $ do
         let cliConfig = def {
-                formattingProvider = "ormolu",
-                plugins = M.fromList [("ormolu", def { plcConfig = KM.fromList ["external" .= True] })]
+                formattingProvider = "ormolu"
             }
             testDataDir = "plugins" </> "hls-ormolu-plugin" </> "test" </> "testdata"
             ormoluPlugin = mkPluginTestDescriptor Ormolu.descriptor "ormolu"
