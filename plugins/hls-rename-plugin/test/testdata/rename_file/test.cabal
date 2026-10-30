@@ -1,0 +1,16 @@
+cabal-version: 3.0
+name: test
+version: 0.1.0.0
+maintainer:
+category:
+synopsis:
+license:
+build-type: Simple
+
+library
+  hs-source-dirs: .
+  exposed-modules:
+    Banana
+    MyFile
+  build-depends: base
+  default-language: Haskell2010
