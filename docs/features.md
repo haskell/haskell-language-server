@@ -64,6 +64,12 @@ Provided by: `hls-explicit-fixity-plugin`
 
 Provides fixity information.
 
+### Language pragma documentation
+
+Provided by: `hls-pragmas-plugin`
+
+Shows documentation for language extensions on hover.
+
 ## Signature help
 
 Provided by: `hls-signature-help-plugin`
@@ -124,6 +130,8 @@ Provided by: `ghcide`
 Provided by: `hls-pragmas-plugin`
 
 Completions for language pragmas.
+
+Language extension completion items include documentation.
 
 ### `case`/`\case` pattern completion
 
