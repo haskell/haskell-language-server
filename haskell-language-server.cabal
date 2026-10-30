@@ -2082,6 +2082,7 @@ test-suite func-test
     cpp-options: -Dhls_fourmolu
   if flag(ormolu)
     cpp-options: -Dhls_ormolu
+    build-depends: haskell-language-server:hls-ormolu-plugin
 
 test-suite wrapper-test
   import:             defaults
