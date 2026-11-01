@@ -17,6 +17,9 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , parenthesizeName
   , noAnnSrcSpanDP
   , noAnnSrcSpanDP1
+#if !MIN_VERSION_ghc(9,11,0)
+  , anchorDP
+#endif
   ) where
 
 import           Data.Bifunctor                  (first)
@@ -140,10 +143,11 @@ parenthesizeName (L (SrcSpanAnn ann l) rdr) =
   where
     (anc, nameAnn, cs) = case ann of
       EpAnn a n c  -> (a, n, c)
-      EpAnnNotUsed -> (genAnchor0, NameAnnTrailing [], emptyComments)
+      EpAnnNotUsed -> (anchorDP (SameLine 0), NameAnnTrailing [], emptyComments)
 
-genAnchor0 :: Anchor
-genAnchor0 = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor (SameLine 0))
+-- | An anchor with no source position, printed at the given delta.
+anchorDP :: DeltaPos -> Anchor
+anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
 #endif
 
 #if MIN_VERSION_ghc(9,11,0)
