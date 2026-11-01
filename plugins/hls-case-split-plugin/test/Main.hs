@@ -242,16 +242,15 @@ applyPlugin name (cradleFile, sourceLines) inserted =
       languageKind = LanguageKind_Haskell
       config = def
       plugin = caseSplitPlugin
-      tree = (mkFs $ FS.simpleCabalProject'
-                      $ [cradleFile,
-                         FS.file (path <.> "hs") (FS.sources sourceLines)])
+      tree = (mkFs [cradleFile,
+                    FS.file (path <.> "hs") (FS.sources sourceLines)])
       act = \doc -> do _ <- waitForDiagnosticsFrom doc
                        actions <- getAllCodeActions doc
                        action <- liftIO $ findAction actions
                        executeCodeAction action
   in testCase (unpack name) $ do
        newSource <- fmap lines $ runSessionWithServerInTmpDir config plugin tree $ do
-              doc <- createDoc (path <.> "hs") languageKind (unlines sourceLines)
+              doc <- openDoc (path <.> "hs") languageKind
               void waitForBuildQueue
               act doc
               documentContents doc
