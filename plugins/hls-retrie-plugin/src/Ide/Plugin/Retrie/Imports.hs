@@ -37,11 +37,8 @@ import           GHC.Parser.Annotation                     (AnnListBrackets (Lis
                                                             NoAnn (noAnn))
 #else
 import           GHC.Parser.Annotation                     (AddEpAnn (..),
-                                                            Anchor (..),
-                                                            AnchorOperation (..),
                                                             LocatedL,
-                                                            SrcSpanAnn' (..),
-                                                            realSrcSpan)
+                                                            SrcSpanAnn' (..))
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
 #if MIN_VERSION_ghc(9,14,0)
@@ -319,8 +316,4 @@ importList items =
   where
     ann = mempty { al_open  = Just (AddEpAnn AnnOpenP d0)
                  , al_close = Just (AddEpAnn AnnCloseP d0) }
-
--- | An anchor with no source position, printed at the given delta.
-anchorDP :: DeltaPos -> Anchor
-anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
 #endif
