@@ -9,7 +9,7 @@ module Main
 import           Control.Lens               (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad              (void)
 import           Data.Maybe                 (maybeToList)
-import           Data.Text                  (Text, lines, unlines, unpack)
+import           Data.Text                  (Text, lines, unpack)
 import qualified Ide.Plugin.CaseSplit       as CS
 import qualified Language.LSP.Protocol.Lens as L
 import           Prelude                    hiding (lines, unlines)
@@ -237,24 +237,21 @@ codeActionTests = testGroup
 
 applyPlugin :: Text -> (FS.FileTree, [Text]) -> [Text] -> TestTree
 applyPlugin name (cradleFile, sourceLines) inserted =
-  let path = "TUnicodeArrow"
-      findAction = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
-      languageKind = LanguageKind_Haskell
-      config = def
-      plugin = caseSplitPlugin
-      tree = (mkFs [cradleFile,
-                    FS.file (path <.> "hs") (FS.sources sourceLines)])
-      act = \doc -> do _ <- waitForDiagnosticsFrom doc
-                       actions <- getAllCodeActions doc
-                       action <- liftIO $ findAction actions
-                       executeCodeAction action
+  let hsFilePath = "TUnicodeArrow" <.> "hs"
+      tree = (mkFs [cradleFile, FS.file hsFilePath (FS.sources sourceLines)])
+      findCaseSplitAct = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
   in testCase (unpack name) $ do
-       newSource <- fmap lines $ runSessionWithServerInTmpDir config plugin tree $ do
-              doc <- openDoc (path <.> "hs") languageKind
+       (oldSource, newSource) <- runSessionWithServerInTmpDir def caseSplitPlugin tree $ do
+              doc <- openDoc hsFilePath LanguageKind_Haskell
               void waitForBuildQueue
-              act doc
-              documentContents doc
-       newSource @?= sourceLines <> inserted
+              oldLines <- lines <$> documentContents doc
+              void $ waitForDiagnosticsFrom doc
+              actions <- getAllCodeActions doc
+              action <- liftIO $ findCaseSplitAct actions
+              executeCodeAction action
+              newLines <- lines <$> documentContents doc
+              pure (oldLines, newLines)
+       newSource @?= oldSource <> inserted
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
