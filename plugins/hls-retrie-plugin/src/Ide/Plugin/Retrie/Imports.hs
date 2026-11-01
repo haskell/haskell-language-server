@@ -14,90 +14,16 @@ module Ide.Plugin.Retrie.Imports
 import           Data.Foldable                             (find)
 import           Data.Generics                             (Data, everything,
                                                             extQ, mkQ)
+import           Development.IDE.GHC.Compat
 #if !MIN_VERSION_ghc(9,13,0)
 import           Data.Generics                             (everythingBut)
 #endif
+import           Data.List.NonEmpty                        (NonEmpty ((:|)))
 import qualified Data.Map                                  as Map
 import qualified Data.Text                                 as T
-import           Development.IDE                           hiding
-                                                           (pluginHandlers)
-import           Development.IDE.GHC.Compat                (AvailInfo,
-                                                            EpAnnImportDecl (..),
-                                                            Extension (PatternSynonyms),
-                                                            FieldOcc,
-                                                            GenLocated (L),
-                                                            GenModule (moduleName),
-                                                            GhcPs, GhcRn,
-                                                            GlobalRdrElt,
-                                                            GlobalRdrEnv,
-                                                            HsBindLR (..),
-                                                            ImportDecl (..),
-                                                            ImportDeclQualifiedStyle (..),
-                                                            ImportListInterpretation (Exactly),
-                                                            ImportSpec, LHsExpr,
-                                                            LIE, LImportDecl,
-                                                            ModuleName, Name,
-                                                            OccName,
-                                                            Parent (NoParent, ParentIs),
-                                                            RdrName (..),
-                                                            SourceText (..),
-                                                            TcGblEnv (..),
-                                                            XImportDeclPass (XImportDeclPass),
-                                                            availsToNameSet,
-                                                            elemNameSet,
-                                                            extensionFlags,
-                                                            fun_id, gre_imp,
-                                                            gre_lcl, gre_name,
-                                                            gre_par,
-                                                            isBuiltInSyntax,
-                                                            isExact,
-                                                            isInternalName,
-                                                            is_mod,
-                                                            lookupGRE_Name,
-                                                            mkRdrUnqual,
-                                                            moduleNameString,
-                                                            ms_hspp_opts,
-                                                            nameOccName,
-                                                            occNameString,
-                                                            rdrNameOcc,
-                                                            simpleImportDecl)
-#if MIN_VERSION_ghc(9,13,0)
-import           Development.IDE.GHC.Compat                (WithUserRdr (WithUserRdr))
-#elif MIN_VERSION_ghc(9,9,0)
-import           Development.IDE.GHC.Compat                (RealSrcSpan, locA,
-                                                            srcSpanToRealSrcSpan)
-#else
-import           Development.IDE.GHC.Compat                (RealSrcSpan,
-                                                            srcSpanToRealSrcSpan)
-#endif
-#if MIN_VERSION_ghc(9,7,0)
-import           Development.IDE.GHC.Compat                (LookupGRE (LookupRdrName),
-                                                            lookupGRE)
-import           GHC.Types.Name.Reader                     (FieldsOrSelectors (..),
-                                                            WhichGREs (..))
-#else
-import           Development.IDE.GHC.Compat                (lookupGRE_RdrName)
-#endif
-import           Development.IDE.GHC.Compat.ExactPrint     (d0, dn, setEntryDP)
-#if MIN_VERSION_ghc(9,11,0)
-import           Development.IDE.GHC.Compat.ExactPrint     (noAnnSrcSpanDP,
-                                                            noAnnSrcSpanDP1)
-#else
-import qualified Development.IDE.GHC.Compat.ExactPrint     as ExactPrint
-#endif
-import           GHC                                       (FieldOcc (FieldOcc),
-                                                            MatchGroup,
-                                                            ParsedModule (..),
-                                                            ParsedSource)
-#if MIN_VERSION_ghc(9,13,0)
-import           GHC                                       (LIdOccP)
-#elif MIN_VERSION_ghc(9,9,0)
-import           Development.IDE.GHC.Compat                (HsMatchContextRn)
-import           GHC                                       (LIdP)
-#else
-import           GHC                                       (HsMatchContext,
-                                                            LIdP)
-#endif
+import           Development.IDE
+import           Development.IDE.GHC.ExactPrint.Annotation
+import           Development.IDE.GHC.ExactPrint.IE
 import qualified GHC.Data.EnumSet                          as EnumSet
 import           GHC.Parser.Annotation                     (AnnList (..),
                                                             DeltaPos (DifferentLine, SameLine),
@@ -113,31 +39,20 @@ import           GHC.Parser.Annotation                     (AnnListBrackets (Lis
 import           GHC.Parser.Annotation                     (AddEpAnn (..),
                                                             Anchor (..),
                                                             AnchorOperation (..),
-                                                            AnnKeywordId (..),
                                                             LocatedL,
                                                             SrcSpanAnn' (..),
                                                             realSrcSpan)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 #endif
-import           GHC.Types.Avail                           (AvailInfo (AvailTC),
-                                                            availNames)
-import           GHC.Types.Name                            (nameModule_maybe)
-import           GHC.Types.Name.Reader                     (is_decl)
-import           Retrie.Rewrites
-
-import           Data.List.NonEmpty                        (NonEmpty ((:|)))
-import           Development.IDE.GHC.ExactPrint.Annotation
-import           Development.IDE.GHC.ExactPrint.IE
-import           Retrie.ExactPrint                         (AnnotatedImports,
-                                                            unsafeMkA)
 #if MIN_VERSION_ghc(9,14,0)
-import           Development.IDE.GHC.Compat                (GREInfo (IAmConLike),
-                                                            gre_info)
 import           GHC.Types.GREInfo                         (ConInfo (conLikeInfo),
                                                             ConLikeInfo (ConIsPatSyn))
-#else
-import           Development.IDE.GHC.Compat                (isDataOcc)
 #endif
+import           Language.Haskell.GHC.ExactPrint           (d0, dn, setEntryDP)
+
+import           Retrie.ExactPrint                         (AnnotatedImports,
+                                                            unsafeMkA)
+import           Retrie.Rewrites
 
 
 -- | All of the 'Name's in this subtree along with their spellings, given
@@ -280,7 +195,7 @@ provenanceOf :: GlobalRdrEnv -> [AvailInfo] -> ModuleName -> Name -> Maybe Prove
 provenanceOf gre exports mod name = do
   gre <- lookupGRE_Name gre name
   let bundled = Map.fromList
-        [ (n, p) | a@(AvailTC p _) <- exports, n <- availNames a, n /= p ]
+        [ (n, p) | a@(AvailTC p _ _) <- exports, n <- availNames a, n /= p ]
   -- is the name defined in this module?
   if gre_lcl gre
     then Just $
@@ -408,11 +323,4 @@ importList items =
 -- | An anchor with no source position, printed at the given delta.
 anchorDP :: DeltaPos -> Anchor
 anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
-
--- | Fresh annotations; older exactprint wants the span they stand in for.
-noAnnSrcSpanDP :: Monoid ann => DeltaPos -> SrcSpanAnn' (EpAnn ann)
-noAnnSrcSpanDP = ExactPrint.noAnnSrcSpanDP generatedSrcSpan
-
-noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
-noAnnSrcSpanDP1 = ExactPrint.noAnnSrcSpanDP1 generatedSrcSpan
 #endif
