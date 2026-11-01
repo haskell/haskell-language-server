@@ -15,6 +15,8 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , modifyAnns
   , addParens
   , parenthesizeName
+  , noAnnSrcSpanDP
+  , noAnnSrcSpanDP1
   ) where
 
 import           Data.Bifunctor                  (first)
@@ -25,7 +27,7 @@ import           GHC                             (LocatedN)
 import           GHC                             (DeltaPos (..), EpAnn (..),
                                                   EpToken (..), EpaLocation,
                                                   EpaLocation' (..),
-                                                  NameAdornment (..),
+                                                  NameAdornment (..), NoAnn,
                                                   SrcSpanAnnA, TrailingAnn (..))
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (..))
 #elif MIN_VERSION_ghc(9,9,0)
@@ -46,6 +48,7 @@ import           GHC                             (Anchor (..),
 import           GHC.Types.SrcLoc                (generatedSrcSpan)
 #endif
 import           Language.Haskell.GHC.ExactPrint (addComma)
+import qualified Language.Haskell.GHC.ExactPrint as EP
 
 -- | An entry delta of @n@ spaces on the same line.
 epl :: Int -> EpaLocation
@@ -141,4 +144,18 @@ parenthesizeName (L (SrcSpanAnn ann l) rdr) =
 
 genAnchor0 :: Anchor
 genAnchor0 = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor (SameLine 0))
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+noAnnSrcSpanDP :: (NoAnn ann) => DeltaPos -> EpAnn ann
+noAnnSrcSpanDP = EP.noAnnSrcSpanDP
+
+noAnnSrcSpanDP1 :: (NoAnn ann) => EpAnn ann
+noAnnSrcSpanDP1 = EP.noAnnSrcSpanDP1
+#else
+noAnnSrcSpanDP :: Monoid ann => DeltaPos -> SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP = EP.noAnnSrcSpanDP generatedSrcSpan
+
+noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP1 = EP.noAnnSrcSpanDP1 generatedSrcSpan
 #endif
