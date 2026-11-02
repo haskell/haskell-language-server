@@ -73,8 +73,7 @@ import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        topDir, unLoc, unLocA)
 import           Development.IDE.GHC.Compat.Util      hiding (catch, toList,
                                                        try)
-import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                       TransformT)
+import           Development.IDE.GHC.ExactPrint       (TransformT)
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
@@ -252,8 +251,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     --   Construct an inline rewrite for it
     --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
-    astSrc <- runActionE "retrie" state $
-        useE GetAnnotatedParsedSource nfpSource
+    astSrc <- runActionE "retrie" state $ useE GetParsedModuleWithComments nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
         -- on the binder itself, inline every use
@@ -276,7 +274,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     let
         annotatedImports = renderImports imports
         uri = filePathToUri $ fromNormalizedFilePath nfp
-    fixedSrc <- liftIO $ transformA (unsafeMkA (makeDeltaAst astSrc) 0) (fix sourceFixities)
+    fixedSrc <- liftIO $ transformA (fixAnns astSrc) (fix sourceFixities)
     inlineRewrite <- liftIO $
       constructInlineFromIdentifer annotatedImports fixedSrc fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
