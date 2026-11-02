@@ -712,6 +712,7 @@ library hls-retrie-plugin
   exposed-modules:  Ide.Plugin.Retrie
   other-modules:
     Ide.Plugin.Retrie.Log,
+    Ide.Plugin.Retrie.Rules,
     Ide.Plugin.Retrie.Imports
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
@@ -719,6 +720,7 @@ library hls-retrie-plugin
     , aeson
     , bytestring
     , containers
+    , deepseq
     , extra
     , ghc
     , ghc-boot-th

@@ -67,7 +67,7 @@ import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        TyClGroup (..), fun_id,
                                                        gopt_set, gopt_unset,
                                                        locA, ms_hspp_opts,
-                                                       nameOccName, occNameFS,
+                                                       nameOccName,
                                                        pattern RealSrcSpan,
                                                        rds_rules, recDotDot,
                                                        topDir, unLoc, unLocA)
@@ -91,8 +91,7 @@ import           GHC                                  (ExprLStmt, GRHS (GRHS),
                                                        Name,
                                                        NamedThing (getName),
                                                        ParsedModule (..),
-                                                       ParsedSource, RdrName,
-                                                       RealSrcSpan,
+                                                       RdrName, RealSrcSpan,
                                                        RenamedSource, Unit,
                                                        extensionFlags, getLocA,
                                                        isExternalName,
@@ -130,10 +129,9 @@ import           Retrie.CPP                           (CPP (NoCPP),
                                                        addImportsCPP, parseCPP,
                                                        printCPP)
 import           Retrie.ExactPrint                    (AnnotatedImports, fix,
-                                                       makeDeltaAst, transformA,
-                                                       unsafeMkA)
+                                                       transformA)
 import           Retrie.Expr                          (mkLocatedHsVar)
-import           Retrie.Fixity                        (FixityEnv, mkFixityEnv)
+import           Retrie.Fixity                        (FixityEnv)
 import           Retrie.Monad                         (Retrie, getGroundTerms,
                                                        runRetrie)
 import           Retrie.Options                       (defaultOptions,
@@ -152,6 +150,7 @@ import           Retrie.Universe                      (Universe)
 
 import           Ide.Plugin.Retrie.Imports
 import           Ide.Plugin.Retrie.Log
+import           Ide.Plugin.Retrie.Rules
 
 
 -- | Parameters for the runRetrie rewrite.
@@ -180,6 +179,7 @@ descriptor recorder plId =
   (defaultPluginDescriptor plId "Provides code actions to inline Haskell definitions")
     { pluginHandlers = handlers
     , pluginCommands = commands
+    , pluginRules = getFixedParsedModuleRule recorder
     }
   where
     (commands, handlers) =
@@ -243,7 +243,6 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     --   Construct an inline rewrite for it
     --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
-    astSrc <- runActionE "retrie" state $ useE GetParsedModuleWithComments nfpSource
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
         -- on the binder itself, inline every use
@@ -266,7 +265,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     let
         annotatedImports = renderImports imports
         uri = filePathToUri $ fromNormalizedFilePath nfp
-    fixedSrc <- liftIO $ transformA (fixAnns astSrc) (fix sourceFixities)
+    fixedSrc <- runActionE "retrie" state $ useE GetFixedParsedModule nfpSource
     inlineRewrite <- liftIO $
       constructInlineFromIdentifer annotatedImports fixedSrc fromRange
     when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
@@ -699,8 +698,7 @@ callRetrie recorder progress state session spec origin binds = do
 
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
-  originPm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments origin
-  originParsedModule <- transformA (fixAnns originPm) (fix originFixities)
+  originParsedModule <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
   -- TODO(simon): It would be better to compute imports per-clause.
   rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
   let retrie = apply rewrites
@@ -740,22 +738,9 @@ useOrFail
 useOrFail state lbl mkException rule f =
   useRuleBlocking lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
 
-fixityEnvFor :: FixityMap -> FixityEnv
-fixityEnvFor (FixityMap fixities) =
-  -- retrie keys fixities by the operator's unqualified name
-  mkFixityEnv
-    [ (fs, (fs, fixity))
-    | (n, fixity) <- Map.toList fixities
-    , let fs = occNameFS (nameOccName n)
-    ]
-
 fixityEnvForFile :: IdeState -> NormalizedFilePath -> IO FixityEnv
 fixityEnvForFile state f =
-  useRuleBlocking "Retrie.GetFixity" state GetFixity f
-    >>= maybe (throwIO $ NoTypeCheck f) (return . fixityEnvFor)
-
-fixAnns :: ParsedModule -> Annotated ParsedSource
-fixAnns ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
+  fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity f
 
 parseSpecs
   :: IdeState
@@ -904,4 +889,4 @@ getCPPmodule recorder state session fixities t = do
   let extensions = extensionFlags (ms_hspp_opts (pm_mod_summary pm))
   if LangExt.Cpp `EnumSet.member` extensions
     then parseCPP parseWith contents
-    else NoCPP <$> transformA (fixAnns pm) (fix fixities)
+    else NoCPP <$> useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule nt
