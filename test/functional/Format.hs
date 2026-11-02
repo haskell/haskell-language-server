@@ -1,9 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
 import           Data.Functor                (void)
+import           Data.Default (Default)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
 import           Ide.Types
@@ -39,17 +42,17 @@ providerTests = testGroup "lsp formatting provider"
         doc <- openDoc "Format.hs" "haskell"
 
         setHlsConfig (formatLspConfig "ormolu")
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        formatDoc doc def
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
         setHlsConfig (formatLspConfig "fourmolu")
-        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+        formatDoc doc def { _tabSize = 4 }
         formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
         setHlsConfig (formatLspConfig "ormolu")
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        formatDoc doc def
         formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
         documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
     ]
@@ -59,3 +62,11 @@ formatLspConfig provider = def { formattingProvider = provider }
 
 formatConfig :: T.Text -> SessionConfig
 formatConfig provider = defaultConfig { lspConfig = hlsConfigToClientConfig (formatLspConfig provider), ignoreConfigurationRequests = False }
+
+-- TODO: this is actually orphan. I wonder if defining it in lsp-types would be reasonable
+instance Default FormattingOptions where
+  def = FormattingOptions { _tabSize = 2
+                          , _insertSpaces = True
+                          , _trimTrailingWhitespace = Nothing
+                          , _insertFinalNewline = Nothing
+                          , _trimFinalNewlines = Nothing }
