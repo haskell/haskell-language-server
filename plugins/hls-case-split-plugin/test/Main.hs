@@ -241,17 +241,16 @@ applyPlugin name (cradleFile, sourceLines) inserted =
       tree = (mkFs [cradleFile, FS.file hsFilePath (FS.sources sourceLines)])
       findCaseSplitAct = Prelude.flip inspectCodeAction [CS.caseSplitPluginCodeActionTitle]
   in testCase (unpack name) $ do
-       (oldSource, newSource) <- runSessionWithServerInTmpDir def caseSplitPlugin tree $ do
-              doc <- openDoc hsFilePath LanguageKind_Haskell
-              void waitForBuildQueue
-              oldLines <- lines <$> documentContents doc
-              void $ waitForDiagnosticsFrom doc
-              actions <- getAllCodeActions doc
-              action <- liftIO $ findCaseSplitAct actions
-              executeCodeAction action
-              newLines <- lines <$> documentContents doc
-              pure (oldLines, newLines)
-       newSource @?= oldSource <> inserted
+       runSessionWithServerInTmpDir def caseSplitPlugin tree $ do
+         doc <- openDoc hsFilePath LanguageKind_Haskell
+         void waitForBuildQueue
+         oldLines <- lines <$> documentContents doc
+         void $ waitForDiagnosticsFrom doc
+         actions <- getAllCodeActions doc
+         action <- liftIO $ findCaseSplitAct actions
+         executeCodeAction action
+         newLines <- lines <$> documentContents doc
+         liftIO $ newLines @?= oldLines <> inserted
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
