@@ -270,7 +270,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
       refuse $ "Not inlined: " <> inlineThisDefinition <> " is recursive"
     -- TODO(simon): Generate a case dispatch if we can't statically determine
     -- the clause.
-    unless (triviallySelectable fun_matches) $
+    when (not $ triviallySelectable fun_matches) $
       refuse $ "Not inlined: " <> inlineThisDefinition <> " has several clauses, guards or a record wildcard"
     imports <- either (refuse . T.pack) pure $
       extractInlineImports check checktgt fun_matches
