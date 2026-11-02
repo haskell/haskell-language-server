@@ -711,6 +711,7 @@ library hls-retrie-plugin
     buildable: False
   exposed-modules:  Ide.Plugin.Retrie
   other-modules:
+    Ide.Plugin.Retrie.Log,
     Ide.Plugin.Retrie.Imports
   hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:

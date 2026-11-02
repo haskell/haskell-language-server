@@ -151,16 +151,8 @@ import           Retrie.Universe                      (Universe)
 
 
 import           Ide.Plugin.Retrie.Imports
+import           Ide.Plugin.Retrie.Log
 
-
-data Log
-  = LogParsingModule FilePath
-  | forall a. Pretty a => LogResolve a
-
-instance Pretty Log where
-  pretty = \case
-    LogParsingModule fp -> "Parsing module:" <+> pretty fp
-    LogResolve l        -> pretty l
 
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
