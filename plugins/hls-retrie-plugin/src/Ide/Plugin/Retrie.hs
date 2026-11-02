@@ -234,8 +234,8 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
       lift $ pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Warning $
         T.unlines $
-          "## Found errors during rewrite:" :
-          ["-" <> T.pack (show e) | e <- errors]
+          "Found errors during rewrite:" :
+          [" - " <> T.pack (show e) | e <- errors]
     return $ ca & L.edit ?~ edits
 
 resolveInlineThis
@@ -675,14 +675,16 @@ data CallRetrieError
   deriving (Eq)
 
 instance Show CallRetrieError where
-  show (CallRetrieInternalError msg f) = msg <> " - " <> fromNormalizedFilePath f
-  show (NoParse f) = "Cannot parse: " <> fromNormalizedFilePath f
-  show (GHCParseError f m) = "Cannot parse " <> fromNormalizedFilePath f <> " : " <> m
-  show (NoTypeCheck f) = "File does not typecheck: " <> fromNormalizedFilePath f
-  show (CannotImport f m) = "Cannot add import to " <> fromNormalizedFilePath f <> " : " <> m
+  show (CallRetrieInternalError msg f) = "Error rewriting " <> fileNameFromNFP f <> ": " <> msg
+  show (NoParse f) = "Cannot parse " <> fileNameFromNFP f
+  show (GHCParseError f m) = "Cannot parse " <> fileNameFromNFP f <> ": " <> m
+  show (NoTypeCheck f) = "File does not typecheck " <> fileNameFromNFP f
+  show (CannotImport f m) = "Cannot add import to " <> fileNameFromNFP f <> ": " <> m
 
 instance Exception CallRetrieError
 
+fileNameFromNFP :: NormalizedFilePath -> String
+fileNameFromNFP = takeFileName . fromNormalizedFilePath
 
 callRetrie
   :: Recorder (WithPriority Log)
@@ -719,7 +721,7 @@ callRetrie recorder progress state session spec origin binds = do
   results <- forM targets $ \t -> runExceptT $ do
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
         uri = filePathToUri $ fromNormalizedFilePath nt
-    lift $ progress $ T.pack $ takeFileName (fromNormalizedFilePath nt)
+    lift $ progress $ T.pack $ fileNameFromNFP nt
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     cpp <- ExceptT $ try $
