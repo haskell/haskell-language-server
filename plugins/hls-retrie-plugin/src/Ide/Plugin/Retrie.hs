@@ -18,8 +18,7 @@ import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, assert,
                                                        catch, throwIO, try)
 import           Control.Lens.Operators
-import           Control.Monad                        (filterM, forM, unless,
-                                                       when)
+import           Control.Monad                        (filterM, forM, when)
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -230,7 +229,7 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         spec
         nfp
         binds
-    unless (null errors) $
+    when ((not . null) errors) $
       lift $ pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Warning $
         T.unlines $
