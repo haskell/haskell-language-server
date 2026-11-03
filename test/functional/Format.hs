@@ -46,7 +46,7 @@ providerTests =
               _ -> assertFailure $ "strange response from formatting provider:" ++ show result
             result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-#if defined(hls_ormolu)
+#if defined(hls_ormolu) && defined(hls_fourmolu)
     , testCase "can change on the fly" $ do
         let orm'and'four'moluPlugins = mkPluginTestDescriptor (Ormolu.descriptor . cmapWithPrio OrmoluLog) "ormolu"
                                     <> mkPluginTestDescriptor (Fourmolu.descriptor . cmapWithPrio FourmoluLog) "fourmolu"
