@@ -1,26 +1,26 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
-import           Data.Default (Default)
+import           Data.Default                (Default)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
+import           Development.IDE             (Pretty)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           Test.Hls
-import qualified Test.Hls.FileSystem        as FS
-import           Development.IDE            (Pretty)
+import qualified Test.Hls.FileSystem         as FS
 #if defined(hls_ormolu)
-import System.FilePath.Posix ((</>))
-import qualified Ide.Plugin.Ormolu as Ormolu
-import qualified Ide.Plugin.Fourmolu as Fourmolu
-import Ide.Logger (cmapWithPrio)
+import           Ide.Logger                  (cmapWithPrio)
+import qualified Ide.Plugin.Fourmolu         as Fourmolu
+import qualified Ide.Plugin.Ormolu           as Ormolu
+import           System.FilePath.Posix       ((</>))
 #endif
 
 tests :: TestTree
