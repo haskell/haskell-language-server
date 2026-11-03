@@ -29,15 +29,15 @@ tests = testGroup "format document"
     ]
 
 providerTests :: TestTree
-providerTests = testGroup "lsp formatting provider"
+providerTests =
+  let filePath = "Format.hs"
+      tree = FS.mkVirtualFileTree ("test" </> "testdata" </> "format")
+           $ FS.simpleCabalProject' [FS.copy filePath]
+  in testGroup "lsp formatting provider"
     [ testCase "respects none" $ do
-        let testDataDir = "test" </> "testdata" </> "format"
-            filePath = "Format.hs"
-            tree = FS.mkVirtualFileTree testDataDir
-                 $ FS.simpleCabalProject' [FS.copy filePath]
 
         runSessionWithServerInTmpDir def (mempty :: PluginTestDescriptor TestLog) tree $ do
-          doc <- openDoc "Format.hs" "haskell"
+          doc <- openDoc filePath LanguageKind_Haskell
           resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
           liftIO $ case resp ^. L.result of
             result@(Left (TResponseError reason message Nothing)) -> case reason of
@@ -48,36 +48,34 @@ providerTests = testGroup "lsp formatting provider"
 
 #if defined(hls_ormolu)
     , testCase "can change on the fly" $ do
-        let testDataDir = "test" </> "testdata" </> "format"
-            filePath = "Format.hs"
-            tree = FS.mkVirtualFileTree testDataDir
-                 $ FS.simpleCabalProject' [FS.copy filePath]
-            orm'and'four'moluPlugins = mkPluginTestDescriptor (Ormolu.descriptor . cmapWithPrio OrmoluLog) "ormolu"
+        let orm'and'four'moluPlugins = mkPluginTestDescriptor (Ormolu.descriptor . cmapWithPrio OrmoluLog) "ormolu"
                                     <> mkPluginTestDescriptor (Fourmolu.descriptor . cmapWithPrio FourmoluLog) "fourmolu"
 
         runSessionWithServerInTmpDir def orm'and'four'moluPlugins tree $ do
-            doc <- openDoc filePath LanguageKind_Haskell
+          doc <- openDoc filePath LanguageKind_Haskell
 
-            setIgnoringConfigurationRequests False
+          setIgnoringConfigurationRequests False
 
-            setHlsConfig (formatLspConfig "ormolu")
-            formatDoc doc def
-            formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
-            documentContents doc >>= liftIO . (@?= formattedOrmolu)
+          setHlsConfig (formatLspConfig "ormolu")
+          formatDoc doc def
+          formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
+          documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
-            setHlsConfig (formatLspConfig "fourmolu")
-            formatDoc doc def { _tabSize = 4 }
-            formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
-            documentContents doc >>= liftIO . (@?= formattedFourmolu)
+          setHlsConfig (formatLspConfig "fourmolu")
+          formatDoc doc def { _tabSize = 4 }
+          formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
+          documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
-            setHlsConfig (formatLspConfig "ormolu")
-            formatDoc doc def
-            formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
-            documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
+          setHlsConfig (formatLspConfig "ormolu")
+          formatDoc doc def
+          formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
+          documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
 #endif
     ]
 
-data TestLog = OrmoluLog Ormolu.LogEvent | FourmoluLog Fourmolu.LogEvent deriving (Pretty, Show)
+data TestLog = OrmoluLog Ormolu.LogEvent
+             | FourmoluLog Fourmolu.LogEvent
+             deriving (Pretty, Show)
 
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
