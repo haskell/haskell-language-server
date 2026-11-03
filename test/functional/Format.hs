@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
-import           Data.Functor                (void)
 import           Data.Default (Default)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
@@ -14,13 +14,13 @@ import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           Test.Hls
-import           Test.Hls.Command
-import           Test.Hls.Flags              (requiresFourmoluPlugin,
-                                              requiresOrmoluPlugin)
 import qualified Test.Hls.FileSystem        as FS
+import           Development.IDE            (Pretty)
 #if defined(hls_ormolu)
 import System.FilePath.Posix ((</>))
 import qualified Ide.Plugin.Ormolu as Ormolu
+import qualified Ide.Plugin.Fourmolu as Fourmolu
+import Ide.Logger (cmapWithPrio)
 #endif
 
 tests :: TestTree
@@ -30,69 +30,57 @@ tests = testGroup "format document"
 
 providerTests :: TestTree
 providerTests = testGroup "lsp formatting provider"
-    [ -- TODO: This requires niether plugin to be available
-      testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
-        void configurationRequest
-        doc <- openDoc "Format.hs" "haskell"
-        resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        liftIO $ case resp ^. L.result of
-          result@(Left (TResponseError reason message Nothing)) -> case reason of
-            (InR ErrorCodes_MethodNotFound) -> pure () -- No formatter
-            (InR ErrorCodes_InvalidRequest) | "No plugin" `T.isPrefixOf` message -> pure ()
-            _ -> assertFailure $ "strange response from formatting provider:" ++ show result
-          result -> assertFailure $ "strange response from formatting provider:" ++ show result
-
-    -- TODO: This requires both plugins to be available
-    , requiresOrmoluPlugin . requiresFourmoluPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullLatestClientCaps "test/testdata/format" $ do
-        void configurationRequest
-
-        doc <- openDoc "Format.hs" "haskell"
-
-        setHlsConfig (formatLspConfig "ormolu")
-        formatDoc doc def
-        formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
-        documentContents doc >>= liftIO . (@?= formattedOrmolu)
-
-        setHlsConfig (formatLspConfig "fourmolu")
-        formatDoc doc def { _tabSize = 4 }
-        formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
-        documentContents doc >>= liftIO . (@?= formattedFourmolu)
-
-        setHlsConfig (formatLspConfig "ormolu")
-        formatDoc doc def
-        formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
-        documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
-
-#if defined(hls_ormolu)
-    -- TODO: This is replicating the beginning of the previous test, but using
-    -- `runSessionWithServerInTmpDir` instad of `runSessionWithConfig`. The issue is that
-    -- `runSessionWithServerInTmpDir` accepts a single plugin, so we can't currently use it
-    -- to do a cross test like the previous one. However, it looks like
-    -- `runSessionWithTestConfig`, which `runSessionWithServerInTmpDir`
-    -- delegates to, doesn't really need to operate on a single plugin, it
-    -- looks like it could easily accept multiple plugins (see
-    -- hls-test-utils/src/Test/Hls.hs:832).
-    , testCase "gimme a name" $ do
+    [ testCase "respects none" $ do
         let testDataDir = "test" </> "testdata" </> "format"
             filePath = "Format.hs"
             tree = FS.mkVirtualFileTree testDataDir
                  $ FS.simpleCabalProject' [FS.copy filePath]
-            ormoluPlugin = mkPluginTestDescriptor Ormolu.descriptor "ormolu"
-        runSessionWithServerInTmpDir def ormoluPlugin tree $ do
+
+        runSessionWithServerInTmpDir def (mempty :: PluginTestDescriptor TestLog) tree $ do
+          doc <- openDoc "Format.hs" "haskell"
+          resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
+          liftIO $ case resp ^. L.result of
+            result@(Left (TResponseError reason message Nothing)) -> case reason of
+              (InR ErrorCodes_MethodNotFound) -> pure () -- No formatter
+              (InR ErrorCodes_InvalidRequest) | "No plugin" `T.isPrefixOf` message -> pure ()
+              _ -> assertFailure $ "strange response from formatting provider:" ++ show result
+            result -> assertFailure $ "strange response from formatting provider:" ++ show result
+
+#if defined(hls_ormolu)
+    , testCase "can change on the fly" $ do
+        let testDataDir = "test" </> "testdata" </> "format"
+            filePath = "Format.hs"
+            tree = FS.mkVirtualFileTree testDataDir
+                 $ FS.simpleCabalProject' [FS.copy filePath]
+            orm'and'four'moluPlugins = mkPluginTestDescriptor (Ormolu.descriptor . cmapWithPrio OrmoluLog) "ormolu"
+                                    <> mkPluginTestDescriptor (Fourmolu.descriptor . cmapWithPrio FourmoluLog) "fourmolu"
+
+        runSessionWithServerInTmpDir def orm'and'four'moluPlugins tree $ do
             doc <- openDoc filePath LanguageKind_Haskell
+
             setIgnoringConfigurationRequests False
+
             setHlsConfig (formatLspConfig "ormolu")
             formatDoc doc def
             formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
             documentContents doc >>= liftIO . (@?= formattedOrmolu)
+
+            setHlsConfig (formatLspConfig "fourmolu")
+            formatDoc doc def { _tabSize = 4 }
+            formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
+            documentContents doc >>= liftIO . (@?= formattedFourmolu)
+
+            setHlsConfig (formatLspConfig "ormolu")
+            formatDoc doc def
+            formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
+            documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
 #endif
     ]
 
+data TestLog = OrmoluLog Ormolu.LogEvent | FourmoluLog Fourmolu.LogEvent deriving (Pretty, Show)
+
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
-
-formatConfig :: T.Text -> SessionConfig
-formatConfig provider = defaultConfig { lspConfig = hlsConfigToClientConfig (formatLspConfig provider), ignoreConfigurationRequests = False }
 
 -- TODO: this is actually orphan. I wonder if defining it in lsp-types would be reasonable
 instance Default FormattingOptions where
