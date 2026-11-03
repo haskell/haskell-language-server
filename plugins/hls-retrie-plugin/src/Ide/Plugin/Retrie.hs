@@ -14,8 +14,7 @@
 module Ide.Plugin.Retrie (descriptor, Log) where
 
 import           Control.Concurrent.STM               (readTVarIO)
-import           Control.Exception.Safe               (Exception (..),
-                                                       SomeException, assert,
+import           Control.Exception.Safe               (SomeException, assert,
                                                        catch, throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (filterM, forM, when)
@@ -23,9 +22,6 @@ import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
-import           Data.Maybe                           (fromMaybe, isJust,
-                                                       isNothing)
-
 import           Control.Monad.Trans.Maybe            (MaybeT, hoistMaybe,
                                                        runMaybeT)
 import           Data.Aeson                           (FromJSON (..),
@@ -39,11 +35,14 @@ import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
 import           Data.List.Extra                      (sortOn)
 import qualified Data.Map                             as Map
+import           Data.Maybe                           (fromMaybe, isJust,
+                                                       isNothing)
 import           Data.Monoid                          (First (First), getFirst)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
-import           Development.IDE                      hiding (pluginHandlers)
+import           Development.IDE                      hiding (pluginHandlers,
+                                                       pluginRules)
 import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
@@ -51,61 +50,27 @@ import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras,
                                                        getShakeExtras,
                                                        hiedbWriter,
                                                        toKnownFiles, withHieDb)
-import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
-                                                       GenLocated (L), GhcPs,
-                                                       GhcRn,
-                                                       HsBindLR (FunBind, fun_matches),
-                                                       HsExpr, HsGroup (..),
-                                                       HsValBindsLR (..),
-                                                       HscEnv, ImportDecl (..),
-                                                       LHsExpr, LRuleDecls,
-                                                       ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                       OccName, Outputable,
-                                                       RuleDecl (HsRule, rd_name),
-                                                       RuleDecls (HsRules),
-                                                       TyClDecl (SynDecl, tcdLName),
-                                                       TyClGroup (..), fun_id,
-                                                       gopt_set, gopt_unset,
-                                                       locA, ms_hspp_opts,
-                                                       nameOccName,
-                                                       pattern RealSrcSpan,
-                                                       rds_rules, recDotDot,
-                                                       topDir, unLoc, unLocA)
+#if MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat           hiding (assert,
+                                                       parseModule, try)
+#else
+import           Development.IDE.GHC.Compat           hiding (parseModule, try)
+#endif
+import           Control.Monad.IO.Unlift              (askRunInIO)
 import           Development.IDE.GHC.Compat.Util      hiding (catch, toList,
                                                        try)
 import           Development.IDE.GHC.ExactPrint       (TransformT)
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
-import           GHC                                  (ExprLStmt, GRHS (GRHS),
-                                                       GRHSs (grhssGRHSs),
-                                                       GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
-                                                       HsLocalBinds,
-                                                       HsLocalBindsLR (HsValBinds),
-                                                       HsRecFields, LIdP,
-                                                       LocatedA, LocatedN,
-                                                       Match (m_grhss),
-                                                       MatchGroup (mg_alts),
-                                                       Module, ModuleName,
-                                                       NHsValBindsLR (NValBinds),
-                                                       Name,
-                                                       NamedThing (getName),
-                                                       ParsedModule (..),
-                                                       RdrName, RealSrcSpan,
-                                                       RenamedSource, Unit,
-                                                       extensionFlags, getLocA,
-                                                       isExternalName,
-                                                       isSubspanOf, parseModule)
-#if MIN_VERSION_ghc(9,13,0)
-import           GHC                                  (LIdOccP)
-#endif
-import           Control.Monad.IO.Unlift              (askRunInIO)
+import           GHC                                  (parseModule)
 import qualified GHC.Data.EnumSet                     as EnumSet
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
                                                        ContextInfo (RecField, ValBind),
                                                        identInfo)
 import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
+import           GHC.Parser.Annotation                (LocatedN)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE)
 import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
