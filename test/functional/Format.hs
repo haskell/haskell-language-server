@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE DeriveAnyClass    #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
@@ -75,7 +74,9 @@ providerTests =
 
 data TestLog = OrmoluLog Ormolu.LogEvent
              | FourmoluLog Fourmolu.LogEvent
-             deriving (Pretty, Show)
+             deriving (Show)
+
+instance Pretty TestLog
 
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
