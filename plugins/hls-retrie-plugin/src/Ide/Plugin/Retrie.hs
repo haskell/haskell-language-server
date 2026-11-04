@@ -639,18 +639,11 @@ instance Exception CallRetrieError
 fileNameFromNFP :: NormalizedFilePath -> String
 fileNameFromNFP = takeFileName . fromNormalizedFilePath
 
-callRetrie
-  :: Recorder (WithPriority Log)
-  -> (T.Text -> IO ())
-  -> IdeState
-  -> HscEnv
-  -> RewriteSpec
-  -> NormalizedFilePath
-  -> [HsBindLR GhcRn GhcRn]
-  -> IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder progress state session spec origin binds = do
-  knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
-  let
+-- | Lists all files affected by the rewrites.
+getTargets :: Retrie a -> Set.HashSet NormalizedFilePath -> IO [FilePath]
+getTargets retrie knownFiles =
+  getTargetFiles retrieOptions (getGroundTerms retrie)
+    where
       -- TODO cover all workspaceFolders
       target = "."
 
@@ -661,6 +654,16 @@ callRetrie recorder progress state session spec origin binds = do
             Set.toList knownFiles
         }
 
+callRetrie
+  :: Recorder (WithPriority Log)
+  -> (T.Text -> IO ())
+  -> IdeState
+  -> HscEnv
+  -> RewriteSpec
+  -> NormalizedFilePath
+  -> [HsBindLR GhcRn GhcRn]
+  -> IO ([CallRetrieError], WorkspaceEdit)
+callRetrie recorder progress state session spec origin binds = do
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
   originParsedModule <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
@@ -668,7 +671,8 @@ callRetrie recorder progress state session spec origin binds = do
   rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
   let retrie = apply rewrites
 
-  targets <- getTargetFiles retrieOptions (getGroundTerms retrie)
+  knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
+  targets <- getTargets retrie knownFiles
 
   results <- forM targets $ \t -> runExceptT $ do
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
