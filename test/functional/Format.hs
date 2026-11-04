@@ -14,7 +14,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
-#if defined(hls_ormolu)
+#if defined(hls_ormolu) && defined(hls_fourmolu)
 import           Ide.Logger                  (Pretty (pretty), cmapWithPrio)
 import qualified Ide.Plugin.Fourmolu         as Fourmolu
 import qualified Ide.Plugin.Ormolu           as Ormolu
