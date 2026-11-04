@@ -184,7 +184,7 @@ minDefToMethodGroups :: HscEnv -> TcGblEnv -> [(Name, Type)] -> ClassMinimalDef 
 minDefToMethodGroups hsc gblEnv methods minDef = makeMethodGroup <$> go minDef
     where
         makeMethodGroup methodDefinitions =
-            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . method_name <$> methodDefinitions
+            let name = mconcat $ intersperse "," $ wrapIn "'" . method_name <$> methodDefinitions
             in MethodGroup name methodDefinitions
 
         matchMethod n =
@@ -198,3 +198,5 @@ minDefToMethodGroups hsc gblEnv methods minDef = makeMethodGroup <$> go minDef
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)
+
+        wrapIn w x = w <> x <> w
