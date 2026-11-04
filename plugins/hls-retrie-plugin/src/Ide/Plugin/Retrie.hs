@@ -69,7 +69,7 @@ import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
                                                        ContextInfo (RecField, ValBind),
                                                        identInfo)
-import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
+import qualified GHC.LanguageExtensions.Type          as LangExt
 import           GHC.Parser.Annotation                (LocatedN)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE)
