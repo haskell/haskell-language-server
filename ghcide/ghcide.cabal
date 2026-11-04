@@ -153,6 +153,7 @@ library
     Development.IDE.GHC.Compat.Env
     Development.IDE.GHC.Compat.Error
     Development.IDE.GHC.Compat.Iface
+    Development.IDE.GHC.Compat.Index
     Development.IDE.GHC.Compat.Logger
     Development.IDE.GHC.Compat.Outputable
     Development.IDE.GHC.Compat.Parser
