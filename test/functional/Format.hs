@@ -8,7 +8,6 @@ import           Control.Monad.IO.Class
 import           Data.Default                (Default)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
-import           Development.IDE             (Pretty)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
@@ -16,7 +15,7 @@ import           Language.LSP.Test
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
 #if defined(hls_ormolu)
-import           Ide.Logger                  (cmapWithPrio)
+import           Ide.Logger                  (Pretty (pretty), cmapWithPrio)
 import qualified Ide.Plugin.Fourmolu         as Fourmolu
 import qualified Ide.Plugin.Ormolu           as Ormolu
 import           System.FilePath.Posix       ((</>))
@@ -76,7 +75,9 @@ data TestLog = OrmoluLog Ormolu.LogEvent
              | FourmoluLog Fourmolu.LogEvent
              deriving (Show)
 
-instance Pretty TestLog
+instance Pretty TestLog where
+  pretty (OrmoluLog l)   = pretty l
+  pretty (FourmoluLog l) = pretty l
 
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
