@@ -17,7 +17,7 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , parenthesizeName
   , noAnnSrcSpanDP
   , noAnnSrcSpanDP1
-#if !MIN_VERSION_ghc(9,11,0)
+#if !MIN_VERSION_ghc(9,9,0)
   , anchorDP
 #endif
   ) where
@@ -37,7 +37,7 @@ import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (..))
 import           GHC                             (DeltaPos (..), EpAnn (..),
                                                   EpaLocation,
                                                   EpaLocation' (..),
-                                                  NameAdornment (..),
+                                                  NameAdornment (..), NoAnn,
                                                   SrcSpanAnnA, TrailingAnn (..))
 #else
 import           GHC                             (Anchor (..),
@@ -150,7 +150,7 @@ anchorDP :: DeltaPos -> Anchor
 anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
 #endif
 
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,9,0)
 noAnnSrcSpanDP :: (NoAnn ann) => DeltaPos -> EpAnn ann
 noAnnSrcSpanDP = EP.noAnnSrcSpanDP
 
