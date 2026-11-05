@@ -5,7 +5,6 @@ module DependentFileTest (tests) where
 
 import           Config
 import qualified Data.Text                      as T
-import           Development.IDE.Test           (expectDiagnostics)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types    hiding
