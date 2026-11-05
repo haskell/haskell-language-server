@@ -119,7 +119,7 @@ setBytecodeLinkerOptions df =
                 concatMap (wayGeneralFlags platform) hostFullWays
           in foldl' gopt_unset df2 $
               concatMap (wayUnsetGeneralFlags platform) hostFullWays
-  setInterpreterWays $
+  in setInterpreterWays $
 #endif
   df {
     ghcLink   = LinkInMemory
