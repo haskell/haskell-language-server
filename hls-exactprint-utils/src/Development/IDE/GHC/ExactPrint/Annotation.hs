@@ -11,9 +11,15 @@ module Development.IDE.GHC.ExactPrint.Annotation
   , removeTrailingCommaAnn
   , ensureTrailingComma
   , withTrailingComma
+  , withCommas
   , modifyAnns
   , addParens
   , parenthesizeName
+  , noAnnSrcSpanDP
+  , noAnnSrcSpanDP1
+#if !MIN_VERSION_ghc(9,11,0)
+  , anchorDP
+#endif
   ) where
 
 import           Data.Bifunctor                  (first)
@@ -24,7 +30,7 @@ import           GHC                             (LocatedN)
 import           GHC                             (DeltaPos (..), EpAnn (..),
                                                   EpToken (..), EpaLocation,
                                                   EpaLocation' (..),
-                                                  NameAdornment (..),
+                                                  NameAdornment (..), NoAnn,
                                                   SrcSpanAnnA, TrailingAnn (..))
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (..))
 #elif MIN_VERSION_ghc(9,9,0)
@@ -45,6 +51,7 @@ import           GHC                             (Anchor (..),
 import           GHC.Types.SrcLoc                (generatedSrcSpan)
 #endif
 import           Language.Haskell.GHC.ExactPrint (addComma)
+import qualified Language.Haskell.GHC.ExactPrint as EP
 
 -- | An entry delta of @n@ spaces on the same line.
 epl :: Int -> EpaLocation
@@ -84,6 +91,12 @@ ensureTrailingComma :: SrcSpanAnnA -> SrcSpanAnnA
 ensureTrailingComma ann
   | any isCommaAnn (trailingAnns ann) = ann
   | otherwise = addComma ann
+
+-- | Add a trailing comma to every element but the last.
+withCommas :: [LocatedAn AnnListItem a] -> [LocatedAn AnnListItem a]
+withCommas []           = []
+withCommas [x]          = [x]
+withCommas (L l e : xs) = L (ensureTrailingComma l) e : withCommas xs
 
 -- | Replace an item's trailing comma with @c@, preserving its delta.
 withTrailingComma :: TrailingAnn -> SrcSpanAnnA -> SrcSpanAnnA
@@ -130,8 +143,23 @@ parenthesizeName (L (SrcSpanAnn ann l) rdr) =
   where
     (anc, nameAnn, cs) = case ann of
       EpAnn a n c  -> (a, n, c)
-      EpAnnNotUsed -> (genAnchor0, NameAnnTrailing [], emptyComments)
+      EpAnnNotUsed -> (anchorDP (SameLine 0), NameAnnTrailing [], emptyComments)
 
-genAnchor0 :: Anchor
-genAnchor0 = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor (SameLine 0))
+-- | An anchor with no source position, printed at the given delta.
+anchorDP :: DeltaPos -> Anchor
+anchorDP dp = Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor dp)
+#endif
+
+#if MIN_VERSION_ghc(9,11,0)
+noAnnSrcSpanDP :: (NoAnn ann) => DeltaPos -> EpAnn ann
+noAnnSrcSpanDP = EP.noAnnSrcSpanDP
+
+noAnnSrcSpanDP1 :: (NoAnn ann) => EpAnn ann
+noAnnSrcSpanDP1 = EP.noAnnSrcSpanDP1
+#else
+noAnnSrcSpanDP :: Monoid ann => DeltaPos -> SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP = EP.noAnnSrcSpanDP generatedSrcSpan
+
+noAnnSrcSpanDP1 :: Monoid ann => SrcSpanAnn' (EpAnn ann)
+noAnnSrcSpanDP1 = EP.noAnnSrcSpanDP1 generatedSrcSpan
 #endif

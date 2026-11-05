@@ -49,6 +49,7 @@ instance Show ModDetails where show = const "<moddetails>"
 instance NFData ModDetails where rnf = rwhnf
 #if !MIN_VERSION_ghc(9,13,0)
 instance NFData SafeHaskellMode where rnf = rwhnf
+instance NFData Fixity where rnf = rwhnf
 #endif
 instance Show Linkable where show = unpack . printOutputable
 #if MIN_VERSION_ghc(9,11,0)
