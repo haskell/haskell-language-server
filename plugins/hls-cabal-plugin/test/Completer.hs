@@ -77,6 +77,31 @@ basicCompleterTests =
         let complTexts = getTextEditTexts compls
         liftIO $ assertBool "suggests f2" $ "f2.hs" `elem` complTexts
         liftIO $ assertBool "does not suggest" $ "Content.hs" `notElem` complTexts
+    , runCabalTestCaseSession "only suggest cabal-version at start of file" "" $ do
+        doc <- openDoc "empty.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 0)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= ["cabal-version:"]
+    , runCabalTestCaseSession "only suggest cabal-version at start of file with other fields" "" $ do
+        doc <- openDoc "cabal-version-missing.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 0)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= ["cabal-version:"]
+    , runCabalTestCaseSession "only suggest cabal-version at start of file with some input" "" $ do
+        doc <- openDoc "start-cabal-version.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 2)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= ["cabal-version:"]
+    , runCabalTestCaseSession "suggest field value completion in first line for fields other than cabal-version" "" $ do
+        doc <- openDoc "cabal-version-not-in-first-line.cabal" "cabal"
+        compls <- getCompletions doc (Position 0 8)
+        let complTexts = getTextEditTexts compls
+        liftIO $ complTexts @?= []
+    , runCabalTestCaseSession "Don't suggest cabal-version at lines after the first line" "" $ do
+        doc <- openDoc "cabal-version-missing.cabal" "cabal"
+        compls <- getCompletions doc (Position 2 0)
+        let complTexts = getTextEditTexts compls
+        liftIO . assertBool "cabal-version is not suggested after first line" . not $ "cabal-version:" `elem` complTexts
     , parameterisedCursorTestM "extensions completion" libraryStanzaData
         [ \_ actual -> assertBool "suggests FieldSelectors" $ "FieldSelectors" `elem` actual
         , \_ actual -> assertBool "suggests OverloadedStrings" $ "OverloadedStrings" `elem` actual
