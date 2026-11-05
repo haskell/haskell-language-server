@@ -48,7 +48,8 @@ completerTests =
       filePathExposedModulesTests,
       exposedModuleCompleterTests,
       importCompleterTests,
-      autogenFieldCompletionTests
+      autogenFieldCompletionTests,
+      weightedCompleterFieldCompletionTests
     ]
 
 basicCompleterTests :: TestTree
@@ -412,6 +413,23 @@ simpleCompleterData sName dir pref = do
       stanzaName = sName,
       matcher = Matcher $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults
     }
+
+weightedCompleterFieldCompletionTests :: TestTree
+weightedCompleterFieldCompletionTests =
+  testGroup "Wighted Field Completer Tests"
+    [ testAutogenField "weight cabalKeyword"         "completion/optional-fields.cabal" (Position 4 5)  ["license-file:","license-files:","license:"],
+     testAutogenField "weight licenseStanza"         "completion/optional-fields.cabal" (Position 7 7)  ["BSD-3-Clause","GPL-3.0-only","MIT"]
+    ]
+
+  where
+    testAutogenField :: String -> FilePath -> Position -> [T.Text] -> TestTree
+    testAutogenField section file pos expected = runCabalTestCaseSession ("keyword completion" <> section) "" $ do
+      doc <- openDoc file "cabal"
+      items <- getCompletions doc pos
+      let labels = map (^. L.label) items
+      liftIO $ forM_ expected $ \expect ->
+        assertBool (T.unpack expect <> " not found in " <> section) $
+          expected == take 3 labels
 
 mkCompleterData :: CabalPrefixInfo -> CompleterData
 mkCompleterData prefInfo =
