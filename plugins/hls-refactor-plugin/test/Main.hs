@@ -308,6 +308,7 @@ codeActionTests = testGroup "code actions"
   , suggestHideShadowTests
   , fixConstructorImportTests
   , fixModuleImportTypoTests
+  , removeDuplicateQualifiedTests
   , importRenameActionTests
   , fillTypedHoleTests
   , addSigActionTests
@@ -1699,6 +1700,40 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
         executeCodeAction replaceWithDataEq
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Eq"
+    ]
+
+removeDuplicateQualifiedTests :: TestTree
+removeDuplicateQualifiedTests = testGroup "multiple occurrences of qualified in import"
+    [ testSession "removes prepositive qualified when ImportQualifiedPost is enabled" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# LANGUAGE ImportQualifiedPost #-}"
+            , "module A where"
+            , "import qualified Data.List qualified"
+            ]
+        _ <- waitForDiagnostics
+        action <- pickActionWithTitle "Remove redundant 'qualified'" =<< getCodeActions doc (R 2 0 2 36)
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= T.unlines
+            [ "{-# LANGUAGE ImportQualifiedPost #-}"
+            , "module A where"
+            , "import Data.List qualified"
+            ]
+    , testSession "removes postpositive qualified without ImportQualifiedPost" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# LANGUAGE NoImportQualifiedPost #-}"
+            , "module A where"
+            , "import qualified Data.List qualified"
+            ]
+        _ <- waitForDiagnostics
+        action <- pickActionWithTitle "Remove redundant 'qualified'" =<< getCodeActions doc (R 2 0 2 36)
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= T.unlines
+            [ "{-# LANGUAGE NoImportQualifiedPost #-}"
+            , "module A where"
+            , "import qualified Data.List"
+            ]
     ]
 
 suggestImportClassMethodTests :: TestTree
