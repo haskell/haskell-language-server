@@ -191,6 +191,7 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
+import qualified Development.IDE.GHC.Compat.Index       as Index
 
 
 data Log
@@ -325,6 +326,7 @@ data ShakeExtras = ShakeExtras
         -> IO [Key]
         -> IO ()
     ,ideNc :: NameCache
+    ,ideUic :: Index.UnitIndexCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
@@ -712,6 +714,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins debouncer
 #else
     ideNc <- initNameCache 'r' knownKeyNames
 #endif
+    ideUic <- Index.initUnitIndexCache
     shakeExtras <- do
         globals <- newTVarIO HMap.empty
         state <- STM.newIO

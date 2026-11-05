@@ -19,12 +19,14 @@ import           Data.Text.Encoding                 (encodeUtf8)
 import           Development.IDE.Core.Shake         hiding (Log, knownTargets,
                                                      withHieDb)
 import qualified Development.IDE.GHC.Compat         as Compat
+
 import           Development.IDE.GHC.Compat.CmdLine
 import           Development.IDE.GHC.Compat.Core    hiding (Target, TargetFile,
                                                      TargetModule, Var, Warning,
                                                      getOptions)
 import qualified Development.IDE.GHC.Compat.Core    as GHC
 import           Development.IDE.GHC.Compat.Env     hiding (Logger)
+import           Development.IDE.GHC.Compat.Index
 import           Development.IDE.GHC.Compat.Units   (UnitId)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Types.Diagnostics
@@ -51,14 +53,12 @@ import qualified Data.Set                           as OS
 import qualified Development.IDE.GHC.Compat.Util    as Compat
 import           Development.IDE.Session.Dependency
 import           Development.IDE.Types.Options
-import           GHC.Data.Graph.Directed
 import           Ide.PluginUtils                    (toAbsolute)
 
 import           GHC.Driver.Env                     (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Types.Error                    (errMsgDiagnostic,
                                                      singleMessage)
-import           GHC.Unit.State
 
 
 #if MIN_VERSION_ghc(9,13,0)
@@ -537,13 +537,13 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 cacheDir :: String
 cacheDir = "ghcide"
 
-emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
-emptyHscEnv nc libDir = do
+emptyHscEnv :: NameCache -> UnitIndexCache -> FilePath -> IO HscEnv
+emptyHscEnv nc uic libDir = do
     -- We call setSessionDynFlags so that the loader is initialised
     -- We need to do this before we call initUnits.
     env <- liftIO $ runGhc (Just libDir) $
       getSessionDynFlags >>= setSessionDynFlags >> getSession
-    pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
+    pure $ setHscUIC uic (setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env))
 
 -- ----------------------------------------------------------------------------
 -- Target Details

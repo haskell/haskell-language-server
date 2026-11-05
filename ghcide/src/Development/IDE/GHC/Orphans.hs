@@ -73,7 +73,10 @@ instance NFData Unlinked where
 #endif
 
 instance NFData WholeCoreBindings where
-#if MIN_VERSION_ghc(9,11,0)
+#if MIN_VERSION_ghc(9,14,1)
+  -- Wrong, that's 9.14.2, but the release does not exists yet
+  rnf (WholeCoreBindings bs m ml f x) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf f `seq` rnf x
+#elif MIN_VERSION_ghc(9,11,0)
   rnf (WholeCoreBindings bs m ml f) = rnf bs `seq` rnf m `seq` rnf ml `seq` rnf f
 #else
   rnf (WholeCoreBindings bs m ml) = rnf bs `seq` rnf m `seq` rnf ml

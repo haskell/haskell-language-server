@@ -113,6 +113,7 @@ import qualified Development.IDE.Session.Ghc         as Ghc
 import qualified Development.IDE.Session.OrderedSet  as S
 import qualified Focus
 import qualified StmContainers.Map                   as STM
+import Development.IDE.GHC.Compat.Index (UnitIndexCache)
 
 data Log
   = LogSettingInitialDynFlags
@@ -674,7 +675,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
 
   return $ do
     clientConfig <- getClientConfigAction
-    extras@ShakeExtras{ideNc, knownTargetsVar
+    extras@ShakeExtras{ideNc, ideUic, knownTargetsVar
                       } <- getShakeExtras
     let invalidateShakeCache = do
             void $ incrementVersion sessionState
@@ -703,6 +704,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} rootDir que = do
               , sessionPendingBarrier = pendingBarrier
               , sessionClientConfig = clientConfig
               , sessionSharedNameCache = ideNc
+              , sessionSharedUnitIndexCache = ideUic
               , sessionLoadingOptions = newSessionLoadingOptions
               }
 
@@ -765,13 +767,14 @@ data SessionShake = SessionShake
 
 -- | Read-only data that the initialisation logic needs access to.
 data SessionEnv = SessionEnv
-  { sessionLspContext      :: Maybe (LanguageContextEnv Config)
-  , sessionRootDir         :: FilePath
-  , sessionIdeOptions      :: IdeOptions
-  , sessionPendingBarrier  :: TVar (Maybe Int)
-  , sessionClientConfig    :: Config
-  , sessionSharedNameCache :: NameCache
-  , sessionLoadingOptions  :: SessionLoadingOptions
+  { sessionLspContext           :: Maybe (LanguageContextEnv Config)
+  , sessionRootDir              :: FilePath
+  , sessionIdeOptions           :: IdeOptions
+  , sessionPendingBarrier       :: TVar (Maybe Int)
+  , sessionClientConfig         :: Config
+  , sessionSharedNameCache      :: NameCache
+  , sessionSharedUnitIndexCache :: UnitIndexCache
+  , sessionLoadingOptions       :: SessionLoadingOptions
   }
 
 type SessionM = ReaderT SessionEnv IO
@@ -1160,7 +1163,8 @@ cradleToOptsAndLibDir recorder loadConfig cradle file old_fps = do
 emptyHscEnvM :: FilePath -> SessionM HscEnv
 emptyHscEnvM libDir = do
   nc <- asks sessionSharedNameCache
-  liftIO $ Ghc.emptyHscEnv nc libDir
+  uic <- asks sessionSharedUnitIndexCache
+  liftIO $ Ghc.emptyHscEnv nc uic libDir
 
 toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
 toFlagsMap TargetDetails{..} =
