@@ -86,6 +86,8 @@ codeActionTests = testGroup
       getActionByTitle "Add placeholders for '==' with signature(s)"
   , goldenWithClass "Only insert pragma once" "InsertPragmaOnce" "" $
       getActionByTitle "Add placeholders for 'pure','<*>' with signature(s)"
+  , goldenWithClass "Don't insert already implemented methods" "IncompleteInstance" "" $
+      getActionByTitle "Add placeholders for all missing methods"
   , expectCodeActionsAvailable "No code action available when minimal requirements meet" "MinimalDefinitionMeet" []
   , expectCodeActionsAvailable "Add placeholders for all missing methods is unavailable when all methods are required" "AllMethodsRequired"
       [ "Add placeholders for 'f','g'"

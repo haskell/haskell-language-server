@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments  #-}
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE LambdaCase      #-}
@@ -103,27 +104,30 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                 $ useE GetClassInstances docPath
             inst <- handleMaybe (PluginInvalidUserState "no instance at diagnostic range")
                 $ listToMaybe (RangeMap.filterByRange range instMap)
-            (tmrTypechecked -> gblEnv) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            tcModuleRes <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            let gblEnv = tmrTypechecked tcModuleRes
+                (hsGr, _, _, _, _) = tmrRenamed $ tcModuleRes
             (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
             logWith recorder Debug (LogImplementedMethods (hsc_dflags hsc) (instClass inst) classMinDef)
             pure
                 $ concatMap mkAction
-                $ nubOrdOn snd
-                $ filter ((/=) mempty . snd)
-                $ mkMethodGroups hsc gblEnv inst classMinDef
+                $ nubOrdOn methods_def
+                $ filter ((/=) mempty . methods_def)
+                $ mkMethodGroups hsc gblEnv inst classMinDef (getInstancedMethods hsGr caRange)
             where
                 range = diag ^. fdLspDiagnosticL . L.range
 
-                mkMethodGroups :: HscEnv -> TcGblEnv -> InstanceInfo -> ClassMinimalDef -> [MethodGroup]
-                mkMethodGroups hsc gblEnv inst classMinDef = minimalDef <> [allClassMethods]
+                mkMethodGroups :: HscEnv -> TcGblEnv -> InstanceInfo -> ClassMinimalDef -> [Name] -> [MethodGroup]
+                mkMethodGroups hsc gblEnv inst classMinDef alreadyThere = minimalDef <> [allClassMethods]
                     where
-                        methods    = instMethods inst
+                        methods    = let getName = fst
+                                     in filter (not . (`elem` alreadyThere) . getName) $ instMethods inst
                         minimalDef = minDefToMethodGroups hsc gblEnv methods classMinDef
                         allClassMethods =
-                            ("all missing methods", map (makeMethodDefinition hsc gblEnv) methods)
+                            MethodGroup "all missing methods" (map (makeMethodDefinition hsc gblEnv) methods)
 
                 mkAction :: MethodGroup -> [Command |? CodeAction]
-                mkAction (name, methods)
+                mkAction (MethodGroup name methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
                                 (Just $ mkCmdParams methods False)
@@ -135,9 +139,13 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                         title = "Add placeholders for " <> name
                         titleWithSig = title <> " with signature(s)"
 
-                mkCmdParams :: [(T.Text, T.Text)] -> Bool -> [Value]
+                mkCmdParams :: [MethodDefinition] -> Bool -> [Value]
                 mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams verTxtDocId range methodGroup withSig)]
+                    let toPair (MethodDefinition n s) = (n, s)
+                        -- TODO: if I want to avoid toPair, I have to move 'MethodGroup' and other 3 types
+                        -- to where 'AddMinimalMethodsParams' is defined. The twist is, I need to implement
+                        -- 'ToJSON' and 'FromJSON', but I can't bother now, will look into it later.
+                    in [toJSON (AddMinimalMethodsParams verTxtDocId range (map toPair methodGroup) withSig)]
 
                 mkCodeAction title cmd
                     = InR
@@ -151,6 +159,20 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                         (Just cmd)
                         Nothing
 
+getInstancedMethods :: HsGroup GhcRn -> Range -> [Name]
+getInstancedMethods declGroup range
+  -- Extract the one instance declaration that covers the given 'range',
+  | [inst] <- filter (or . (`spanContainsRange` range) . getLoc)
+                     (group_instds =<< hs_tyclds declGroup)
+  -- forget the location and match on the bindings,
+  , ClsInstD { cid_inst = ClsInstDecl { cid_binds } } <- unLoc inst
+  -- forget the location and match on function bindings, returning the name.
+  = do cid_bind <- fmap unLoc cid_binds
+       case cid_bind of
+         FunBind { fun_id = L _ name } -> [name]
+         _                             -> []
+getInstancedMethods _ _ = []
+
 isClassMethodWarning :: StructuredMessage -> Maybe ClassMinimalDef
 isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
     Nothing          -> Nothing
@@ -163,11 +185,13 @@ isUnsatisfiedMinimalDefWarning = stripTcRnMessageContext >>> \case
 
 type MethodSignature = T.Text
 type MethodName = T.Text
-type MethodDefinition = (MethodName, MethodSignature)
-type MethodGroup = (T.Text, [MethodDefinition])
+data MethodDefinition = MethodDefinition { method_name :: MethodName, method_sig :: MethodSignature }
+  deriving (Eq, Ord, Show)
+data MethodGroup = MethodGroup { group_name :: T.Text, methods_def :: [MethodDefinition] }
+  deriving Show
 
 makeMethodDefinition :: HscEnv -> TcGblEnv -> (Name, Type) -> MethodDefinition
-makeMethodDefinition hsc gblEnv (name, ty) = (nameTxt, signature)
+makeMethodDefinition hsc gblEnv (name, ty) = MethodDefinition nameTxt signature
     where
         -- nameTxt is bare (no parens); ExactPrint.makeMethodDecl applies
         -- toMethodName to wrap operators when emitting the placeholder.
@@ -178,8 +202,8 @@ minDefToMethodGroups :: HscEnv -> TcGblEnv -> [(Name, Type)] -> ClassMinimalDef 
 minDefToMethodGroups hsc gblEnv methods minDef = makeMethodGroup <$> go minDef
     where
         makeMethodGroup methodDefinitions =
-            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
-            in  (name, methodDefinitions)
+            let name = mconcat $ intersperse "," $ wrapIn "'" . method_name <$> methodDefinitions
+            in MethodGroup name methodDefinitions
 
         matchMethod n =
             map (makeMethodDefinition hsc gblEnv)
@@ -192,3 +216,5 @@ minDefToMethodGroups hsc gblEnv methods minDef = makeMethodGroup <$> go minDef
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)
+
+        wrapIn w x = w <> x <> w
