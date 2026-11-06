@@ -62,6 +62,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
+    deletePositionMapping,
     deleteValue,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
@@ -1534,6 +1535,10 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
         uri = toNormalizedUri _uri
         f = Just . updatePositionMappingHelper _version changes . fromMaybe mempty
 
+-- | Clients restart version numbers when they reopen a document.
+deletePositionMapping :: IdeState -> NormalizedUri -> STM ()
+deletePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} uri =
+    STM.delete uri positionMapping
 
 updatePositionMappingHelper ::
     Int32
