@@ -30,7 +30,7 @@ extra-deps:
   - lsp-test-0.18.0.0
   - lsp-types-2.4.0.0
   - table-layout-1.0.0.2
-  # to we have tasty's dependentTestGroup
+  # to have tasty's dependentTestGroup
   - tasty-1.5.4
   # stan dependencies not found in the stackage snapshot
   - stan-0.2.1.0
@@ -41,6 +41,7 @@ extra-deps:
   - trial-tomland-0.0.0.0
   - directory-ospath-streaming-0.2.2
   - cabal-add-0.2
+  - data-default-0.8.0.2
 configure-options:
   ghcide:
     - --disable-library-for-ghci

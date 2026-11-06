@@ -2043,6 +2043,7 @@ test-suite func-test
     haskell-language-server:haskell-language-server,
 
   build-depends:
+    , data-default ^>=0.8.0.2
     , aeson
     , bytestring
     , containers
@@ -2080,8 +2081,10 @@ test-suite func-test
 -- formatters
   if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
+    build-depends: haskell-language-server:hls-fourmolu-plugin
   if flag(ormolu)
     cpp-options: -Dhls_ormolu
+    build-depends: haskell-language-server:hls-ormolu-plugin
 
 test-suite wrapper-test
   import:             defaults
