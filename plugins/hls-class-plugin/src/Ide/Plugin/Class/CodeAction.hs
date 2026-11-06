@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments  #-}
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE LambdaCase      #-}
@@ -103,21 +104,24 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                 $ useE GetClassInstances docPath
             inst <- handleMaybe (PluginInvalidUserState "no instance at diagnostic range")
                 $ listToMaybe (RangeMap.filterByRange range instMap)
-            (tmrTypechecked -> gblEnv) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            tcModuleRes <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            let gblEnv = tmrTypechecked tcModuleRes
+                (hsGr, _, _, _, _) = tmrRenamed $ tcModuleRes
             (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
             logWith recorder Debug (LogImplementedMethods (hsc_dflags hsc) (instClass inst) classMinDef)
             pure
                 $ concatMap mkAction
                 $ nubOrdOn methods_def
                 $ filter ((/=) mempty . methods_def)
-                $ mkMethodGroups hsc gblEnv inst classMinDef
+                $ mkMethodGroups hsc gblEnv inst classMinDef (getInstancedMethods hsGr caRange)
             where
                 range = diag ^. fdLspDiagnosticL . L.range
 
-                mkMethodGroups :: HscEnv -> TcGblEnv -> InstanceInfo -> ClassMinimalDef -> [MethodGroup]
-                mkMethodGroups hsc gblEnv inst classMinDef = minimalDef <> [allClassMethods]
+                mkMethodGroups :: HscEnv -> TcGblEnv -> InstanceInfo -> ClassMinimalDef -> [Name] -> [MethodGroup]
+                mkMethodGroups hsc gblEnv inst classMinDef alreadyThere = minimalDef <> [allClassMethods]
                     where
-                        methods    = instMethods inst
+                        methods    = let getName = fst
+                                     in filter (not . (`elem` alreadyThere) . getName) $ instMethods inst
                         minimalDef = minDefToMethodGroups hsc gblEnv methods classMinDef
                         allClassMethods =
                             MethodGroup "all missing methods" (map (makeMethodDefinition hsc gblEnv) methods)
@@ -154,6 +158,20 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                         Nothing
                         (Just cmd)
                         Nothing
+
+getInstancedMethods :: HsGroup GhcRn -> Range -> [Name]
+getInstancedMethods declGroup range
+  -- Extract the one instance declaration that covers the given 'range',
+  | [inst] <- filter (or . (`spanContainsRange` range) . getLoc)
+                     (group_instds =<< hs_tyclds declGroup)
+  -- forget the location and match on the bindings,
+  , ClsInstD { cid_inst = ClsInstDecl { cid_binds } } <- unLoc inst
+  -- forget the location and match on function bindings, returning the name.
+  = do cid_bind <- fmap unLoc cid_binds
+       case cid_bind of
+         FunBind { fun_id = L _ name } -> [name]
+         _                             -> []
+getInstancedMethods _ _ = []
 
 isClassMethodWarning :: StructuredMessage -> Maybe ClassMinimalDef
 isClassMethodWarning message = case message ^? _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage of
