@@ -1,11 +1,9 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 module Format (tests) where
 
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
-import           Data.Default                (Default)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
 import           Ide.Types
@@ -55,17 +53,17 @@ providerTests =
           setIgnoringConfigurationRequests False
 
           setHlsConfig (formatLspConfig "ormolu")
-          formatDoc doc def
+          formatDoc doc defFmtOpts
           formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
           setHlsConfig (formatLspConfig "fourmolu")
-          formatDoc doc def { _tabSize = 4 }
+          formatDoc doc defFmtOpts { _tabSize = 4 }
           formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
           setHlsConfig (formatLspConfig "ormolu")
-          formatDoc doc def
+          formatDoc doc defFmtOpts
           formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
 #endif
@@ -82,10 +80,9 @@ instance Pretty TestLog where
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
 
--- TODO: this is actually orphan. I wonder if defining it in lsp-types would be reasonable
-instance Default FormattingOptions where
-  def = FormattingOptions { _tabSize = 2
-                          , _insertSpaces = True
-                          , _trimTrailingWhitespace = Nothing
-                          , _insertFinalNewline = Nothing
-                          , _trimFinalNewlines = Nothing }
+defFmtOpts :: FormattingOptions
+defFmtOpts = FormattingOptions { _tabSize = 2
+                               , _insertSpaces = True
+                               , _trimTrailingWhitespace = Nothing
+                               , _insertFinalNewline = Nothing
+                               , _trimFinalNewlines = Nothing }
