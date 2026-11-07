@@ -21,7 +21,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Data.Aeson                            (Value)
 import           Data.Maybe
-import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
@@ -124,10 +123,7 @@ data ServerLifecycleContext config = ServerLifecycleContext
     -- ^ Callback to log/confirm reactor shutdown with a reason
   , ctxForceShutdown :: IO ()
     -- ^ Action to forcefully exit the server when exception occurs
-  , ctxClearReqId :: SomeLspId -> IO ()
-    -- ^ Function to clear/cancel a request by its ID
-  , ctxWaitForCancel :: SomeLspId -> IO ()
-    -- ^ Function to wait for a request cancellation by its ID
+  , ctxPendingRequests :: PendingRequests
   , ctxClientMsgChan :: Chan ReactorMessage
     -- ^ Channel for communicating with the reactor message loop
   }
@@ -225,26 +221,9 @@ setupLSP recorder defaultRoot disableInitialCwdShift getHieDbLoc userHandlers ge
   -- Forcefully exit
   let exit = void $ tryPutMVar clientMsgVar ()
 
-  -- The set of requests ids that we have received but not finished processing
-  pendingRequests <- newTVarIO Set.empty
-  -- The set of requests that have been cancelled and are also in pendingRequests
-  cancelledRequests <- newTVarIO Set.empty
-
-  let cancelRequest reqId = atomically $ do
-          queued <- readTVar pendingRequests
-          -- We want to avoid that the list of cancelled requests
-          -- keeps growing if we receive cancellations for requests
-          -- that do not exist or have already been processed.
-          when (reqId `Set.member` queued) $
-              modifyTVar cancelledRequests (Set.insert reqId)
-  let clearReqId reqId = atomically $ do
-          modifyTVar pendingRequests (Set.delete reqId)
-          modifyTVar cancelledRequests (Set.delete reqId)
-      -- We implement request cancellation by racing waitForCancel against
-      -- the actual request handler.
-  let waitForCancel reqId = atomically $ do
-          cancelled <- readTVar cancelledRequests
-          unless (reqId `Set.member` cancelled) retry
+  -- The set of request ids that we haven't answered yet.
+  pendingRequests <- newPendingRequests
+  let cancelRequest = atomically . cancelPendingRequest pendingRequests
 
   let staticHandlers = mconcat
         [ userHandlers
@@ -263,18 +242,41 @@ setupLSP recorder defaultRoot disableInitialCwdShift getHieDbLoc userHandlers ge
         , ctxUntilReactorStopSignal = untilReactorStopSignal
         , ctxConfirmReactorShutdown = confirmReactorShutdown
         , ctxForceShutdown = exit
-        , ctxClearReqId = clearReqId
-        , ctxWaitForCancel = waitForCancel
+        , ctxPendingRequests = pendingRequests
         , ctxClientMsgChan = clientMsgChan
         }
 
   let doInitialize = handleInit lifecycleCtx
 
-  let interpretHandler (env,  st) = LSP.Iso (LSP.runLspT env . flip (runReaderT . unServerM) (clientMsgChan,st)) liftIO
+  let interpretHandler (env,  st) =
+        LSP.Iso
+          (LSP.runLspT env . flip (runReaderT . unServerM)
+          (ServerEnv clientMsgChan pendingRequests st))
+          liftIO
   let onExit = [void $ tryPutMVar reactorStopSignal ()]
 
   pure MkSetup {doInitialize, staticHandlers, interpretHandler, onExit}
 
+-- | Run a request handler and respond with an error if it is cancelled or throws.
+runRequest :: Recorder (WithPriority Log) -> PendingRequests -> LspId m -> IO a -> (TResponseError m -> IO a) -> IO a
+runRequest recorder pendingRequests reqId action respondError = do
+  let sid = SomeLspId reqId
+      onCancel = do
+        logWith recorder Debug $ LogCancelledRequest sid
+        respondError $ TResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
+      onError (e :: SomeException) = do
+        logWith recorder Error $ LogReactorMessageActionException e
+        respondError $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
+      isCancelled = isRequestCancelled pendingRequests sid
+      -- We implement request cancellation by racing waitForCancel against
+      -- the actual request handler.
+      waitForCancel = atomically $ isCancelled >>= flip unless retry
+      run = do
+        cancelled <- atomically isCancelled
+        if cancelled
+          then onCancel
+          else race waitForCancel action >>= either (const onCancel) pure
+  handle onError run `finally` atomically (removePendingRequest pendingRequests sid)
 
 handleInit
     :: ServerLifecycleContext config
@@ -313,26 +315,6 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
       exceptionInHandler e = do
         logWith recorder Error $ LogReactorMessageActionException e
 
-      checkCancelled :: forall m . LspId m -> IO () -> (TResponseError m -> IO ()) -> IO ()
-      checkCancelled _id act k =
-        let sid = SomeLspId _id
-         in flip finally (ctxClearReqId lifecycleCtx sid) $
-              catch
-                (do
-                  -- We could optimize this by first checking if the id
-                  -- is in the cancelled set. However, this is unlikely to be a
-                  -- bottleneck and the additional check might hide
-                  -- issues with async exceptions that need to be fixed.
-                  cancelOrRes <- race (ctxWaitForCancel lifecycleCtx sid) act
-                  case cancelOrRes of
-                    Left () -> do
-                      logWith recorder Debug $ LogCancelledRequest sid
-                      k $ TResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
-                    Right res -> pure res
-                )
-                $ \(e :: SomeException) -> do
-                    exceptionInHandler e
-                    k $ TResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally loggedTeardown $ do
       -- Need to be careful about when the shutdown occurs, it needs to be shut
       -- down after the session loader and restarting threads, and before the
@@ -349,7 +331,7 @@ handleInit lifecycleCtx env (TRequestMessage _ _ m params) = otTracedHandler "In
           -- This is to ensure that all file edits and config changes are applied before a request is handled
           case msg of
             ReactorNotification act  -> handle exceptionInHandler act
-            ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+            ReactorRequest _id act k -> void $ async $ runRequest recorder (ctxPendingRequests lifecycleCtx) _id act k
       logWith recorder Info LogReactorThreadStopped
 
     ide <- readMVar ideMVar
