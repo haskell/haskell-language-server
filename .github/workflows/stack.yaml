@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Setup GHC and Stack
-        uses: haskell-actions/setup@v2.11
+        uses: haskell-actions/setup@v2.12
         with:
           ghc-version: ${{ matrix.ghc }}
           enable-stack: true
