@@ -2,22 +2,26 @@
 
 module AsyncTests (tests) where
 
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Lens                    ((^.))
 import           Control.Monad
-import           Control.Monad.IO.Class        (liftIO)
-import           Data.Aeson                    (toJSON)
+import           Control.Monad.IO.Class          (liftIO)
+import           Data.Aeson                      (toJSON)
+import           Data.Bifunctor                  (first)
 import           Data.Proxy
-import qualified Data.Text                     as T
+import qualified Data.Text                       as T
+import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (..),
-                                                SemanticTokenRelative (..),
-                                                SemanticTokensEdit (..),
-                                                mkRange)
+import           Language.LSP.Protocol.Types     hiding
+                                                 (SemanticTokenAbsolute (..),
+                                                  SemanticTokenRelative (..),
+                                                  SemanticTokensEdit (..),
+                                                  mkRange)
 import           Language.LSP.Test
 -- import Test.QuickCheck.Instances ()
 import           Config
-import           Development.IDE.Plugin.Test   (TestRequest (BlockSeconds),
-                                                blockCommandId)
+import           Development.IDE.Plugin.Test     (TestRequest (BlockSeconds),
+                                                  blockCommandId)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -50,4 +54,11 @@ tests = testGroup "async"
             codeLenses <- getAndResolveCodeLenses doc
             liftIO $ [ _title | CodeLens{_command = Just Command{_title}} <- codeLenses] @=?
               [ "foo :: a -> a" ]
+    , testWithDummyPluginEmpty "cancel request" $ do
+            let method = SMethod_CustomMethod (Proxy @"test")
+            reqId@(IdInt i) <- sendRequest method $ toJSON $ BlockSeconds 10
+            void $ skipManyTill anyMessage $ customNotification (Proxy @"ghcide/blocking/request")
+            sendNotification SMethod_CancelRequest $ CancelParams $ InL i
+            resp <- skipManyTill anyMessage $ responseForId method reqId
+            liftIO $ first (^. L.code) (resp ^. L.result) @?= Left (InL LSPErrorCodes_RequestCancelled)
     ]
