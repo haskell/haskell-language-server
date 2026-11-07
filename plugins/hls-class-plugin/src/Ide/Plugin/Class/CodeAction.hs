@@ -107,7 +107,11 @@ codeAction recorder state plId (CodeActionParams _ _ docId caRange _) = do
                 $ listToMaybe (RangeMap.filterByRange range instMap)
             tcModuleRes <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
             let gblEnv = tmrTypechecked tcModuleRes
+#if MIN_VERSION_ghc(9,10,0)
                 (hsGr, _, _, _, _) = tmrRenamed $ tcModuleRes
+#else
+                (hsGr, _, _, _) = tmrRenamed $ tcModuleRes
+#endif
             (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
             logWith recorder Debug (LogImplementedMethods (hsc_dflags hsc) (instClass inst) classMinDef)
             pure
@@ -168,7 +172,11 @@ getInstancedMethods declGroup range
   -- match on the bindings,
   , L _ ClsInstD { cid_inst = ClsInstDecl { cid_binds } } <- inst
   -- match on function bindings, returning the name.
+#if MIN_VERSION_ghc(9,12,0)
   , let names = cid_binds >>= \case
+#else
+  , let names = bagToList cid_binds >>= \case
+#endif
                    L _ (FunBind { fun_id = L _ name }) -> [name]
                    _                             -> []
   = fromList names
