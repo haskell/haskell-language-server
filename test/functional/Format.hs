@@ -6,18 +6,16 @@ import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
+import           HlsPlugins                  (idePlugins)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
+import           System.FilePath.Posix       ((</>))
 import           Test.Hls
 import qualified Test.Hls.FileSystem         as FS
-#if defined(hls_ormolu) && defined(hls_fourmolu)
-import           Ide.Logger                  (Pretty (pretty), cmapWithPrio)
-import qualified Ide.Plugin.Fourmolu         as Fourmolu
-import qualified Ide.Plugin.Ormolu           as Ormolu
-import           System.FilePath.Posix       ((</>))
-#endif
+import           Test.Hls.Flags              (requiresFourmoluPlugin,
+                                              requiresOrmoluPlugin)
 
 tests :: TestTree
 tests = testGroup "format document"
@@ -31,8 +29,7 @@ providerTests =
            $ FS.simpleCabalProject' [FS.copy filePath]
   in testGroup "lsp formatting provider"
     [ testCase "respects none" $ do
-
-        runSessionWithServerInTmpDir def (mempty :: PluginTestDescriptor TestLog) tree $ do
+        runSessionWithServerInTmpDir def { formattingProvider = "none" } idePlugins tree $ do
           doc <- openDoc filePath LanguageKind_Haskell
           resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
           liftIO $ case resp ^. L.result of
@@ -42,12 +39,8 @@ providerTests =
               _ -> assertFailure $ "strange response from formatting provider:" ++ show result
             result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-#if defined(hls_ormolu) && defined(hls_fourmolu)
-    , testCase "can change on the fly" $ do
-        let orm'and'four'moluPlugins = mkPluginTestDescriptor (Ormolu.descriptor . cmapWithPrio OrmoluLog) "ormolu"
-                                    <> mkPluginTestDescriptor (Fourmolu.descriptor . cmapWithPrio FourmoluLog) "fourmolu"
-
-        runSessionWithServerInTmpDir def orm'and'four'moluPlugins tree $ do
+    , requiresOrmoluPlugin $ requiresFourmoluPlugin $ testCase "can change on the fly" $ do
+        runSessionWithServerInTmpDir def idePlugins tree $ do
           doc <- openDoc filePath LanguageKind_Haskell
 
           setIgnoringConfigurationRequests False
@@ -66,16 +59,7 @@ providerTests =
           formatDoc doc defFmtOpts
           formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
-#endif
     ]
-
-data TestLog = OrmoluLog Ormolu.LogEvent
-             | FourmoluLog Fourmolu.LogEvent
-             deriving (Show)
-
-instance Pretty TestLog where
-  pretty (OrmoluLog l)   = pretty l
-  pretty (FourmoluLog l) = pretty l
 
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
