@@ -2043,6 +2043,7 @@ test-suite func-test
     haskell-language-server:haskell-language-server,
 
   build-depends:
+    , haskell-language-server
     , aeson
     , bytestring
     , containers
