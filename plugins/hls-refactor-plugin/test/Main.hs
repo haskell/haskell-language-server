@@ -3160,6 +3160,14 @@ addFunctionConstraintTests = let
     , "foo = pure ()"
     ]
 
+  incompleteConstraintSourceCodeWithPreexisitingConstraintWithParents :: T.Text -> T.Text
+  incompleteConstraintSourceCodeWithPreexisitingConstraintWithParents constraint =
+    T.unlines
+    [ "module Testing where"
+    , "foo :: (Foldable (g k)" <> constraint <> ") => (a -> b) -> g k a -> g k b"
+    , "foo = fmap"
+    ]
+
   missingMonadConstraint constraint = T.unlines
     [ "module Testing where"
     , "f :: " <> constraint <> "m ()"
@@ -3218,6 +3226,11 @@ addFunctionConstraintTests = let
     "Add `Applicative m` to the context of the type signature for `foo`"
     (incompleteConstraintSourceCodeWithCommentInTypeSignature "")
     (incompleteConstraintSourceCodeWithCommentInTypeSignature " Applicative m")
+  , checkCodeAction
+    "preexisting constraint, with parenthesis"
+    "Add `Functor (g k2)` to the context of the type signature for `foo`"
+    (incompleteConstraintSourceCodeWithPreexisitingConstraintWithParents "")
+    (incompleteConstraintSourceCodeWithPreexisitingConstraintWithParents ", Functor (g k2)")
   , checkCodeAction
     "missing Monad constraint"
     "Add `Monad m` to the context of the type signature for `f`"
