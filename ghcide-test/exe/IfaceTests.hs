@@ -4,10 +4,6 @@ import           Config
 import           Control.Monad.IO.Class        (liftIO)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test          (configureCheckProject,
-                                                expectDiagnostics,
-                                                expectNoMoreDiagnostics,
-                                                getInterfaceFilesDir)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types   hiding
                                                (SemanticTokenAbsolute (..),
@@ -17,6 +13,10 @@ import           Language.LSP.Protocol.Types   hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
+import           Test.Hls                      (configureCheckProject,
+                                                expectDiagnostics,
+                                                expectNoMoreDiagnostics,
+                                                getInterfaceFilesDir)
 import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit

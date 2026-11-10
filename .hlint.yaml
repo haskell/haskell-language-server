@@ -211,7 +211,7 @@
     - Development.IDE.Core.Compile
     - Development.IDE.Core.Rules
     - Development.IDE.Core.Shake
-    - Development.IDE.Test
+    - Test.Hls
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
     - CodeLensTests #Previously part of GHCIDE Main tests

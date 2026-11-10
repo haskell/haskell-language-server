@@ -6,18 +6,17 @@ module Config (tests) where
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Hashable
-import qualified Data.HashMap.Strict  as HM
-import qualified Data.Map             as Map
-import           Development.IDE      (RuleResult, action, define,
-                                       getFilesOfInterestUntracked,
-                                       getPluginConfigAction, ideErrorText,
-                                       uses_)
-import           Development.IDE.Test (ExpectedDiagnostic, expectDiagnostics)
+import qualified Data.HashMap.Strict as HM
+import qualified Data.Map            as Map
+import           Development.IDE     (RuleResult, action, define,
+                                      getFilesOfInterestUntracked,
+                                      getPluginConfigAction, ideErrorText,
+                                      uses_)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
-import           Language.LSP.Test    as Test
-import           System.FilePath      ((</>))
+import           Language.LSP.Test   as Test
+import           System.FilePath     ((</>))
 import           Test.Hls
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
