@@ -120,8 +120,7 @@ import           Ide.Plugin.Retrie.Rules
 
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
-  { description     :: T.Text
-  , spec            :: RewriteSpec
+  { spec            :: RewriteSpec
   , originatingFile :: Uri
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
@@ -169,7 +168,7 @@ resolveRunRetrie
   -> RunRetrieParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
 resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  pluginWithIndefiniteProgress description Nothing Cancellable $ \ progress -> runExceptT $ do
+  pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
     rio <- lift askRunInIO
     nfp <- getNormalizedFilePathE uri
     (session, _) <-
