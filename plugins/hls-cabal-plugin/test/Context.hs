@@ -13,7 +13,7 @@ import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completions
 import           Ide.Plugin.Cabal.Completion.Types           (Context,
                                                               FieldContext (KeyWord, None),
-                                                              StanzaContext (Stanza, TopLevel))
+                                                              StanzaContext (FirstLine, Stanza, TopLevel))
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Test.Hls
 import           Utils                                       as T
@@ -65,7 +65,7 @@ getContextTests =
             -- for a completely empty file, the context needs to
             -- be top level without a specified keyword
             ctx <- callGetContext (Position 0 0) "" ""
-            ctx @?= (TopLevel, None)
+            ctx @?= (FirstLine, None)
         , testCase "Cabal version keyword - no value, no space after :" $ do
             -- on a file, where the keyword is already written
             -- the context should still be toplevel but the keyword should be recognized
@@ -76,7 +76,7 @@ getContextTests =
             -- but the cursor is in the middle of the keyword,
             -- we are not in a keyword context
             ctx <- callGetContext (Position 0 5) "cabal" "cabal-version:\n"
-            ctx @?= (TopLevel, None)
+            ctx @?= (FirstLine, None)
         , testCase "Cabal version keyword - no value, many spaces" $ do
             -- on a file, where the "cabal-version:" keyword is already written
             -- the context should still be top level but the keyword should be recognized
@@ -87,7 +87,7 @@ getContextTests =
             -- has not been written completely, the keyword context
             -- should still be None
             ctx <- callGetContext (Position 0 5) "cabal" "cabal"
-            ctx @?= (TopLevel, None)
+            ctx @?= (FirstLine, None)
         , testCase "Cabal version keyword - value partly written" $ do
             -- in the first line of the file, if the keyword
             -- has not been written completely, the keyword context
@@ -182,7 +182,7 @@ getContextTests =
             ctx <- callGetContext (Position 8 14) "" multiLineOptsData
             ctx @?= (Stanza "library" Nothing, KeyWord "build-depends:")
         , parameterisedCursorTest "Contexts in large testfile" multiPositionTestData
-            [ (TopLevel, None)
+            [ (FirstLine, None)
             , (TopLevel, KeyWord "cabal-version:")
             , (TopLevel, None)
             , (TopLevel, KeyWord "description:")
