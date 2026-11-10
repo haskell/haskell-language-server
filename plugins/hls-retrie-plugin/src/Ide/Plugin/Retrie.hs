@@ -85,7 +85,7 @@ import           System.FilePath                      (takeFileName)
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule, Options,
                                                        Options_ (..),
-                                                       Verbosity (Loud), apply,
+                                                       Verbosity (Loud),
                                                        applyWithUpdate,
                                                        applyWithUpdateAndStrategy,
                                                        topDown)
@@ -118,15 +118,24 @@ import           Ide.Plugin.Retrie.Log
 import           Ide.Plugin.Retrie.Rules
 
 
+-- | Optionally restrict rewrites to a single location (i.e. inline this use
+-- site only).
+data SiteRestriction
+  = Everywhere    -- ^ rewrite everywhere
+  | Site Location -- ^ rewrite only here
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
 -- | Parameters for the runRetrie rewrite.
 data RunRetrieParams = RunRetrieParams
   { spec            :: RewriteSpec
   , originatingFile :: Uri
+  , site            :: SiteRestriction
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 data RunRetrieInlineThisParams = RunRetrieInlineThisParams
-  { inlineIntoThisLocation :: !Location
+  { inlineIntoThisLocation :: SiteRestriction
+  , inlineTargetFile       :: Uri
   , inlineFromThisLocation :: !Location
   , inlineThisDefinition   :: !T.Text
   }
@@ -184,6 +193,7 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         spec
         nfp
         binds
+        site
     when ((not . null) errors) $
       lift $ pluginSendNotification SMethod_WindowShowMessage $
         ShowMessageParams MessageType_Warning $
@@ -198,9 +208,9 @@ resolveInlineThis
   -> CodeAction
   -> RunRetrieInlineThisParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
-resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
+resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile = uri, ..} = ExceptT $ do
   outcome <- runExceptT $ runExceptT $ do
-    nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
+    nfp <- getNormalizedFilePathE uri
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:
     --   Find the identifier in the given position
@@ -208,9 +218,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $ do
     --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
     let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
-        intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
-        -- on the binder itself, inline every use
-        site = if intoRange == fromRange then Nothing else Just intoRange
+        site = siteToSpan inlineIntoThisLocation
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
     sourceFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfpSource)
@@ -483,10 +491,12 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
         unfoldRewrite =
             let spec = Unfold (qualify ms_mod pprName)
                 description = "Unfold " <> pprNameText
+                site = Everywhere
             in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite =
           let spec = Fold (qualify ms_mod pprName)
               description = "Fold " <> pprNameText
+              site = Everywhere
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite, foldRewrite]
 suggestBindRewrites _ _ _ _ = []
@@ -499,14 +509,19 @@ suggestBindInlines
   -> WithHieDb
   -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
   -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
-suggestBindInlines _uri binds range hie lookupMod = do
+suggestBindInlines uri binds range hie lookupMod = do
     identifiers <- definedIdentifiers
     return $ map (\(name, siteLoc, srcLoc) ->
         let
             title = "Inline " <> printedName
             printedName = printOutputable name
-            params = RunRetrieInlineThisParams
-                { inlineIntoThisLocation = siteLoc
+            -- On a use-site only inline that specific use. On the binder
+            -- itself, inline every use.
+            site = if siteLoc == srcLoc then Everywhere else Site siteLoc
+            params =
+              RunRetrieInlineThisParams
+                { inlineIntoThisLocation = site
+                , inlineTargetFile = uri
                 , inlineFromThisLocation = srcLoc
                 , inlineThisDefinition= printedName
                 }
@@ -580,10 +595,12 @@ suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
         unfoldRewrite =
             let spec = TypeForward (qualify ms_mod pprName)
                 description = "Unfold " <> pprNameText
+                site = Everywhere
            in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite =
           let spec = TypeBackward (qualify ms_mod pprName)
               description = "Fold " <> pprNameText
+              site = Everywhere
            in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite, foldRewrite]
 suggestTypeRewrites _ _ _ = []
@@ -606,10 +623,12 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     forwardRewrite ruleName =
       let spec = RuleForward (qualify ms_mod ruleName)
           description = "Apply rule " <> T.pack ruleName <> " forward"
+          site = Everywhere
       in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
     backwardsRewrite ruleName =
       let spec = RuleBackward (qualify ms_mod ruleName)
           description = "Apply rule " <> T.pack ruleName <> " backwards"
+          site = Everywhere
         in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
 
 qualify :: Outputable mod => mod -> String -> String
@@ -653,6 +672,16 @@ getTargets retrie knownFiles =
             Set.toList knownFiles
         }
 
+getLocationSpan :: Location -> RealSrcSpan
+getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
+  where
+    nfp = fromUri $ toNormalizedUri $ getLocationUri loc
+
+siteToSpan :: SiteRestriction -> Maybe RealSrcSpan
+siteToSpan site = case site of
+  Everywhere -> Nothing
+  Site loc   -> Just $ getLocationSpan loc
+
 callRetrie
   :: Recorder (WithPriority Log)
   -> (T.Text -> IO ())
@@ -661,14 +690,16 @@ callRetrie
   -> RewriteSpec
   -> NormalizedFilePath
   -> [HsBindLR GhcRn GhcRn]
+  -> SiteRestriction
   -> IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder progress state session spec origin binds = do
+callRetrie recorder progress state session spec origin binds site = do
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
   originParsedModule <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
   -- TODO(simon): It would be better to compute imports per-clause.
   rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
-  let retrie = apply rewrites
+  -- restrict rewrites to a specific location
+  let retrie = applyAt (siteToSpan site) updateContext rewrites
 
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   targets <- getTargets retrie knownFiles
