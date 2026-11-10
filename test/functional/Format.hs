@@ -23,10 +23,7 @@ tests = testGroup "format document"
 
 providerTests :: TestTree
 providerTests =
-  let filePath = "Format.hs"
-      tree = FS.mkVirtualFileTree ("test" </> "testdata" </> "format")
-           $ FS.simpleCabalProject' [FS.copy filePath]
-  in testGroup "lsp formatting provider"
+  testGroup "lsp formatting provider"
     [ testCase "respects none" $ do
         runSessionWithServerInTmpDir def { formattingProvider = "none" } idePlugins tree $ do
           doc <- openDoc filePath LanguageKind_Haskell
@@ -59,6 +56,13 @@ providerTests =
           formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
     ]
+
+filePath :: FilePath
+filePath = "Format.hs"
+
+tree :: FS.VirtualFileTree
+tree = FS.mkVirtualFileTree ("test" </> "testdata" </> "format")
+     $ FS.simpleCabalProject' [FS.copy filePath]
 
 formatLspConfig :: T.Text -> Config
 formatLspConfig provider = def { formattingProvider = provider }
