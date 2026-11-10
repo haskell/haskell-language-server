@@ -17,6 +17,7 @@
   - Improved limited cross-module renaming
 - Improvements to `hls-refactor-plugin`
   - Code action to delete all unused bindings, including `let` bindings
+  - Code action to remove a redundant `qualified` from an import
 - Improvements to `hls-eval-plugin`
   - Capture `stdout` and `stderr` from evaluated expressions
 - Improvements to `hls-splice-plugin`
