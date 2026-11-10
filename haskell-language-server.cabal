@@ -2044,7 +2044,6 @@ test-suite func-test
 
   build-depends:
     , haskell-language-server
-    , data-default ^>=0.8.0.2
     , aeson
     , bytestring
     , containers
