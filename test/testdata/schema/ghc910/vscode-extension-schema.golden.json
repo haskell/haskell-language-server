@@ -273,6 +273,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.pragmas-hover.globalOn": {
+        "default": true,
+        "description": "Enables pragmas-hover plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.pragmas-suggest.globalOn": {
         "default": true,
         "description": "Enables pragmas-suggest plugin",
