@@ -2043,7 +2043,7 @@ test-suite func-test
     haskell-language-server:haskell-language-server,
 
   build-depends:
-    , haskell-language-server ^>=2.15.0.0
+    , haskell-language-server
     , data-default ^>=0.8.0.2
     , aeson
     , bytestring

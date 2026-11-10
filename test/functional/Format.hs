@@ -4,7 +4,7 @@ module Format (tests) where
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
 import qualified Data.Text                   as T
-import qualified Data.Text.IO                as T
+import           Development.IDE.GHC.Util    (readFileUtf8)
 import           HlsPlugins                  (idePlugins)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
@@ -27,7 +27,7 @@ providerTests =
     [ testCase "respects none" $ do
         runSessionWithServerInTmpDir def { formattingProvider = "none" } idePlugins tree $ do
           doc <- openDoc filePath LanguageKind_Haskell
-          resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
+          resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc defFmtOpts
           liftIO $ case resp ^. L.result of
             result@(Left (TResponseError reason message Nothing)) -> case reason of
               (InR ErrorCodes_MethodNotFound) -> pure () -- No formatter
@@ -43,17 +43,17 @@ providerTests =
 
           setHlsConfig (formatLspConfig "ormolu")
           formatDoc doc defFmtOpts
-          formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
+          formattedOrmolu <- liftIO $ readFileUtf8 "test/testdata/format/Format.ormolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
           setHlsConfig (formatLspConfig "fourmolu")
           formatDoc doc defFmtOpts { _tabSize = 4 }
-          formattedFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.fourmolu.formatted.hs"
+          formattedFourmolu <- liftIO $ readFileUtf8 "test/testdata/format/Format.fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedFourmolu)
 
           setHlsConfig (formatLspConfig "ormolu")
           formatDoc doc defFmtOpts
-          formattedOrmoluPostFourmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
+          formattedOrmoluPostFourmolu <- liftIO $ readFileUtf8 "test/testdata/format/Format.ormolu_post_fourmolu.formatted.hs"
           documentContents doc >>= liftIO . (@?= formattedOrmoluPostFourmolu)
     ]
 
