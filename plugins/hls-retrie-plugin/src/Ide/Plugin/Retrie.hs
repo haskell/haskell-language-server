@@ -658,8 +658,9 @@ fileNameFromNFP :: NormalizedFilePath -> String
 fileNameFromNFP = takeFileName . fromNormalizedFilePath
 
 -- | Lists all files affected by the rewrites.
-getTargets :: Retrie a -> Set.HashSet NormalizedFilePath -> IO [FilePath]
-getTargets retrie knownFiles =
+getTargets :: SiteRestriction -> Retrie a -> Set.HashSet NormalizedFilePath -> IO [FilePath]
+getTargets (Site loc) _ _ = pure [fromNormalizedFilePath $ getLocationNfp loc]
+getTargets _ retrie knownFiles =
   getTargetFiles retrieOptions (getGroundTerms retrie)
     where
       -- TODO cover all workspaceFolders
@@ -672,10 +673,13 @@ getTargets retrie knownFiles =
             Set.toList knownFiles
         }
 
+getLocationNfp :: Location -> NormalizedFilePath
+getLocationNfp loc = fromUri $ toNormalizedUri $ getLocationUri loc
+
 getLocationSpan :: Location -> RealSrcSpan
 getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
   where
-    nfp = fromUri $ toNormalizedUri $ getLocationUri loc
+    nfp = getLocationNfp loc
 
 siteToSpan :: SiteRestriction -> Maybe RealSrcSpan
 siteToSpan site = case site of
@@ -702,7 +706,7 @@ callRetrie recorder progress state session spec origin binds site = do
   let retrie = applyAt (siteToSpan site) updateContext rewrites
 
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
-  targets <- getTargets retrie knownFiles
+  targets <- getTargets site retrie knownFiles
 
   results <- forM targets $ \t -> runExceptT $ do
     let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
