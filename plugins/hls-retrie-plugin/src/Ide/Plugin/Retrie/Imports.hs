@@ -11,7 +11,6 @@ module Ide.Plugin.Retrie.Imports
   ) where
 
 
-import           Data.Foldable                             (find)
 import           Data.Generics                             (Data, everything,
                                                             extQ, mkQ)
 import           Development.IDE.GHC.Compat
@@ -20,7 +19,6 @@ import           Data.Generics                             (everythingBut)
 #endif
 import           Data.List.NonEmpty                        (NonEmpty ((:|)))
 import qualified Data.Map                                  as Map
-import qualified Data.Text                                 as T
 import           Development.IDE
 import           Development.IDE.GHC.ExactPrint.Annotation
 import           Development.IDE.GHC.ExactPrint.IE
@@ -50,6 +48,8 @@ import           Language.Haskell.GHC.ExactPrint           (d0, dn, setEntryDP)
 import           Retrie.ExactPrint                         (AnnotatedImports,
                                                             unsafeMkA)
 import           Retrie.Rewrites
+
+import           Ide.Plugin.Retrie.Utils
 
 
 -- | All of the 'Name's in this subtree along with their spellings, given
@@ -249,13 +249,10 @@ data ImportForm
 
 extractImports :: TcModuleResult -> TcModuleResult -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> Either String AnnotatedImports
 extractImports tmrDef tmrTarget topLevelBinds (Unfold thing)
-  | Just FunBind{fun_matches} <- find (\case FunBind{fun_id = L _ n} -> qualifiedName n == thing ; _ -> False) topLevelBinds
+  | Just (_, fun_matches) <- findBinder (definedAs thing) topLevelBinds
   = renderImports <$> extractInlineImports tmrDef tmrTarget fun_matches
 -- TODO handle imports for all rewrites
 extractImports _ _ _ _ = Right mempty
-
-qualifiedName :: Name -> String
-qualifiedName n = T.unpack $ maybe "" ((<> ".") . printOutputable) (nameModule_maybe n) <> printOutputable n
 
 --------------------------------------------------------------------------------
 -- Import rendering

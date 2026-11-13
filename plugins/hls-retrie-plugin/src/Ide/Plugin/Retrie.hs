@@ -37,7 +37,6 @@ import           Data.List.Extra                      (sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust,
                                                        isNothing)
-import           Data.Monoid                          (First (First), getFirst)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
@@ -82,6 +81,8 @@ import           Language.LSP.Protocol.Types          as LSP
 import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
 import           System.FilePath                      (takeFileName)
 
+import           Data.Generics                        (GenericQ, everything,
+                                                       extQ, listify, mkQ)
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule, Options,
                                                        Options_ (..),
@@ -107,15 +108,13 @@ import           Retrie.Rewrites
 import           Retrie.Rewrites.Function             (matchToRewrites)
 import           Retrie.Substitution                  (HoleVal (HoleExpr),
                                                        foldSubst)
-import           Retrie.SYB                           (GenericQ, everything,
-                                                       extQ, listify, mkQ)
 import           Retrie.Types
 import           Retrie.Universe                      (Universe)
-
 
 import           Ide.Plugin.Retrie.Imports
 import           Ide.Plugin.Retrie.Log
 import           Ide.Plugin.Retrie.Rules
+import           Ide.Plugin.Retrie.Utils
 
 
 -- | Optionally restrict rewrites to a single location (i.e. inline this use
@@ -225,7 +224,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
     targetFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfp)
     (fun_id, fun_matches) <-
       maybe (throwError PluginStaleResolve) pure $
-        findBinder fromRange (tmrRenamed check)
+        findBinder (definedAt fromRange) (tmrRenamed check)
     when (isNothing site && referencesName (unLoc fun_id) fun_matches) $
       refuse $ "Not inlined: " <> inlineThisDefinition <> " is recursive"
     -- TODO(simon): Generate a case dispatch if we can't statically determine
@@ -270,24 +269,6 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
   where
     refuse :: T.Text -> ExceptT PluginError (ExceptT T.Text (HandlerM Config)) a
     refuse = lift . throwError
-
-
--- | Finds the binder at the provided span.
-findBinder
-  :: RealSrcSpan
-  -> RenamedSource
-  -> Maybe ( LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn) )
-findBinder originSpan =
-    getFirst <$> everything (<>) (First Nothing `mkQ` matcher)
-  where
-    matcher
-      :: HsBindLR GhcRn GhcRn
-      -> First ( LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn) )
-    matcher FunBind{fun_id, fun_matches}
-      | RealSrcSpan sp _ <- getLocA fun_id
-      , sp == originSpan =
-        First $ Just (fun_id, fun_matches)
-    matcher _ = First Nothing
 
 -- | Whether a definition's body uses the name it defines.
 referencesName :: Name -> MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
@@ -631,9 +612,6 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           site = Everywhere
         in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
 
-qualify :: Outputable mod => mod -> String -> String
-qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
-
 -------------------------------------------------------------------------------
 -- Retrie driving code
 
@@ -781,24 +759,12 @@ constructInlineFromIdentifer
   -> Annotated (GenLocated l a)
   -> RealSrcSpan
   -> IO [Rewrite Universe]
-constructInlineFromIdentifer imports originParsedModule originSpan = do
-  fmap astA $ transformA originParsedModule $ \(L _ m) -> do
-    let
-      ast = everything (<>) (First Nothing `mkQ` matcher) m
-      matcher
-        :: HsBindLR GhcPs GhcPs
-        -> First ( LocatedN RdrName
-                  , MatchGroup GhcPs (LocatedA (HsExpr GhcPs))
-                  )
-      matcher FunBind{fun_id, fun_matches}
-        | RealSrcSpan sp _ <- getLocA fun_id
-        , sp == originSpan =
-          First $ Just (fun_id, fun_matches)
-      matcher _ = First Nothing
-    case ast of
-      First (Just (fun_id, fun_matches)) ->
+constructInlineFromIdentifer imports originParsedModule originSpan =
+  fmap astA $ transformA originParsedModule $ \(L _ m) ->
+    case findBinder (definedAt originSpan) m of
+      Just (fun_id, fun_matches) ->
         constructfromFunMatches imports fun_id fun_matches
-      _ -> return $ error "could not find source code to inline"
+      Nothing -> return $ error "could not find source code to inline"
 
 -- | Group 'TextEdit's by file.
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
