@@ -419,6 +419,7 @@ configP =
         )
     <*> optional (strOption (long "shake-profiling" <> metavar "PATH"))
     <*> optional (strOption (long "ot-profiling" <> metavar "DIR" <> help "Enable OpenTelemetry and write eventlog for each benchmark in DIR"))
+    <*> optional (strOption (long "rts-profiling" <> metavar "DIR" <> help "Enable RTS profiling and write stats for each benchmark in DIR"))
     <*> strOption (long "csv" <> metavar "PATH" <> value "results.csv" <> showDefault)
     <*> flag Cabal Stack (long "stack" <> help "Use stack (by default cabal is used)")
     <*> many (strOption (long "ghcide-options" <> help "additional options for ghcide"))
@@ -495,6 +496,8 @@ runBenchmarksFun dir allBenchmarks = do
 
   whenJust (otMemoryProfiling ?config) $ \eventlogDir ->
       createDirectoryIfMissing True eventlogDir
+  whenJust (rtsProfiling ?config) $ \rtsDir ->
+    createDirectoryIfMissing True rtsDir
 
   lspConfig <- if Experiments.Types.lspConfig ?config
     then either error id . eitherDecodeStrict' <$> BS.getContents
@@ -523,7 +526,7 @@ runBenchmarksFun dir allBenchmarks = do
 
   let headers = map fst summaryColumns
       summaryRow showTime b r = [ renderCell showTime (cell b r) | (_, cell) <- summaryColumns ]
-      csv = T.unlines $ map (T.intercalate ", ")
+      csv = T.unlines $ map (T.intercalate ",")
               (headers : [ summaryRow showMs b r | (b, r) <- results ])
   TIO.writeFile (outputCSV ?config) csv
 
@@ -546,6 +549,14 @@ runBenchmarksFun dir allBenchmarks = do
                , "-RTS"
                ]
              | Just dir <- [otMemoryProfiling ?config]
+             ]
+          ++ concat
+             [ [ "+RTS"
+               , "-t" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "rts")
+               , "--machine-readable"
+               , "-RTS"
+               ]
+             | Just dir <- [rtsProfiling ?config]
              ]
           ++ ghcideOptions ?config
           ++ concat
