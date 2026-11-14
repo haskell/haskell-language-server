@@ -189,6 +189,7 @@ import           OpenTelemetry.Eventlog                 hiding (addEvent)
 import qualified Prettyprinter                          as Pretty
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
+import           System.IO                              (hPutStrLn, stderr)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 import           UnliftIO                               (MonadUnliftIO (withRunInIO))
@@ -1317,6 +1318,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                 (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
+                        liftIO $ hPutStrLn stderr $ "DEBUG rule exception: " <> T.unpack (prettyRuleAbortedByException key file e)
                         pure (Nothing, ([ideErrorText file (prettyRuleAbortedByException key file e) | not $ isBadDependency e],Nothing))
 
                 ver <- estimateFileVersionUnsafely key mbRes file

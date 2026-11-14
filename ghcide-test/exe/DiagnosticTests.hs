@@ -260,7 +260,13 @@ tests = testGroup "diagnostics"
         ) $ \sessionDir -> do
       tdoc <- openDoc ("srcA" </> "T.hs") "haskell"
       WaitForIdeRuleResult{ideResultSuccess} <- waitForAction "TypeCheck" tdoc
-      liftIO $ assertBool "T should typecheck using srcA's C" ideResultSuccess
+      unless ideResultSuccess $ do
+        liftIO $ sleep 2
+        _ <- waitForAction "TypeCheck" tdoc
+        let doc rel = TextDocumentIdentifier $ filePathToUri $ sessionDir </> rel
+        diags <- forM ["srcA" </> "T.hs", "srcA" </> "C.hs", "srcB" </> "C.hs"] $ \rel ->
+          (rel,) <$> getCurrentDiagnostics (doc rel)
+        liftIO $ assertFailure $ "T should typecheck using srcA's C. Diagnostics: " <> show diags
       expectCurrentDiagnostics tdoc []
       locs <- getDefinitions tdoc (Position 1 7)
       assertDefsFile (sessionDir </> "srcA" </> "C.hs") locs
