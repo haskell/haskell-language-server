@@ -3,6 +3,7 @@ module UnitTests (tests) where
 
 import           Config                                       (mkIdeTestFs)
 import           Control.Concurrent
+import           Control.Lens                                 ((^.))
 import           Control.Monad.IO.Class                       (liftIO)
 import qualified Data.HashMap.Strict                          as HMS
 import qualified Data.IntMap.Strict                           as IntMap
@@ -12,6 +13,7 @@ import           Data.IORef.Extra                             (atomicModifyIORef
 import           Data.List.Extra
 import           Data.String                                  (IsString (fromString))
 import qualified Data.Text                                    as T
+import           Development.IDE.Core.Compile                 (handleGenerationErrors)
 import           Development.IDE.Core.FileStore               (getModTime)
 import           Development.IDE.Import.DependencyInformation (DependencyInformation (..),
                                                                FilePathId (..),
@@ -29,6 +31,7 @@ import           Ide.Logger                                   (Recorder,
                                                                WithPriority)
 import           Ide.PluginUtils                              (pluginDescToIdePlugins)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                  hiding
                                                               (SemanticTokenAbsolute (..),
@@ -110,6 +113,11 @@ tests = do
            resolution_us <- findResolution_us 1
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
+     , testCase "handleGenerationErrors turns a failing action into a diagnostic" $ do
+         -- Only the GhcException handler reads the DynFlags.
+         diags <- handleGenerationErrors (error "DynFlags unused") "test" $
+           ioError (userError "boom")
+         map (\d -> T.isInfixOf "boom" (Diagnostics.fdLspDiagnostic d ^. L.message)) diags @?= [True]
      , testCase "transitiveReverseDependencies follows the chain" $ do
          -- Chain: 0 imported by 1, 1 imported by 2, 2 imported by 3.
          -- transitiveReverseDependencies of node 0 must contain {1, 2, 3},

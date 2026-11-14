@@ -24,6 +24,7 @@ module Development.IDE.Core.Compile
   , writeAndIndexHieFile
   , indexHieFile
   , writeHiFile
+  , handleGenerationErrors
   , getModSummaryFromImports
   , loadHieFile
   , loadInterface
@@ -1037,7 +1038,7 @@ writeHiFile se hscEnv tc =
 
 handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
 handleGenerationErrors dflags source action =
-  action >> pure [] `catches`
+  (action >> pure []) `catches`
     [ Handler $ pure . diagFromGhcException source dflags
     , Handler $ \(exception :: SomeException) -> pure $
         diagFromString
