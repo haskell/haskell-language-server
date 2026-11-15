@@ -216,7 +216,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
     --   Construct an inline rewrite for it
     --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
-    let fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
+    let fromRange = rangeToRealSrcSpan nfpSource $ inlineFromThisLocation ^. L.range
         site = siteToSpan inlineIntoThisLocation
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
@@ -521,7 +521,7 @@ suggestBindInlines uri binds range hie lookupMod = do
       getLocalBinderDetails :: HsBindLR GhcRn GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
       getLocalBinderDetails FunBind{fun_id}
         | Just defLoc <- srcSpanToLocation (getLocA fun_id)
-        , range `isSubrangeOf` getLocationRange defLoc =
+        , range `isSubrangeOf` (defLoc ^. L.range) =
             pure $ Set.singleton (nameOccName (unLoc fun_id), defLoc, defLoc)
       getLocalBinderDetails _ = pure mempty
 
@@ -534,7 +534,7 @@ suggestBindInlines uri binds range hie lookupMod = do
         | name <- getName (unLoc lname) =
         case srcSpanToLocation (getLocA lname) of
             Just siteLoc
-              | siteRange <- getLocationRange siteLoc
+              | siteRange <- siteLoc ^. L.range
               , range `isSubrangeOf` siteRange -> do
                     srcLocations <- nameToLocation withHieDb lookupModule name
                     equations <- filterM (equationBound name) (fromMaybe [] srcLocations)
