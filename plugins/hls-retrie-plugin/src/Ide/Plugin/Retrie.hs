@@ -418,12 +418,6 @@ mkCodeAction title kind resolveData =
     , _data_       = Just (toJSON resolveData)
     }
 
-getLocationUri :: Location -> Uri
-getLocationUri Location{_uri} = _uri
-
-getLocationRange :: Location -> Range
-getLocationRange Location{_range} = _range
-
 getBinds :: NormalizedFilePath -> ExceptT PluginError Action
   ( ModSummary
   , [HsBindLR GhcRn GhcRn]
@@ -650,14 +644,6 @@ getTargets _ retrie knownFiles =
         , Retrie.targetFiles = map fromNormalizedFilePath $
             Set.toList knownFiles
         }
-
-getLocationNfp :: Location -> NormalizedFilePath
-getLocationNfp loc = fromUri $ toNormalizedUri $ getLocationUri loc
-
-getLocationSpan :: Location -> RealSrcSpan
-getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
-  where
-    nfp = getLocationNfp loc
 
 siteToSpan :: SiteRestriction -> Maybe RealSrcSpan
 siteToSpan site = case site of
