@@ -207,10 +207,11 @@ resolveInlineThis
   -> CodeAction
   -> RunRetrieInlineThisParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
-resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile = uri, ..} = ExceptT $ do
-  outcome <- runExceptT $ runExceptT $ do
+resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile = uri, ..} = ExceptT $
+  pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
     nfp <- getNormalizedFilePathE uri
     nfpSource <- getNormalizedFilePathE $ inlineFromThisLocation ^. L.uri
+    lift $ progress $ T.pack $ fileNameFromNFP nfp
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
@@ -226,12 +227,12 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
       maybe (throwError PluginStaleResolve) pure $
         findBinder (definedAt fromRange) (tmrRenamed check)
     when (isNothing site && referencesName (unLoc fun_id) fun_matches) $
-      refuse $ "Not inlined: " <> inlineThisDefinition <> " is recursive"
+      throwError $ PluginInternalError $ "definition is recursive"
     -- TODO(simon): Generate a case dispatch if we can't statically determine
     -- the clause.
     when (not $ triviallySelectable fun_matches) $
-      refuse $ "Not inlined: " <> inlineThisDefinition <> " has several clauses, guards or a record wildcard"
-    imports <- either (refuse . T.pack) pure $
+      throwError $ PluginInternalError $ "definition has several clauses, guards or a record wildcard"
+    imports <- either (throwError . PluginInternalError . T.pack) pure $
       extractInlineImports check checktgt fun_matches
     let
         annotatedImports = renderImports imports
@@ -239,7 +240,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
     fixedSrc <- runActionE "retrie" state $ useE GetFixedParsedModule nfpSource
     inlineRewrite <- liftIO $
       constructInlineFromIdentifer annotatedImports fixedSrc fromRange
-    when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
+    when (null inlineRewrite) $ throwError $ PluginInternalError "empty rewrite"
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
     cpp <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
@@ -248,27 +249,16 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
           | isExternalName (unLoc fun_id) =
               applyAt site updateContext rewrites
           | otherwise = applyLocal site fromRange rewrites
-    result <- liftIO $ try @_ @SomeException $
+    result <- liftIO $
         runRetrie (sourceFixities <> targetFixities) inline cpp
     case result of
-        Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
-        -- a refused site is not an error: leave the action without an edit
-        Right (_,_,NoChange) ->
-            refuse "Not inlined: the call site did not match the definition, or a binding there would capture one of its variables"
-        Right (_,cpp',change) -> do
-            let edits = asEditMap $ asTextEdits uri cpp cpp' change
-                wedit = WorkspaceEdit (Just edits) Nothing Nothing
-            return $ ca & L.edit ?~ wedit
-  case outcome of
-    Left msg -> do
-      -- warn and don't make any edits
-      pluginSendNotification SMethod_WindowShowMessage $
-        ShowMessageParams MessageType_Warning msg
-      return (Right ca)
-    Right resolved -> return resolved
-  where
-    refuse :: T.Text -> ExceptT PluginError (ExceptT T.Text (HandlerM Config)) a
-    refuse = lift . throwError
+      -- a refused site is not an error: leave the action without an edit
+      (_,_,NoChange) ->
+          throwError $ PluginInternalError "the call site did not match the definition, or a binding there would capture one of its variables"
+      (_,cpp',change) -> do
+          let edits = asEditMap $ asTextEdits uri cpp cpp' change
+              wedit = WorkspaceEdit (Just edits) Nothing Nothing
+          return $ ca & L.edit ?~ wedit
 
 -- | Whether a definition's body uses the name it defines.
 referencesName :: Name -> MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
