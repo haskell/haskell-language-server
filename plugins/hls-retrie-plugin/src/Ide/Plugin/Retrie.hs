@@ -210,7 +210,7 @@ resolveInlineThis
 resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile = uri, ..} = ExceptT $ do
   outcome <- runExceptT $ runExceptT $ do
     nfp <- getNormalizedFilePathE uri
-    nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
+    nfpSource <- getNormalizedFilePathE $ inlineFromThisLocation ^. L.uri
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
@@ -546,7 +546,7 @@ suggestBindInlines uri binds range hie lookupMod = do
 equationBound :: Name -> Location -> IdeAction Bool
 equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
     defFile <- hoistMaybe $
-      uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri loc
+      uriToNormalizedFilePath $ toNormalizedUri $ loc ^. L.uri
     (HAR{refMap}, _) <- useWithStaleFastMT GetHieAst defFile
     -- occurrences of the name in the defining module
     let occs = Map.findWithDefault [] (Right name) refMap

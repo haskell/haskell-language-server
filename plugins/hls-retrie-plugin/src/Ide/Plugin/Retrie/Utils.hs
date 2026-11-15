@@ -8,10 +8,10 @@ module Ide.Plugin.Retrie.Utils
   , qualify
   , getLocationNfp
   , getLocationSpan
-  , getLocationUri
   , getLocationRange
   ) where
 
+import           Control.Lens               ((^.))
 import           Data.Data                  (Data, Typeable)
 import           Data.Generics              (everything, mkQ)
 import           Data.Monoid                (First (First), getFirst)
@@ -19,6 +19,7 @@ import qualified Data.Text                  as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           GHC.Parser.Annotation      (LocatedN)
+import qualified Language.LSP.Protocol.Lens as L
 
 
 -- | Find a matching binder anywhere in a parsed or renamed AST.
@@ -53,14 +54,11 @@ definedAs qualified (L _ name) = case nameModule_maybe name of
 qualify :: Outputable mod => mod -> String -> String
 qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
 
-getLocationUri :: Location -> Uri
-getLocationUri Location{_uri} = _uri
-
 getLocationRange :: Location -> Range
-getLocationRange Location{_range} = _range
+getLocationRange location = location ^. L.range
 
 getLocationNfp :: Location -> NormalizedFilePath
-getLocationNfp loc = fromUri $ toNormalizedUri $ getLocationUri loc
+getLocationNfp loc = fromUri $ toNormalizedUri $ loc ^. L.uri
 
 getLocationSpan :: Location -> RealSrcSpan
 getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
