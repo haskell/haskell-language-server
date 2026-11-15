@@ -76,7 +76,6 @@ inlineThisTests =
       , testInline "outer of two nested uses" "NestedUseOuter" 3 6
       , testInline "where binder, every use" "WhereBinder" 5 4
       , testInline "where binder, nested use" "WhereBinderNested" 5 4
-      , testInline "recursive where binder is refused" "WhereBinderRec" 5 4
       , testInline "let binder" "NestedLet" 4 6
       , testInline "nested let function" "NestedLet" 5 5
       , testInline "nested function shadowing a top-level one" "ShadowLocal" 6 26
@@ -98,11 +97,12 @@ inlineThisTests =
       , testInline "comment in an argument, CPP module" "CommentArgCpp" 9 6
       ]
     , testGroup "refused"
-      [ testRefused "multi clause" "MultiClause" 7 4
-      , testRefused "guards" "Guards" 9 4
-      , testRefused "multi parameter" "MultiClauseTuple" 7 6
-      , testRefused "multi clause partial" "MultiClausePartial" 8 8
-      , testRefused "record wildcard construction" "WildcardCon" 10 4
+      [ testRefused "multi clause" "MultiClause" 7 4 notSelectable
+      , testRefused "guards" "Guards" 9 4 notSelectable
+      , testRefused "multi parameter" "MultiClauseTuple" 7 6 notSelectable
+      , testRefused "multi clause partial" "MultiClausePartial" 8 8 notSelectable
+      , testRefused "record wildcard construction" "WildcardCon" 10 4 notSelectable
+      , testRefused "recursive where binder" "WhereBinderRec" 5 4 "definition is recursive"
       ]
     , expectFail $ testGroup "dispatch"
       [ testInline "dispatch multi clause" "MultiClause" 7 4
@@ -115,11 +115,12 @@ inlineThisTests =
       , testInline "appends an import once when other uses remain" "CrossFileUses" 6 4
       , testInline "import unqualified to match template" "QualifiedScopeUse" 6 4
       , testInline "import qualified" "QualifiedBodyUse" 5 4
-      , testRefused "different field selector" "FieldClash" 9 4
-      , testRefused "local variable clashes with field selector" "VarClash" 10 4
-      , testRefused "clashing field selectors" "FieldFieldClash" 9 4
-      , testRefused "clashing record label" "ConPatNoDisamb" 9 4
-      , testInline "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
+      , testRefused "different field selector" "FieldClash" 9 4 $ clash "name"
+      , testRefused "local variable clashes with field selector" "VarClash" 10 4 $ clash "name"
+      , testRefused "clashing field selectors" "FieldFieldClash" 9 4 $ clash "name"
+      , testRefused "clashing record label" "ConPatNoDisamb" 9 4 $ clash "name"
+      , testRefused "reject if required import isn't exported" "CrossModuleNotExportedUse" 4 4
+          "k is not exported from CrossModuleNotExported"
       , testInline "import a method exported without its class" "ChildExportUse" 5 4
       , testInline "import a method imported without its class" "LoneMethodUse" 5 4
       , testInline "import a constructor via its type" "ConstructorUse" 5 4
@@ -180,29 +181,39 @@ testUnfold = testResolve $ titleStartsWith "Unfold"
 testInline :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testInline = testResolve $ titleStartsWith "Inline"
 
--- | The Inline action at the position resolves to a refusal: the document
--- is left as it was.
-testRefused :: TestName -> FilePath -> UInt -> UInt -> TestTree
-testRefused title file row col = testCase title $ runWithRetrie $ do
+-- | The Inline action at the position resolves to an error carrying the
+-- refusal message.
+testRefused :: TestName -> FilePath -> UInt -> UInt -> Text -> TestTree
+testRefused title file row col message = testCase title $ runWithRetrie $ do
     adoc <- openDoc (file <.> "hs") "haskell"
     _ <- waitForTypecheck adoc
-    before <- documentContents adoc
-    let p = Position row col
-    codeActions <- getCodeActions adoc $ Range p p
-    case filter (titleStartsWith "Inline") codeActions of
-        [InR ca] -> resolveAndExecuteCodeAction ca
-        cas -> liftIO . assertFailure $
-          "One code action expected, got " <> show (map codeActionTitle cas)
-    after <- documentContents adoc
-    liftIO $ after @?= before
+    ca <- codeActionAt (titleStartsWith "Inline") adoc (Position row col)
+    TResponseMessage{_result} <- request SMethod_CodeActionResolve ca
+    liftIO $ case _result of
+        Left TResponseError{_message} ->
+            assertBool ("Unexpected refusal: " <> T.unpack _message) $
+              message `T.isInfixOf` _message
+        Right _ -> assertFailure "Expected the inline to be refused"
+
+-- | The refusal for a definition whose clause cannot be chosen statically.
+notSelectable :: Text
+notSelectable = "definition has several clauses, guards or a record wildcard"
+
+-- | The refusal for an import whose spelling is taken in the target.
+clash :: Text -> Text
+clash rdr = "spelling " <> rdr <> " is already bound to a different name in the target"
 
 testResolve :: (Command |? CodeAction -> Bool) -> TestName -> FilePath -> UInt -> UInt -> TestTree
 testResolve keep title file row col = goldenWithRetrie title file $ \adoc -> do
     _ <- waitForTypecheck adoc
-    let p = Position row col
+    resolveAndExecuteCodeAction =<< codeActionAt keep adoc (Position row col)
+
+-- | The one code action at the position that @keep@ accepts.
+codeActionAt :: (Command |? CodeAction -> Bool) -> TextDocumentIdentifier -> Position -> Session CodeAction
+codeActionAt keep adoc p = do
     codeActions <- getCodeActions adoc $ Range p p
     case filter keep codeActions of
-        [InR ca] -> resolveAndExecuteCodeAction ca
+        [InR ca] -> pure ca
         cas -> liftIO . assertFailure $
           "One code action expected, got " <> show (map codeActionTitle cas)
 
