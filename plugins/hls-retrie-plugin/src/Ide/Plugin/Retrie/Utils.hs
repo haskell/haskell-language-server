@@ -8,7 +8,6 @@ module Ide.Plugin.Retrie.Utils
   , qualify
   , getLocationNfp
   , getLocationSpan
-  , getLocationRange
   ) where
 
 import           Control.Lens               ((^.))
@@ -54,13 +53,10 @@ definedAs qualified (L _ name) = case nameModule_maybe name of
 qualify :: Outputable mod => mod -> String -> String
 qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
 
-getLocationRange :: Location -> Range
-getLocationRange location = location ^. L.range
-
 getLocationNfp :: Location -> NormalizedFilePath
 getLocationNfp loc = fromUri $ toNormalizedUri $ loc ^. L.uri
 
 getLocationSpan :: Location -> RealSrcSpan
-getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
+getLocationSpan loc = rangeToRealSrcSpan nfp $ loc ^. L.range
   where
     nfp = getLocationNfp loc
