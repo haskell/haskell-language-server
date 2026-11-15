@@ -1,10 +1,15 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Ide.Plugin.Retrie.Utils
   ( findBinder
   , definedAt
   , definedAs
   , qualify
+  , getLocationNfp
+  , getLocationSpan
+  , getLocationUri
+  , getLocationRange
   ) where
 
 import           Data.Data                  (Data, Typeable)
@@ -47,3 +52,17 @@ definedAs qualified (L _ name) = case nameModule_maybe name of
 -- | Print the name qualified.
 qualify :: Outputable mod => mod -> String -> String
 qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
+
+getLocationUri :: Location -> Uri
+getLocationUri Location{_uri} = _uri
+
+getLocationRange :: Location -> Range
+getLocationRange Location{_range} = _range
+
+getLocationNfp :: Location -> NormalizedFilePath
+getLocationNfp loc = fromUri $ toNormalizedUri $ getLocationUri loc
+
+getLocationSpan :: Location -> RealSrcSpan
+getLocationSpan loc = rangeToRealSrcSpan nfp $ getLocationRange loc
+  where
+    nfp = getLocationNfp loc
