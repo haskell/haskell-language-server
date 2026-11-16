@@ -271,11 +271,7 @@ runRequest recorder pendingRequests reqId action respondError = do
       -- We implement request cancellation by racing waitForCancel against
       -- the actual request handler.
       waitForCancel = atomically $ isCancelled >>= flip unless retry
-      run = do
-        cancelled <- atomically isCancelled
-        if cancelled
-          then onCancel
-          else race waitForCancel action >>= either (const onCancel) pure
+      run = race waitForCancel action >>= either (const onCancel) pure
   handle onError run `finally` atomically (removePendingRequest pendingRequests sid)
 
 handleInit

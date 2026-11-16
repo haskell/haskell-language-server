@@ -75,9 +75,11 @@ requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params
   let sid = SomeLspId _id
       resp' :: Either (TResponseError m) (MessageResult m) -> LspM c ()
       resp' r =
-        -- This has to be masked, otherwise the handler might get cancelled after
-        -- the request was deleted from the pending set, causing us to forget to
-        -- send a response.
+        -- This has to be masked, otherwise waitForCancel might cancel the
+        -- handler after the request was deleted from the pending set.
+        --
+        -- The pending set is used as a signal to send a response, so we'd
+        -- forget to send if this is allowed to be interrupted.
         mask_ $ do
           wasPending <- liftIO $ atomically $ removePendingRequest pending sid
           when wasPending $ (runReaderT . unServerM) (resp r) st
