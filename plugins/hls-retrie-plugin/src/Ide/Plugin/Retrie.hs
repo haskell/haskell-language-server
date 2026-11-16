@@ -616,9 +616,9 @@ fileNameFromNFP :: NormalizedFilePath -> String
 fileNameFromNFP = takeFileName . fromNormalizedFilePath
 
 -- | Lists all files affected by the rewrites.
-getTargets :: SiteRestriction -> Retrie a -> Set.HashSet NormalizedFilePath -> IO [FilePath]
-getTargets (Site loc) _ _ = pure [fromNormalizedFilePath $ getLocationNfp loc]
-getTargets _ retrie knownFiles =
+getTargets :: SiteRestriction -> Retrie a -> Set.HashSet NormalizedFilePath -> IO [NormalizedFilePath]
+getTargets (Site loc) _ _ = pure [getLocationNfp loc]
+getTargets _ retrie knownFiles = map toNormalizedFilePath' <$>
   getTargetFiles retrieOptions (getGroundTerms retrie)
     where
       -- TODO cover all workspaceFolders
@@ -657,14 +657,13 @@ callRetrie recorder progress state spec origin binds site = do
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   targets <- getTargets site retrie knownFiles
 
-  results <- forM targets $ \t -> runExceptT $ do
-    let nt = toNormalizedFilePath' (toAbsolute (rootDir state) t)
-        uri = filePathToUri $ fromNormalizedFilePath nt
+  results <- forM targets $ \ nt -> runExceptT $ do
+    let uri = filePathToUri $ fromNormalizedFilePath nt
     lift $ progress $ T.pack $ fileNameFromNFP nt
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     cpp <- ExceptT $ try $
-      getCPPmodule recorder state targetFixities t
+      getCPPmodule recorder state targetFixities nt
     imps <- either (throwError . CannotImport nt) pure $
       extractImports tcd tct binds spec
     (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
@@ -795,11 +794,9 @@ getCPPmodule
   :: Recorder (WithPriority Log)
   -> IdeState
   -> FixityEnv
-  -> FilePath
+  -> NormalizedFilePath
   -> IO (CPP AnnotatedModule)
-getCPPmodule recorder state fixities t = do
-  -- TODO: is it safe to drop this makeAbsolute?
-  let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
+getCPPmodule recorder state fixities nt = do
   let parseWith contents = do
         session <- hscEnv <$>
           useOrFail state "Retrie.GhcSessionDeps" (CallRetrieInternalError "no session") GhcSessionDeps nt
@@ -815,7 +812,7 @@ getCPPmodule recorder state fixities t = do
                       `gopt_set` Opt_KeepRawTokenStream
                       `gopt_unset` Opt_Haddock
                 }
-        logWith recorder Info $ LogParsingModule t
+        logWith recorder Info $ LogParsingModule $ fromNormalizedFilePath nt
         parsed <- evalGhcEnv session (parseModule ms')
             `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
         transformA (fixAnns parsed) (fix fixities)
