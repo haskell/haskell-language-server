@@ -1,0 +1,29 @@
+name: "Cabal audit"
+
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  cabal-audit:
+    name: "Scan dependencies for vulnerabilities"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # cabal-audit computes the build plan, so GHC and cabal must be on $PATH
+      - uses: haskell-actions/setup@v2.11
+        with:
+          ghc-version: '9.12'
+          cabal-version: '3.16.1.0'
+          enable-stack: false
+
+      # Runs cabal-audit and uploads the SARIF report to GitHub code scanning
+      - uses: blackheaven/haskell-security-action@df18e40481ae37a2a023308720b701063a98157b # v1.1.0
