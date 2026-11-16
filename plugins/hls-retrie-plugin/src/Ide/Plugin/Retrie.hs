@@ -217,7 +217,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile =
     --   Construct an inline rewrite for it
     --   Run retrie on the identifier in the given position only
     --   Attach the edit to the code action
-    let fromRange = rangeToRealSrcSpan nfpSource $ inlineFromThisLocation ^. L.range
+    let fromRange = getLocationSpan inlineFromThisLocation
         site = siteToSpan inlineIntoThisLocation
     check <- runActionE "retrie" state $ useE TypeCheck nfpSource
     checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
