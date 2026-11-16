@@ -179,16 +179,12 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
   pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
     rio <- lift askRunInIO
     nfp <- getNormalizedFilePathE uri
-    (session, _) <-
-      runActionE "Retrie.GhcSessionDeps" state $
-        useWithStaleE GhcSessionDeps nfp
     (_, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
     (errors, edits) <- liftIO $
       callRetrie
         recorder
         (rio . progress)
         state
-        (hscEnv session)
         spec
         nfp
         binds
@@ -644,13 +640,12 @@ callRetrie
   :: Recorder (WithPriority Log)
   -> (T.Text -> IO ())
   -> IdeState
-  -> HscEnv
   -> RewriteSpec
   -> NormalizedFilePath
   -> [HsBindLR GhcRn GhcRn]
   -> SiteRestriction
   -> IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder progress state session spec origin binds site = do
+callRetrie recorder progress state spec origin binds site = do
   tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   originFixities <- fixityEnvForFile state origin
   originParsedModule <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
@@ -669,7 +664,7 @@ callRetrie recorder progress state session spec origin binds site = do
     tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
     targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
     cpp <- ExceptT $ try $
-      getCPPmodule recorder state session targetFixities t
+      getCPPmodule recorder state targetFixities t
     imps <- either (throwError . CannotImport nt) pure $
       extractImports tcd tct binds spec
     (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
@@ -799,14 +794,15 @@ deriving instance ToJSON RewriteSpec
 getCPPmodule
   :: Recorder (WithPriority Log)
   -> IdeState
-  -> HscEnv
   -> FixityEnv
   -> FilePath
   -> IO (CPP AnnotatedModule)
-getCPPmodule recorder state session fixities t = do
+getCPPmodule recorder state fixities t = do
   -- TODO: is it safe to drop this makeAbsolute?
   let nt = toNormalizedFilePath' $ (toAbsolute $ rootDir state) t
   let parseWith contents = do
+        session <- hscEnv <$>
+          useOrFail state "Retrie.GhcSessionDeps" (CallRetrieInternalError "no session") GhcSessionDeps nt
         modSummary <- msrModSummary <$>
           useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
         let ms' =
