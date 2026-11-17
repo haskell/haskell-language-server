@@ -219,7 +219,7 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $
       findBinder (definedAt defSpan) (tmrRenamed check)
     checkBinder inlineIntoThisLocation b
 
-    rewrites <- buildRewrites defPm defSpan inlineIntoThisLocation name
+    rewrites <- buildInlineRewrites defPm defSpan inlineIntoThisLocation name
 
     -- rewrite a single module
     target <- getNormalizedFilePathE inlineTargetFile
@@ -259,14 +259,14 @@ checkBinder siteRestriction (name, matches) = do
 
 -- | Build rewrites to inline a definition, optionally restricted to a single
 -- site.
-buildRewrites
+buildInlineRewrites
   :: MonadIO m
   => AnnotatedModule
   -> RealSrcSpan
   -> SiteRestriction
   -> LIdP GhcRn
   -> m (Retrie ())
-buildRewrites defParsed defSpan siteRestriction name = do
+buildInlineRewrites defParsed defSpan siteRestriction name = do
   inlineRewrite <- liftIO $
     constructInlineFromIdentifer mempty defParsed defSpan
   let
