@@ -134,8 +134,8 @@ data RunRetrieParams = RunRetrieParams
 data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   { inlineIntoThisLocation :: SiteRestriction
   , inlineTargetFile       :: Uri
-  , inlineFromThisLocation :: !Location
-  , inlineThisDefinition   :: !T.Text
+  , inlineFromThisLocation :: Location
+  , inlineThisDefinition   :: T.Text
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
