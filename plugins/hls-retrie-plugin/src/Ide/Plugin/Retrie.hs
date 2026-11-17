@@ -35,8 +35,7 @@ import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
 import           Data.List.Extra                      (sortOn)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (fromMaybe, isJust,
-                                                       isNothing)
+import           Data.Maybe                           (fromMaybe, isJust)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
 import qualified Data.Text.Utf16.Rope.Mixed           as Rope
@@ -169,6 +168,7 @@ resolveProvider recorder state _plId ca _uri = \case
   ResolveRunRetrie params  -> resolveRunRetrie recorder state ca params
   ResolveInlineThis params -> resolveInlineThis recorder state ca params
 
+-- | The "Run Retrie" actions directly delegate rewrite specs to retrie.
 resolveRunRetrie
   :: Recorder (WithPriority Log)
   -> IdeState
@@ -197,64 +197,88 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
           [" - " <> T.pack (show e) | e <- errors]
     return $ ca & L.edit ?~ edits
 
+-- | The code action resolve handler for the "Inline" action. This differs from
+-- the other code actions as it doesn't map directly to a retrie command.
+-- The closest rewrite retrie offers in an "Unfold" which is only specified on
+-- top-level bindings. The inline action allows us to target where and let
+-- bindings and specific usage sites (as opposed to all uses).
 resolveInlineThis
   :: Recorder (WithPriority Log)
   -> IdeState
   -> CodeAction
   -> RunRetrieInlineThisParams
   -> ExceptT PluginError (HandlerM Config) CodeAction
-resolveInlineThis recorder state ca RunRetrieInlineThisParams{inlineTargetFile = uri, ..} = ExceptT $
+resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $
   pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
-    nfp <- getNormalizedFilePathE uri
-    nfpSource <- getNormalizedFilePathE $ inlineFromThisLocation ^. L.uri
-    lift $ progress $ T.pack $ fileNameFromNFP nfp
-    -- What we do here:
-    --   Find the identifier in the given position
-    --   Construct an inline rewrite for it
-    --   Run retrie on the identifier in the given position only
-    --   Attach the edit to the code action
-    let fromRange = getLocationSpan inlineFromThisLocation
-        site = siteToSpan inlineIntoThisLocation
-    check <- runActionE "retrie" state $ useE TypeCheck nfpSource
-    checktgt <- runActionE "retrie" state $ useE TypeCheck nfp
-    sourceFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfpSource)
-    targetFixities <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity nfp)
-    (fun_id, fun_matches) <-
-      maybe (throwError PluginStaleResolve) pure $
-        findBinder (definedAt fromRange) (tmrRenamed check)
-    when (isNothing site && referencesName (unLoc fun_id) fun_matches) $
-      throwError $ PluginInternalError $ "definition is recursive"
-    -- TODO(simon): Generate a case dispatch if we can't statically determine
-    -- the clause.
-    when (not $ triviallySelectable fun_matches) $
-      throwError $ PluginInternalError $ "definition has several clauses, guards or a record wildcard"
-    imports <- either (throwError . PluginInternalError . T.pack) pure $
-      extractInlineImports check checktgt fun_matches
-    let
-        annotatedImports = renderImports imports
-        uri = filePathToUri $ fromNormalizedFilePath nfp
-    fixedSrc <- runActionE "retrie" state $ useE GetFixedParsedModule nfpSource
-    inlineRewrite <- liftIO $
-      constructInlineFromIdentifer annotatedImports fixedSrc fromRange
-    when (null inlineRewrite) $ throwError $ PluginInternalError "empty rewrite"
-    (session, _) <- runActionE "retrie" state $
-      useWithStaleE GhcSessionDeps nfp
-    cpp <- liftIO $ getCPPmodule recorder state (hscEnv session) targetFixities $ fromNormalizedFilePath nfp
-    let rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) site
-        inline
-          | isExternalName (unLoc fun_id) =
-              applyAt site updateContext rewrites
-          | otherwise = applyLocal site fromRange rewrites
+    rio     <- lift askRunInIO
+    defPath <- getNormalizedFilePathE $ inlineFromThisLocation ^. L.uri
+    check   <- runActionE "retrie" state $ useE TypeCheck defPath
+    defFix  <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity defPath)
+    defPm   <- runActionE "retrie" state $ useE GetFixedParsedModule defPath
+    let defSpan = getLocationSpan inlineFromThisLocation
+
+    -- find the definition, check it and build the retrie rewrites
+    b@(name, matches) <- maybe (throwError PluginStaleResolve) pure $
+      findBinder (definedAt defSpan) (tmrRenamed check)
+    checkBinder inlineIntoThisLocation b
+
+    rewrites <- buildRewrites defPm defSpan inlineIntoThisLocation name
+
+    -- rewrite a single module
+    target <- getNormalizedFilePathE inlineTargetFile
+    let buildImports tct = renderImports <$> extractInlineImports check tct matches
     result <- liftIO $
-        runRetrie (sourceFixities <> targetFixities) inline cpp
-    case result of
-      -- a refused site is not an error: leave the action without an edit
-      (_,_,NoChange) ->
-          throwError $ PluginInternalError "the call site did not match the definition, or a binding there would capture one of its variables"
-      (_,cpp',change) -> do
-          let edits = asEditMap $ asTextEdits uri cpp cpp' change
-              wedit = WorkspaceEdit (Just edits) Nothing Nothing
-          return $ ca & L.edit ?~ wedit
+      rewriteModule
+        recorder
+        (rio . progress)
+        state
+        defFix
+        buildImports
+        rewrites
+        target
+
+    -- convert the changes into a WorkspaceEdit
+    edits <- case result of
+      Left err -> throwError $ PluginInternalError $ T.pack $ show err
+      Right edits ->
+        pure $ WorkspaceEdit (Just $ asEditMap edits) Nothing Nothing
+
+    pure $ ca & L.edit ?~ edits
+
+-- | Refuse definitions we cannot inline.
+checkBinder
+  :: Monad m
+  => SiteRestriction
+  -> (LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn))
+  -> ExceptT PluginError m ()
+checkBinder siteRestriction (name, matches) = do
+  when (siteRestriction == Everywhere && referencesName (unLoc name) matches) $
+    throwError $ PluginInternalError $ "definition is recursive"
+  -- TODO(simon): Generate a case dispatch if we can't statically determine
+  -- the clause.
+  when (not $ triviallySelectable matches) $
+    throwError $ PluginInternalError $
+      "definition has several clauses, guards or a record wildcard"
+
+-- | Construct the retrie script that inlines the definition.
+buildRewrites
+  :: MonadIO m
+  => AnnotatedModule
+  -> RealSrcSpan
+  -> SiteRestriction
+  -> LIdP GhcRn
+  -> m (Retrie ())
+buildRewrites defParsed defSpan siteRestriction name = do
+  inlineRewrite <- liftIO $
+    constructInlineFromIdentifer mempty defParsed defSpan
+  let
+    siteSp = siteToSpan siteRestriction
+    rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) siteSp
+    inline
+      | isExternalName (unLoc name) =
+          applyAt siteSp updateContext rewrites
+      | otherwise = applyLocal siteSp defSpan rewrites
+  pure inline
 
 -- | Whether a definition's body uses the name it defines.
 referencesName :: Name -> MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
@@ -646,30 +670,21 @@ callRetrie
   -> SiteRestriction
   -> IO ([CallRetrieError], WorkspaceEdit)
 callRetrie recorder progress state spec origin binds site = do
-  tcd <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
-  originFixities <- fixityEnvForFile state origin
-  originParsedModule <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
-  -- TODO(simon): It would be better to compute imports per-clause.
-  rewrites <- parseSpecs state origin originParsedModule originFixities [spec]
+  check  <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
+  defFix <- fixityEnvForFile state origin
+  defPm  <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
+
+  rewrites <- parseSpecs state origin defPm defFix [spec]
+
   -- restrict rewrites to a specific location
   let retrie = applyAt (siteToSpan site) updateContext rewrites
+  let buildImports tct = extractImports check tct binds spec
 
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   targets <- getTargets site retrie knownFiles
 
-  results <- forM targets $ \ nt -> runExceptT $ do
-    let uri = filePathToUri $ fromNormalizedFilePath nt
-    lift $ progress $ T.pack $ fileNameFromNFP nt
-    tct <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
-    targetFixities <- ExceptT $ try $ fixityEnvForFile state nt
-    cpp <- ExceptT $ try $
-      getCPPmodule recorder state targetFixities nt
-    imps <- either (throwError . CannotImport nt) pure $
-      extractImports tcd tct binds spec
-    (_, cpp', change) <- lift $ runRetrie (originFixities <> targetFixities) retrie cpp
-    return $ asTextEdits uri cpp cpp' $ case change of
-      NoChange               -> NoChange
-      Change replacements im -> Change replacements (im++[imps])
+  results <- forM targets $
+    rewriteModule recorder progress state defFix buildImports retrie
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
@@ -677,6 +692,34 @@ callRetrie recorder progress state spec origin binds site = do
         WorkspaceEdit (Just $ asEditMap $ concat replacements) Nothing Nothing
 
   return (errors, editParams)
+
+-- | Runs the rewrites over a single target module.
+rewriteModule
+  :: Recorder (WithPriority Log)
+  -> (T.Text -> IO ())
+  -> IdeState
+  -> FixityEnv
+  -> (TcModuleResult -> Either String AnnotatedImports)
+  -> Retrie ()
+  -> NormalizedFilePath
+  -> IO (Either CallRetrieError [(Uri, TextEdit)])
+rewriteModule recorder progress state defFix buildImports retrie nt = runExceptT $ do
+  lift $ progress $ T.pack $ fileNameFromNFP nt
+
+  targetCheck <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
+  targetFix <- ExceptT $ try $ fixityEnvForFile state nt
+  cpp <- ExceptT $ try $
+    getCPPmodule recorder state targetFix nt
+
+  imps <- either (throwError . CannotImport nt) pure $ buildImports targetCheck
+
+  (_, cpp', change) <- lift $
+    runRetrie (defFix <> targetFix) retrie cpp
+
+  let uri = filePathToUri $ fromNormalizedFilePath nt
+  return $ asTextEdits uri cpp cpp' $ case change of
+    NoChange               -> NoChange
+    Change replacements im -> Change replacements (im++[imps])
 
 useOrFail
   :: IdeRule r v
