@@ -717,6 +717,7 @@ library hls-retrie-plugin
     buildable: False
   exposed-modules:  Ide.Plugin.Retrie
   other-modules:
+    Ide.Plugin.Retrie.Orphans,
     Ide.Plugin.Retrie.Utils,
     Ide.Plugin.Retrie.Log,
     Ide.Plugin.Retrie.Rules,
