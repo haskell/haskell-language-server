@@ -9,8 +9,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-{-# OPTIONS -Wno-orphans #-}
-
 module Ide.Plugin.Retrie (descriptor, Log) where
 
 import           Control.Concurrent.STM               (readTVarIO)
@@ -112,6 +110,7 @@ import           Retrie.Universe                      (Universe)
 
 import           Ide.Plugin.Retrie.Imports
 import           Ide.Plugin.Retrie.Log
+import           Ide.Plugin.Retrie.Orphans            ()
 import           Ide.Plugin.Retrie.Rules
 import           Ide.Plugin.Retrie.Utils
 
@@ -260,7 +259,8 @@ checkBinder siteRestriction (name, matches) = do
     throwError $ PluginInternalError $
       "definition has several clauses, guards or a record wildcard"
 
--- | Construct the retrie script that inlines the definition.
+-- | Build rewrites to inline a definition, optionally restricted to a single
+-- site.
 buildRewrites
   :: MonadIO m
   => AnnotatedModule
@@ -820,17 +820,6 @@ useRuleBlocking
 useRuleBlocking label state rule f = runAction label state (use rule f)
 
 -------------------------------------------------------------------------------
--- Serialization wrappers and instances
-
-deriving instance Eq RewriteSpec
-
-deriving instance Show RewriteSpec
-
-deriving instance Generic RewriteSpec
-
-deriving instance FromJSON RewriteSpec
-
-deriving instance ToJSON RewriteSpec
 
 -- | Parsed source of a file, reassociated with the given fixities.
 getCPPmodule
