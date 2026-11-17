@@ -247,12 +247,16 @@ data ImportForm
   | ImportQualifiedAs ModuleName
     -- ^ @import qualified M as Q@.
 
-extractImports :: TcModuleResult -> TcModuleResult -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> Either String AnnotatedImports
-extractImports tmrDef tmrTarget topLevelBinds (Unfold thing)
-  | Just (_, fun_matches) <- findBinder (definedAs thing) topLevelBinds
-  = renderImports <$> extractInlineImports tmrDef tmrTarget fun_matches
+extractImports
+  :: TcModuleResult -- ^ definition module
+  -> TcModuleResult -- ^ target module
+  -> RewriteSpec
+  -> Either String AnnotatedImports
+extractImports def target (Unfold thing)
+  | Just (_, matches) <- findBinder (definedAs thing) (tmrRenamed def)
+  = renderImports <$> extractInlineImports def target matches
 -- TODO handle imports for all rewrites
-extractImports _ _ _ _ = Right mempty
+extractImports _ _ _ = Right mempty
 
 --------------------------------------------------------------------------------
 -- Import rendering

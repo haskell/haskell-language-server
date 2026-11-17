@@ -178,7 +178,6 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
   pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
     rio <- lift askRunInIO
     nfp <- getNormalizedFilePathE uri
-    (_, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
     (errors, edits) <- liftIO $
       callRetrie
         recorder
@@ -186,7 +185,6 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         state
         spec
         nfp
-        binds
         site
     when ((not . null) errors) $
       lift $ pluginSendNotification SMethod_WindowShowMessage $
@@ -666,10 +664,9 @@ callRetrie
   -> IdeState
   -> RewriteSpec
   -> NormalizedFilePath
-  -> [HsBindLR GhcRn GhcRn]
   -> SiteRestriction
   -> IO ([CallRetrieError], WorkspaceEdit)
-callRetrie recorder progress state spec origin binds site = do
+callRetrie recorder progress state spec origin site = do
   check  <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
   defFix <- fixityEnvForFile state origin
   defPm  <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
@@ -678,7 +675,7 @@ callRetrie recorder progress state spec origin binds site = do
 
   -- restrict rewrites to a specific location
   let retrie = applyAt (siteToSpan site) updateContext rewrites
-  let buildImports tct = extractImports check tct binds spec
+  let buildImports tct = extractImports check tct spec
 
   knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
   targets <- getTargets site retrie knownFiles
