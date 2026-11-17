@@ -1,5 +1,4 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Shake rules used in this plugin.
 module Ide.Plugin.Retrie.Rules
@@ -21,6 +20,7 @@ import           Retrie.ExactPrint
 import           Retrie.Fixity
 
 import           Ide.Plugin.Retrie.Log
+import           Ide.Plugin.Retrie.Orphans  ()
 
 
 data GetFixedParsedModule = GetFixedParsedModule
@@ -29,9 +29,6 @@ instance Hashable GetFixedParsedModule
 instance NFData GetFixedParsedModule
 
 type instance RuleResult GetFixedParsedModule = AnnotatedModule
-
-instance Show (Annotated ast) where show _ = "<Annotated>"
-instance NFData (Annotated ast) where rnf = rwhnf
 
 -- | Rule that reassociates the parsed module with the fixities from
 -- typechecking.
