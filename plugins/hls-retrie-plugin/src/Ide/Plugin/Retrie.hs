@@ -377,8 +377,7 @@ atSite site update c i x = narrow <$> update c i x
 -------------------------------------------------------------------------------
 
 provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = do
-  let (LSP.CodeActionContext _diags _monly _) = ca
+provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   nfp <- getNormalizedFilePathE uri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
