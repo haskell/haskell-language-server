@@ -718,6 +718,7 @@ rewriteModule recorder progress state defFix buildImports retrie nt = runExceptT
     NoChange               -> NoChange
     Change replacements im -> Change replacements (im++[imps])
 
+-- | Request a rule result and map failure to a custom exception type.
 useOrFail
   :: IdeRule r v
   => IdeState
