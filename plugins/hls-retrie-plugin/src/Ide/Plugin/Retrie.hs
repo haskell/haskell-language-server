@@ -727,7 +727,7 @@ useOrFail
   -> NormalizedFilePath
   -> IO (RuleResult r)
 useOrFail state lbl mkException rule f =
-  useRuleBlocking lbl state rule f >>= maybe (liftIO $ throwIO $ mkException f) return
+  runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) return
 
 fixityEnvForFile :: IdeState -> NormalizedFilePath -> IO FixityEnv
 fixityEnvForFile state f =
@@ -803,18 +803,6 @@ rewriteTextEdits before after reps =
   makeDiffTextEdit
     (T.pack $ printCPP [] before)
     (T.pack $ printCPP reps after)
-
--------------------------------------------------------------------------------
--- Rule wrappers
-
-useRuleBlocking
-  :: (IdeRule k v)
-  => String
-  -> IdeState
-  -> k
-  -> NormalizedFilePath
-  -> IO (Maybe (RuleResult k))
-useRuleBlocking label state rule f = runAction label state (use rule f)
 
 -------------------------------------------------------------------------------
 
