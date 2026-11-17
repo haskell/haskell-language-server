@@ -387,7 +387,7 @@ provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca
     <- runActionE "retrie" state $
         getBinds nfp
 
-  extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "" state getShakeExtras
+  extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "retrie.shakeExtras" state getShakeExtras
 
   range <- fromCurrentRangeE posMapping range
   let pos = range ^. L.start
@@ -406,7 +406,7 @@ provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca
         | (title, kind, params) <- rewrites
         ]
 
-  inlineSuggestions <- liftIO $ runIdeAction "" extras $
+  inlineSuggestions <- liftIO $ runIdeAction "retrie.bindInlines" extras $
     suggestBindInlines uri topLevelBinds range withHieDb (lookupMod hiedbWriter)
   let inlineActions =
         [ mkCodeAction title CodeActionKind_RefactorInline (ResolveInlineThis params)
