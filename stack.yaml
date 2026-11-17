@@ -54,8 +54,6 @@ flags:
     pedantic: true
   stylish-haskell:
     ghc-lib: true
-  retrie:
-    BuildExecutable: false
   # stan dependencies
   directory-ospath-streaming:
       os-string: false
