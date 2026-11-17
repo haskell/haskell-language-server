@@ -746,12 +746,12 @@ parseSpecs state origin originParsedModule originFixities specs = do
     originFixities
     specs
 
-constructfromFunMatches
+constructFromFunMatches
   :: Annotated [LocatedA (ImportDecl GhcPs)]
   -> LocatedN RdrName
   -> MatchGroup GhcPs (LocatedA (HsExpr GhcPs))
   -> TransformT IO [Rewrite Universe]
-constructfromFunMatches imps fun_id fun_matches = do
+constructFromFunMatches imps fun_id fun_matches = do
   fe <- mkLocatedHsVar fun_id
   rewrites <- concat <$>
     forM (unLoc $ mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
@@ -769,7 +769,7 @@ constructInlineFromIdentifer imports originParsedModule originSpan =
   fmap astA $ transformA originParsedModule $ \(L _ m) ->
     case findBinder (definedAt originSpan) m of
       Just (fun_id, fun_matches) ->
-        constructfromFunMatches imports fun_id fun_matches
+        constructFromFunMatches imports fun_id fun_matches
       Nothing -> return $ error "could not find source code to inline"
 
 -- | Group 'TextEdit's by file.
