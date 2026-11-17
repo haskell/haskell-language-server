@@ -668,7 +668,7 @@ callRetrie
   -> IO ([CallRetrieError], WorkspaceEdit)
 callRetrie recorder progress state spec origin site = do
   check  <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
-  defFix <- fixityEnvForFile state origin
+  defFix <- fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity origin
   defPm  <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
 
   rewrites <- parseSpecs state origin defPm defFix [spec]
@@ -704,7 +704,7 @@ rewriteModule recorder progress state defFix buildImports retrie nt = runExceptT
   lift $ progress $ T.pack $ fileNameFromNFP nt
 
   targetCheck <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
-  targetFix <- ExceptT $ try $ fixityEnvForFile state nt
+  targetFix <- ExceptT $ try $ fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity nt
   cpp <- ExceptT $ try $
     getCPPmodule recorder state targetFix nt
 
@@ -728,10 +728,6 @@ useOrFail
   -> IO (RuleResult r)
 useOrFail state lbl mkException rule f =
   runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) return
-
-fixityEnvForFile :: IdeState -> NormalizedFilePath -> IO FixityEnv
-fixityEnvForFile state f =
-  fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity f
 
 parseSpecs
   :: IdeState
