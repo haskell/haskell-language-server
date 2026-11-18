@@ -16,6 +16,7 @@ In the last couple of months, I have written various HLS plugins, including:
 1. Suggest imports for variables not in scope,
 2. Remove redundant imports,
 3. Evaluate code in comments (à la [doctest](https://docs.python.org/3/library/doctest.html)),
+
 These plugins are small but meaningful steps towards a more polished IDE experience.
 While writing them, I didn't have to worry about performance, UI, or distribution; another tool (usually GHC) always did the heavy lifting.
 

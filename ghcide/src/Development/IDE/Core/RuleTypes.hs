@@ -281,6 +281,16 @@ instance Show DocAndTyThingMap where
 
 type instance RuleResult GetDocMap = DocAndTyThingMap
 
+newtype FixityMap = FixityMap (M.Map Name Fixity)
+
+instance NFData FixityMap where
+    rnf (FixityMap xs) = rnf xs
+
+instance Show FixityMap where
+    show = const "FixityMap"
+
+type instance RuleResult GetFixity = FixityMap
+
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
 
@@ -500,6 +510,11 @@ data GetDocMap = GetDocMap
     deriving (Eq, Show, Generic)
 instance Hashable GetDocMap
 instance NFData   GetDocMap
+
+data GetFixity = GetFixity
+    deriving (Eq, Show, Generic)
+instance Hashable GetFixity
+instance NFData   GetFixity
 
 data GetHieAst = GetHieAst
     deriving (Eq, Show, Generic)

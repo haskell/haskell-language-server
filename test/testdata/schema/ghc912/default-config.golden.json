@@ -140,6 +140,9 @@
             },
             "renameOn": true
         },
+        "retrie": {
+            "globalOn": true
+        },
         "semanticTokens": {
             "config": {
                 "classMethodToken": "method",
