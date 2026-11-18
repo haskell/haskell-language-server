@@ -44,9 +44,6 @@ on:
     #   & so it gets shared across all PRs.
     - cron: "25 2/8 * * *"
 
-# Not using a explicit target to build the top level haskell-language-server package
-# which make build the rest of subpackages *libs* (but shake-bench)
-#
 # We choose a very short build directory, as we run into long path issues on windows.
 # See cabal tracking issue https://github.com/haskell/cabal/issues/11395
 # We can't set the `--builddir` via `v2-configure` as cabal doesn't support this.
@@ -93,6 +90,12 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        include:
+          - os: windows-latest
+            ghc: "9.10.2"
+        exclude:
+          - os: windows-latest
+            ghc: "9.10"
     steps:
       - uses: actions/checkout@v7
 
@@ -104,15 +107,5 @@ jobs:
 
       # This build agenda is not to have successful code but produce cache as much as possible
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Build haskell-language-server
-        run: |
-          # repeating builds to workaround segfaults in windows and ghc-8.8.4
-          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
-
-      # We build ghcide with benchs and test enabled to include its dependencies in the cache
-      # (including shake-bench)
-      # Only for the same ghc and os used in the bench workflow, so we save cache space
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
-        name: Build ghcide benchmark
-        run: |
-          cabal $cabalBuild ghcide --enable-benchmarks --enable-tests
+        name: Build dependencies
+        run: cabal $cabalBuild --only-dependencies all
