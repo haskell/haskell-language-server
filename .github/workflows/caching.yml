@@ -102,15 +102,6 @@ jobs:
           os: ${{ runner.os }}
           save-cache: "true"
 
-      # Download sources for feeding build sources cache
-      # Fetching from github cache is faster than doing it from hackage
-      # Sources does not change per ghc and ghc version son only doing it
-      # for one matrix job (it is arbitrary)
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '9.6'
-        name: Download sources
-        run: |
-          cabal $cabalBuild --only-download --enable-benchmarks --enable-tests
-
       # This build agenda is not to have successful code but produce cache as much as possible
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Build haskell-language-server
