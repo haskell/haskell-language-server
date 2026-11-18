@@ -19,6 +19,10 @@ inputs:
     description: "Whether we have to shorten haskell language server to hls"
     required: false
     default: "true"
+  save-cache:
+    description: "Whether to save the compiled deps cache"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -108,18 +112,30 @@ runs:
         cat 'cabal.project.freeze'
       shell: bash
 
+    - name: Set the dependency cache keys
+      run: |
+        prefix="${{ inputs.cache-prefix }}compiled-deps-${{ inputs.os }}-${{ steps.HaskEnvSetup.outputs.ghc-version }}-"
+        echo "DEPS_RESTORE_KEY=$prefix" >> "$GITHUB_ENV"
+        echo "DEPS_KEY=${prefix}${{ hashFiles('cabal.project.freeze') }}" >> "$GITHUB_ENV"
+      shell: bash
+
     - name: Compiled deps cache
       id: compiled-deps
+      if: inputs.save-cache == 'true'
       uses: actions/cache@v6
-      env:
-        cache-name: compiled-deps
       with:
         path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-        restore-keys: |
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
+        key: ${{ env.DEPS_KEY }}
+        restore-keys: ${{ env.DEPS_RESTORE_KEY }}
+
+    - name: Compiled deps cache (restore only)
+      id: compiled-deps-restore
+      if: inputs.save-cache != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+        key: ${{ env.DEPS_KEY }}
+        restore-keys: ${{ env.DEPS_RESTORE_KEY }}
 
     # We remove the freeze file because it could interfere with the build
     - name: "Remove freeze file"
