@@ -12,8 +12,8 @@
 module Ide.Plugin.Retrie (descriptor, Log) where
 
 import           Control.Concurrent.STM               (readTVarIO)
-import           Control.Exception.Safe               (SomeException, assert,
-                                                       catch, throwIO, try)
+import           Control.Exception.Safe               (SomeException, catch,
+                                                       throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (filterM, forM, when)
 import           Control.Monad.Error.Class            (MonadError (throwError))
@@ -755,9 +755,7 @@ constructFromFunMatches imps fun_id fun_matches = do
   fe <- mkLocatedHsVar fun_id
   rewrites <- concat <$>
     forM (unLoc $ mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
-  let urewrites = toURewrite <$> rewrites
-  assert (not $ null urewrites) $
-    return urewrites
+  pure $ toURewrite <$> rewrites
 
 constructInlineFromIdentifer
   :: Data a
