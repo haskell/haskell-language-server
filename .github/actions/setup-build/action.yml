@@ -37,6 +37,7 @@ runs:
         ghc-version  : ${{ inputs.ghc   }}
         cabal-version: ${{ inputs.cabal }}
         enable-stack: false
+        cabal-update: false
 
     - if: inputs.os == 'Windows'
       name: (Windows) Platform config (root test directory)
@@ -67,7 +68,7 @@ runs:
 
     # To ensure we get the latest hackage index without relying on the haskell action logic
     # It has to be done before `cabal freeze` to make it aware of the new index
-    - run: cabal update
+    - run: cabal update || cabal update || cabal update
       shell: bash
 
     # We bump --max-backjumps 10000 because cabal
