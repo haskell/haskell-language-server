@@ -459,6 +459,7 @@ getBinds nfp = do
             ]
       return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
+-- | Suggest code actions for top-level bindings.
 suggestBindRewrites
   :: Uri
   -> Position
@@ -483,7 +484,9 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
      in [unfoldRewrite, foldRewrite]
 suggestBindRewrites _ _ _ _ = []
 
--- find all the identifiers in the AST for which have source definitions
+-- | Suggestions for the "inline this" feature. Surface suggestions on where
+-- and let binders to inline every occurrence and on use sites to inline that
+-- specific usage.
 suggestBindInlines
   :: Uri
   -> [HsBindLR GhcRn GhcRn]
@@ -566,6 +569,7 @@ equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
     isField RecField{} = True
     isField _          = False
 
+-- | Suggest code actions for type declarations.
 suggestTypeRewrites ::
   Uri ->
   Module ->
@@ -587,6 +591,7 @@ suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
      in [unfoldRewrite, foldRewrite]
 suggestTypeRewrites _ _ _ = []
 
+-- | Suggest code actions for rule declarations.
 suggestRuleRewrites
   :: Uri
   -> Position
