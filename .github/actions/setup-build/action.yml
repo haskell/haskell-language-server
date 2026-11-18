@@ -23,6 +23,10 @@ inputs:
     description: "Whether to save the compiled deps cache"
     required: false
     default: "false"
+outputs:
+  cache-hit:
+    description: "Whether the compiled deps cache exactly matched its cache key"
+    value: ${{ steps.compiled-deps.outputs.cache-hit || steps.compiled-deps-restore.outputs.cache-hit }}
 
 runs:
   using: "composite"
