@@ -110,3 +110,38 @@ jobs:
       - if: steps.setup-build.outputs.cache-hit != 'true'
         name: Build dependencies
         run: cabal $cabalBuild --only-dependencies all
+
+      # PRs use this build directory, so they only have to recompile changed modules.
+      - name: Restore the build directory
+        id: build-dir
+        uses: actions/cache/restore@v6
+        with:
+          path: b
+          key: build-dir-${{ env.DEPS_KEY }}-${{ github.sha }}
+          restore-keys: build-dir-${{ env.DEPS_KEY }}-
+
+      - if: steps.build-dir.outputs.cache-hit != 'true'
+        id: build-hls
+        name: Build haskell-language-server
+        continue-on-error: true
+        run: cabal $cabalBuild all
+
+      # The compiled binaries are the biggest contributor to build directory sizes.
+      # Remove them, so dependents only have to redo the relatively cheaper relink.
+      - if: steps.build-hls.outcome == 'success'
+        name: Remove linked binaries from the build directory
+        run: |
+          jq --raw-output0 '
+            ."install-plan"[]           # every unit in the cabal build plan
+            | select(.style == "local") # built from this project
+            | select(has("bin-file"))   # that links a binary
+            | ."bin-file"               # its path
+          ' b/cache/plan.json | xargs -0 rm -fv
+          find b -path '*/cache/build' -type f -delete
+
+      - if: steps.build-hls.outcome == 'success'
+        name: Save the build directory
+        uses: actions/cache/save@v6
+        with:
+          path: b
+          key: build-dir-${{ env.DEPS_KEY }}-${{ github.sha }}
