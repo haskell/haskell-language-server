@@ -49,7 +49,7 @@
 /docs @michaelpj
 
 # CI
-/.github @michaelpj @fendor
+/.github @michaelpj @fendor @crtschin
 
 # Build
 *.nix @berberman @michaelpj @guibou
