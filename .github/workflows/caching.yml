@@ -99,13 +99,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: ./.github/actions/setup-build
+      - id: setup-build
+        uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
           os: ${{ runner.os }}
           save-cache: "true"
 
       # This build agenda is not to have successful code but produce cache as much as possible
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+      - if: steps.setup-build.outputs.cache-hit != 'true'
         name: Build dependencies
         run: cabal $cabalBuild --only-dependencies all
