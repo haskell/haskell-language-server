@@ -8,8 +8,12 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-
-module Ide.Plugin.Retrie (descriptor, Log) where
+-- | A plugin that uses the retrie library to apply source-to-source
+-- transformations across the workspace.
+module Ide.Plugin.Retrie
+  ( descriptor
+  , Log
+  ) where
 
 import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (SomeException, catch,
