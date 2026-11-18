@@ -40,7 +40,8 @@ import           Language.LSP.Server            (ProgressAmount (..),
                                                  withProgress)
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM
-import           UnliftIO                       (Async, async, bracket, cancel)
+import           UnliftIO                       (Async, asyncWithUnmask,
+                                                 bracket, cancel, mask_)
 
 data ProgressEvent
   = ProgressNewStarted
@@ -108,17 +109,6 @@ data State
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: IO () -> Transition -> State -> IO State
-updateState _ _ Stopped = pure Stopped
-updateState start (Event ProgressNewStarted) NotStarted = Running <$> async start
-updateState start (Event ProgressNewStarted) (Running job) = cancel job >> Running <$> async start
-updateState start (Event ProgressStarted) NotStarted = Running <$> async start
-updateState _ (Event ProgressStarted) (Running job) = return (Running job)
-updateState _ (Event ProgressCompleted) (Running job) = cancel job $> NotStarted
-updateState _ (Event ProgressCompleted) st = pure st
-updateState _ StopProgress (Running job) = cancel job $> Stopped
-updateState _ StopProgress st = pure st
-
 -- | Data structure to track progress across the project
 -- see Note [ProgressReporting API and InProgressState]
 data InProgressState
@@ -167,8 +157,25 @@ progressReportingNoTrace todo done (Just lspEnv) title optProgressStyle = do
   progressState <- newVar NotStarted
   let _progressUpdate event = liftIO $ updateStateVar $ Event event
       _progressStop = updateStateVar StopProgress
-      updateStateVar = modifyVar_ progressState . updateState (progressCounter lspEnv title optProgressStyle todo done)
+      updateStateVar = mask_ . modifyVar_ progressState . updateState (progressCounter lspEnv title optProgressStyle todo done)
   return ProgressReporting {..}
+
+-- | Must run masked, or an exception might interrupt between starting a job
+-- and storing it in the state.
+updateState :: IO () -> Transition -> State -> IO State
+updateState start transition st = case (transition, st) of
+  (_, Stopped)                        -> pure Stopped
+  (Event ProgressStarted, Running _)  -> pure st
+  (Event ProgressStarted, NotStarted) -> startJob
+  (Event ProgressNewStarted, _)       -> cancelJob >> startJob
+  (Event ProgressCompleted, _)        -> cancelJob $> NotStarted
+  (StopProgress, Running _)           -> cancelJob $> Stopped
+  (StopProgress, NotStarted)          -> pure NotStarted
+  where
+    startJob = Running <$> asyncWithUnmask (\unmask -> unmask start)
+    cancelJob = case st of
+      Running job -> cancel job
+      _           -> pure ()
 
 -- | `progressReporting` initiates a new progress reporting session.
 -- It necessitates the active tracking of progress using the `inProgress` function.
