@@ -16,7 +16,9 @@
             "completionOn": true,
             "diagnosticsOn": true,
             "hoverOn": true,
-            "symbolsOn": true
+            "symbolsOn": true,
+            "willCreateFilesOn": true,
+            "willRenameFilesOn": true
         },
         "cabal-fmt": {
             "config": {
@@ -138,7 +140,8 @@
             "config": {
                 "crossModule": true
             },
-            "renameOn": true
+            "renameOn": true,
+            "willRenameFilesOn": true
         },
         "semanticTokens": {
             "config": {

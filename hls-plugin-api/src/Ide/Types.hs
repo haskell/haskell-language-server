@@ -313,21 +313,24 @@ instance FromJSON LegacySessionLoadingPreferenceConfig where
 -- This provides a regular naming scheme for all plugin config.
 data PluginConfig =
     PluginConfig
-      { plcGlobalOn         :: !Bool
-      , plcCallHierarchyOn  :: !Bool
-      , plcCodeActionsOn    :: !Bool
-      , plcCodeLensOn       :: !Bool
-      , plcInlayHintsOn     :: !Bool
-      , plcDiagnosticsOn    :: !Bool
-      , plcHoverOn          :: !Bool
-      , plcSymbolsOn        :: !Bool
-      , plcSignatureHelpOn  :: !Bool
-      , plcCompletionOn     :: !Bool
-      , plcRenameOn         :: !Bool
-      , plcSelectionRangeOn :: !Bool
-      , plcFoldingRangeOn   :: !Bool
-      , plcSemanticTokensOn :: !Bool
-      , plcConfig           :: !Object
+      { plcGlobalOn          :: !Bool
+      , plcCallHierarchyOn   :: !Bool
+      , plcCodeActionsOn     :: !Bool
+      , plcCodeLensOn        :: !Bool
+      , plcInlayHintsOn      :: !Bool
+      , plcDiagnosticsOn     :: !Bool
+      , plcHoverOn           :: !Bool
+      , plcSymbolsOn         :: !Bool
+      , plcSignatureHelpOn   :: !Bool
+      , plcCompletionOn      :: !Bool
+      , plcRenameOn          :: !Bool
+      , plcSelectionRangeOn  :: !Bool
+      , plcFoldingRangeOn    :: !Bool
+      , plcSemanticTokensOn  :: !Bool
+      , plcWillCreateFilesOn :: !Bool
+      , plcWillRenameFilesOn :: !Bool
+      , plcWillDeleteFilesOn :: !Bool
+      , plcConfig            :: !Object
       } deriving (Show,Eq)
 
 instance Default PluginConfig where
@@ -346,11 +349,14 @@ instance Default PluginConfig where
       , plcSelectionRangeOn = True
       , plcFoldingRangeOn   = True
       , plcSemanticTokensOn = True
+      , plcWillCreateFilesOn = True
+      , plcWillRenameFilesOn = True
+      , plcWillDeleteFilesOn = True
       , plcConfig           = mempty
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca ih cl d h s sh c rn sr fr st cfg) = r
+    toJSON (PluginConfig g ch ca ih cl d h s sh c rn sr fr st wcf wrf wdf cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
@@ -366,6 +372,9 @@ instance ToJSON PluginConfig where
                    , "selectionRangeOn" .= sr
                    , "foldingRangeOn"   .= fr
                    , "semanticTokensOn" .= st
+                   , "willCreateFilesOn" .= wcf
+                   , "willRenameFilesOn" .= wrf
+                   , "willDeleteFilesOn" .= wdf
                    , "config"           .= cfg
                    ]
 
@@ -672,10 +681,19 @@ instance PluginMethod Request (Method_CustomMethod m) where
   handlesRequest _ _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request Method_WorkspaceWillRenameFiles where
-  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf =
+         pluginEnabledGlobally desc conf
+      <> pluginFeatureEnabled plcWillRenameFilesOn desc conf
 
 instance PluginMethod Request Method_WorkspaceWillCreateFiles where
-  handlesRequest _ _ _ desc conf = pluginEnabledGlobally desc conf
+  handlesRequest _ _ _ desc conf =
+         pluginEnabledGlobally desc conf
+      <> pluginFeatureEnabled plcWillCreateFilesOn desc conf
+
+instance PluginMethod Request Method_WorkspaceWillDeleteFiles where
+  handlesRequest _ _ _ desc conf =
+         pluginEnabledGlobally desc conf
+      <> pluginFeatureEnabled plcWillDeleteFilesOn desc conf
 
 -- Plugin Notifications
 
