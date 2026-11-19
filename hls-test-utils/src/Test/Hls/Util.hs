@@ -51,6 +51,7 @@ module Test.Hls.Util
     , extractCursorPositions
     , mkParameterisedLabel
     , __i
+    , saveDoc
   )
 where
 
@@ -90,10 +91,14 @@ import qualified Data.Map                                 as Map
 import           Data.Maybe                               (fromJust)
 import           Data.String.Interpolate                  (__i)
 import qualified Data.Text.Internal.Search                as T
+import qualified Data.Text.IO                             as T
 import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefixFromRope)
 import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
+import qualified Language.LSP.Protocol.Message            as L
 import qualified Language.LSP.Server                      as LSP
+import           Language.LSP.Test                        (sendNotification)
+import           Test.Hls.FileSystem                      (atomicFileWriteText)
 
 noLiteralCaps :: ClientCapabilities
 noLiteralCaps = def & L.textDocument ?~ textDocumentCaps
@@ -379,6 +384,9 @@ renameFile from to = do
                         docChanges
                 _ -> pure ()
         _ -> pure ()
+    contents <- Test.documentContents from
+    liftIO $ atomicFileWriteText (getFilePath from) contents
+
     -- We are using the below two operations in place of renameFile,
     -- due to a potential race condition on Windows.
     liftIO $ Directory.copyFileWithMetadata (getFilePath from) (getFilePath to)
@@ -490,6 +498,20 @@ didCreateFile newFile =
 
 docIdToText :: TextDocumentIdentifier -> T.Text
 docIdToText tdi = getUri $ tdi ^. L.uri
+
+-- | Persists the given contents to the 'TextDocumentIdentifier' on disk
+-- and sends the @textDocument/didSave@ notification.
+saveDoc :: TextDocumentIdentifier -> T.Text -> Test.Session ()
+saveDoc docId t = do
+    -- I couldn't figure out how to get the virtual file contents, so we write it
+    -- to disk and send the 'SMethod_TextDocumentDidSave' notification
+    case uriToFilePath (docId ^. L.uri) of
+        Nothing -> pure ()
+        Just fp -> do
+            liftIO $ T.writeFile fp t
+
+    let params = DidSaveTextDocumentParams docId Nothing
+    sendNotification L.SMethod_TextDocumentDidSave params
 
 -- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
