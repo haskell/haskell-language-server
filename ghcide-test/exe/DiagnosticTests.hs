@@ -10,12 +10,6 @@ import           Control.Monad.IO.Class          (liftIO)
 import           Data.List.Extra
 import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test            (diagnostic,
-                                                  expectCurrentDiagnostics,
-                                                  expectDiagnostics,
-                                                  expectDiagnosticsWithTags,
-                                                  expectNoMoreDiagnostics,
-                                                  flushMessages, waitForAction)
 import           Development.IDE.Types.Location
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -35,7 +29,14 @@ import           Data.Default                    (def)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           System.Time.Extra
 import           Test.Hls                        (TestConfig (testConfigCaps, testDirLocation, testDisableKick, testPluginDescriptor),
+                                                  diagnostic,
+                                                  expectCurrentDiagnostics,
+                                                  expectDiagnostics,
+                                                  expectDiagnosticsWithTags,
+                                                  expectNoMoreDiagnostics,
+                                                  flushMessages,
                                                   runSessionWithTestConfig,
+                                                  waitForAction,
                                                   waitForProgressBegin)
 import           Test.Hls.FileSystem
 import           Test.Tasty

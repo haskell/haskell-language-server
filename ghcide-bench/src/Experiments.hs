@@ -49,7 +49,6 @@ import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as TIO
 import           Data.Version
 import           Development.IDE.Plugin.Test
-import           Development.IDE.Test.Diagnostic
 import           Development.Shake                  (CmdOption (Cwd), cmd_)
 import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
@@ -67,6 +66,7 @@ import           System.FilePath                    ((<.>), (</>))
 import           System.IO
 import           System.Process
 import           System.Time.Extra
+import           Test.Hls.Diagnostic
 import           Text.Layout.Table                  (columnHeaderTableS, def,
                                                      rowsG, tableLines, titlesH)
 import           Text.Layout.Table.Style            (asciiS)

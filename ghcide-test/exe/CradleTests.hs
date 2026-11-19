@@ -20,12 +20,6 @@ import qualified Data.Text                       as T
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult (..))
-import           Development.IDE.Test            (expectCurrentDiagnostics,
-                                                  expectDiagnostics,
-                                                  expectDiagnosticsWithTags,
-                                                  expectNoMoreDiagnostics,
-                                                  isReferenceReady,
-                                                  waitForAction)
 import           Development.IDE.Types.Location
 import           GHC.TypeLits                    (symbolVal)
 import           Ide.Types                       (Config (..),
@@ -41,10 +35,15 @@ import           Language.LSP.Test
 import           System.FilePath
 import           Test.Hls                        (GhcVersion (..),
                                                   TestConfig (..), def,
+                                                  expectCurrentDiagnostics,
+                                                  expectDiagnostics,
+                                                  expectDiagnosticsWithTags,
                                                   expectFailBecause,
+                                                  expectNoMoreDiagnostics,
                                                   ignoreTestBecause,
+                                                  isReferenceReady,
                                                   runSessionWithTestConfig,
-                                                  setHlsConfig,
+                                                  setHlsConfig, waitForAction,
                                                   waitForBuildQueue)
 import           Test.Hls.FileSystem
 import           Test.Hls.Util                   (EnvSpec (..), OS (..),

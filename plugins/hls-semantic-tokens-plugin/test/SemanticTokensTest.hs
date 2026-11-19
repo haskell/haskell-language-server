@@ -15,7 +15,6 @@ import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
 import           Data.Version                       (Version (..))
 import           Development.IDE                    (Pretty)
-import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
@@ -220,14 +219,8 @@ semanticTokensTests =
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
           doc2 <- openDoc file2 "haskell"
-          check1 <- waitForAction "TypeCheck" doc1
-          check2 <- waitForAction "TypeCheck" doc2
-          case check1 of
-            Right (WaitForIdeRuleResult _) -> return ()
-            Left _                         -> error "TypeCheck1 failed"
-          case check2 of
-            Right (WaitForIdeRuleResult _) -> return ()
-            Left _                         -> error "TypeCheck2 failed"
+          _ <- waitForAction "TypeCheck" doc1
+          _ <- waitForAction "TypeCheck" doc2
 
           result <- docSemanticTokensString def doc2
           let expect =

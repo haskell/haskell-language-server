@@ -10,7 +10,6 @@ import           Data.Functor               ((<&>))
 import           Data.List                  (sort, tails)
 import qualified Data.Map                   as M
 import qualified Data.Text                  as T
-import           Development.IDE.Test
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Protocol.Lens as L
 import qualified Language.LSP.Test          as Test

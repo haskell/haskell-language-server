@@ -4,14 +4,14 @@ import           Config                      (testWithDummyPluginEmpty')
 import           Control.Monad.IO.Class      (liftIO)
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
-import           Development.IDE.Test        (expectCurrentDiagnostics,
-                                              getStoredKeys, waitForGC,
-                                              waitForTypecheck)
 import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
                                               SemanticTokenRelative (..),
                                               SemanticTokensEdit (..), mkRange)
 import           Language.LSP.Test
 import           System.FilePath
+import           Test.Hls                    (expectCurrentDiagnostics,
+                                              getStoredKeys, waitForGC,
+                                              waitForTypecheck)
 import           Test.Hls.FileSystem
 import           Test.Tasty
 import           Test.Tasty.HUnit

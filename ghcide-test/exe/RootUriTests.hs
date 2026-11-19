@@ -3,13 +3,13 @@ module RootUriTests (tests) where
 
 import           Control.Monad.IO.Class   (liftIO)
 import           Development.IDE.GHC.Util
-import           Development.IDE.Test     (expectNoMoreDiagnostics)
 import           Language.LSP.Test
 import           System.FilePath
 -- import Test.QuickCheck.Instances ()
 import           Config
 import           Data.Default             (def)
 import           Test.Hls                 (TestConfig (..),
+                                           expectNoMoreDiagnostics,
                                            runSessionWithTestConfig)
 import           Test.Hls.FileSystem      (copyDir)
 import           Test.Tasty
