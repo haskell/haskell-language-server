@@ -9,21 +9,79 @@ on:
   workflow_dispatch:
 
 jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
+    steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v7
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
+
+  build-cabal-audit:
+    runs-on: ubuntu-latest
+    env:
+      CABAL_AUDIT_REV: 075deb5dff271725276cc928642b377694ec6ea0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: MangoIV/cabal-audit
+          ref: ${{ env.CABAL_AUDIT_REV }}
+      - id: setup
+        uses: haskell-actions/setup@v2.11
+        with:
+          ghc-version: '9.12.2'
+          cabal-version: '3.16.1.0'
+          enable-stack: false
+      - run: cabal update
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: cabal-audit-${{ runner.os }}-${{ env.CABAL_AUDIT_REV }}
+          restore-keys: cabal-audit-${{ runner.os }}-
+      - run: cabal install exe:cabal-audit --installdir=bin --install-method=copy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cabal-audit
+          path: bin/cabal-audit
+
   cabal-audit:
-    name: "Scan dependencies for vulnerabilities"
+    name: "Scan dependencies for vulnerabilities (GHC ${{ matrix.ghc }})"
+    needs: [pre_job, build-cabal-audit]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
     steps:
       - uses: actions/checkout@v7
 
       # cabal-audit computes the build plan, so GHC and cabal must be on $PATH
       - uses: haskell-actions/setup@v2.11
         with:
-          ghc-version: '9.12'
+          ghc-version: ${{ matrix.ghc }}
           cabal-version: '3.16.1.0'
           enable-stack: false
 
-      # Runs cabal-audit and uploads the SARIF report to GitHub code scanning
-      - uses: blackheaven/haskell-security-action@df18e40481ae37a2a023308720b701063a98157b # v1.1.0
+      - run: cabal update
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cabal-audit
+          path: ${{ runner.temp }}
+      - run: chmod +x "$RUNNER_TEMP/cabal-audit"
+      - name: Run cabal-audit
+        run: |
+          "$RUNNER_TEMP/cabal-audit" --sarif --to-file results.sarif
+          cat results.sarif
+
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+          category: cabal-audit-ghc-${{ matrix.ghc }}
