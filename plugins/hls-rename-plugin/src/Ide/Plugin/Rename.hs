@@ -43,7 +43,6 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        hiding (Log)
 import qualified Development.IDE.GHC.ExactPrint        as E
-import           Development.IDE.GHC.Util              (evalGhcEnv)
 import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.HscEnvEq        (HscEnvEq (hscEnv))
@@ -59,8 +58,8 @@ import           HieDb.Types                           (RefRow (refIsGenerated))
 import           Ide.Logger
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
+import qualified Ide.Plugin.Rename.Module              as ModuleRename
 import qualified Ide.Plugin.Rename.ModuleName          as ModuleName
-import qualified Ide.Plugin.Rename.ModuleRename        as ModuleRename
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens            as L
@@ -142,7 +141,7 @@ renameModuleProvider recorder state _ (RenameFilesParams renames) = do
 
         guessModuleName newNfp oldNfp = do
             (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession oldNfp
-            srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
+            let srcPaths = importPaths $ hsc_dflags (hscEnv session)
             correctNames <- mapExceptT liftIO $ ModuleName.potentialModuleNames (cmapWithPrio LogModuleName recorder) state (fromNormalizedFilePath newNfp) srcPaths
             pure $ minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
 

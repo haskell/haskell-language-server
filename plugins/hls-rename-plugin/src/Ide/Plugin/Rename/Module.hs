@@ -4,7 +4,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-module Ide.Plugin.Rename.ModuleRename (renameModuleDeclaration, applyRenameToImports, Log(..)) where
+module Ide.Plugin.Rename.Module (renameModuleDeclaration, applyRenameToImports, Log(..)) where
 
 import           Control.Lens                                 (re)
 import           Control.Lens.Getter                          ((^.))

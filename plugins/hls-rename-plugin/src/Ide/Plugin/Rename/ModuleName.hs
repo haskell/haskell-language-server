@@ -40,8 +40,7 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        IdeState, Pretty,
                                                        Priority (Debug),
                                                        Recorder, WithPriority,
-                                                       colon, evalGhcEnv,
-                                                       hscEnv, logWith,
+                                                       colon, hscEnv, logWith,
                                                        realSrcSpanToRange,
                                                        rootDir, runAction,
                                                        useWithStale, (<+>))
@@ -49,9 +48,9 @@ import           Development.IDE.Core.FileStore       (getFileContents)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
-                                                       getSessionDynFlags,
-                                                       hsmodName, importPaths,
-                                                       locA, moduleNameString,
+                                                       hsc_dflags, hsmodName,
+                                                       importPaths, locA,
+                                                       moduleNameString,
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source, unLoc)
 import           Ide.Logger                           (Pretty (..))
@@ -133,7 +132,7 @@ pathModuleNames recorder state nfp
   | firstLetter isLower $ takeFileName filePath = return ["Main"]
   | otherwise = do
       (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession nfp
-      srcPaths <- liftIO $ evalGhcEnv (hscEnv session) $ importPaths <$> getSessionDynFlags
+      let srcPaths = importPaths $ hsc_dflags (hscEnv session)
       logWith recorder Debug (SrcPaths srcPaths)
       potentialModuleNames recorder state filePath srcPaths
   where
