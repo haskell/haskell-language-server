@@ -523,9 +523,8 @@ hideSymbol ::
   String -> LImportDecl GhcPs -> Rewrite
 hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
   case ideclImportList of
-    Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl
-    Just (EverythingBut, _hides) -> Rewrite (locA loc) $ extendHiding symbol $ makeDeltaAst lidecl
     Just (Exactly, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl $ setEntryDP (makeDeltaAst imports) (SameLine 1)
+    _ -> Rewrite (locA loc) $ extendHiding symbol $ makeDeltaAst lidecl
 
 extendHiding ::
   String ->
