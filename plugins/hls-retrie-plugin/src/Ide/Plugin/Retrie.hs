@@ -797,12 +797,14 @@ asTextEdits _ _ _ (Change [] _) = []
 asTextEdits target before after (Change reps imports) =
   map (target,) (rewriteTextEdits before (addImportsCPP imports after) reps)
 
+-- | Diff the module and turn them into 'TextEdit's.
 rewriteTextEdits
   :: CPP AnnotatedModule
   -> CPP AnnotatedModule
   -> [Replacement]
   -> [TextEdit]
 rewriteTextEdits before after reps =
+  -- exact print the module before and after the ast edits
   makeDiffTextEdit
     (T.pack $ printCPP [] before)
     (T.pack $ printCPP reps after)
