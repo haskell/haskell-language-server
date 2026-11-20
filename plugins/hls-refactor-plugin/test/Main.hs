@@ -2086,6 +2086,18 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
                 "Use EVec for Vec, hiding other imports"
                 "HideType.expected.E.hs"
         ]
+    , testGroup "empty hiding list"
+        [ testCase "add fromList" $
+            compareTwo
+                "HideFunctionEmptyList.hs" [(9,9), (11,8)]
+                "Use AVec for fromList, hiding other imports"
+                "HideFunctionEmptyList.expected.fromList.A.hs"
+        , testCase "add (++)" $
+            compareTwo
+                "HideFunctionEmptyList.hs" [(9,9), (11,8)]
+                "Use AVec for ++, hiding other imports"
+                "HideFunctionEmptyList.expected.append.A.hs"
+        ]
     ]
   , testGroup "Qualify strategy"
     [ testSession "Replace with qualified preserves backticks" $ do

@@ -523,18 +523,16 @@ hideSymbol ::
   String -> LImportDecl GhcPs -> Rewrite
 hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
   case ideclImportList of
-    Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl Nothing
-    Just (EverythingBut, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
     Just (Exactly, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl $ setEntryDP (makeDeltaAst imports) (SameLine 1)
+    _ -> Rewrite (locA loc) $ extendHiding symbol $ makeDeltaAst lidecl
 
 extendHiding ::
   String ->
   LImportDecl GhcPs ->
-  Maybe (XRec GhcPs [LIE GhcPs]) ->
   DynFlags ->
   TransformT (Either String) (LImportDecl GhcPs)
-extendHiding symbol (L l idecls) mlies df = do
-  L l' lies <- case mlies of
+extendHiding symbol (L l idecls) df = do
+  L l' lies <- case ideclImportList idecls of
     Nothing -> do
 #if MIN_VERSION_ghc(9,11,0)
         let ann :: EpAnn (AnnList (EpToken "hiding", [EpToken ","]))
@@ -560,7 +558,9 @@ extendHiding symbol (L l idecls) mlies df = do
 #endif
                 }
         return $ L ann' []
-    Just pr -> pure pr
+    Just (EverythingBut, pr) -> pure pr
+    Just (Exactly, _) -> TransformT $ lift $
+      Left "Unable to extend the hiding list of an explicit import list"
   let hasSibling = not $ null lies
   src <- uniqueSrcSpanT
   top <- uniqueSrcSpanT
