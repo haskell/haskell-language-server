@@ -1,0 +1,18 @@
+packages: ./
+
+package *
+  ghc-options: -j4
+  tests: True
+
+index-state: 2024-01-01T00:00:00Z
+
+if impl(ghc >= 9.4)
+  active-repositories: hackage.haskell.org:merge
+
+source-repository-package
+  type: git
+  location: https://github.com/haskell/haskell-language-server
+  tag: v2.9.0.0
+  subdir: plugins/hls-graph
+
+-- a comment at the end

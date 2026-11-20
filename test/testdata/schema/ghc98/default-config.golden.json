@@ -28,6 +28,11 @@
                 "path": "cabal-gild"
             }
         },
+        "cabal-project": {
+            "completionOn": true,
+            "diagnosticsOn": true,
+            "semanticTokensOn": true
+        },
         "cabalHaskellIntegration": {
             "globalOn": true
         },

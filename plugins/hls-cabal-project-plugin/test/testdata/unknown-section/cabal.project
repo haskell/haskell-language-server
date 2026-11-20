@@ -1,0 +1,4 @@
+packages: ./
+
+frobnicate foo
+  packages: ./
