@@ -109,6 +109,9 @@ pluginsToDefaultConfig IdePlugins {..} =
           SMethod_TextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= plcCallHierarchyOn]
           SMethod_TextDocumentSemanticTokensFull   -> ["semanticTokensOn" A..= plcSemanticTokensOn]
           SMethod_TextDocumentSemanticTokensFullDelta -> ["semanticTokensOn" A..= plcSemanticTokensOn]
+          SMethod_WorkspaceWillCreateFiles         -> ["willCreateFilesOn" A..= plcWillCreateFilesOn]
+          SMethod_WorkspaceWillRenameFiles         -> ["willRenameFilesOn" A..= plcWillRenameFilesOn]
+          SMethod_WorkspaceWillDeleteFiles         -> ["willDeleteFilesOn" A..= plcWillDeleteFilesOn]
           _                                 -> []
 
 -- | Generates json schema used in haskell vscode extension
@@ -143,6 +146,9 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
           SMethod_TextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy" plcCallHierarchyOn]
           SMethod_TextDocumentSemanticTokensFull   -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens" plcSemanticTokensOn]
           SMethod_TextDocumentSemanticTokensFullDelta   -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens" plcSemanticTokensOn]
+          SMethod_WorkspaceWillCreateFiles         -> [toKey' "willCreateFilesOn" A..= schemaEntry "on file creation" plcWillCreateFilesOn]
+          SMethod_WorkspaceWillRenameFiles         -> [toKey' "willRenameFilesOn" A..= schemaEntry "on file rename" plcWillRenameFilesOn]
+          SMethod_WorkspaceWillDeleteFiles         -> [toKey' "willDeleteFilesOn" A..= schemaEntry "on file deletion" plcWillDeleteFilesOn]
           _                                        -> []
         schemaEntry desc defaultVal =
           A.object

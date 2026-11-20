@@ -1,0 +1,7 @@
+cabal-version: 3.4
+name: create
+version: 0.1.0.0
+build-type: Simple
+
+library lib
+  build-depends: base

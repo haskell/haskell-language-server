@@ -98,15 +98,14 @@
           '';
         };
 
+        mkDebugDevShell = hpkgs: (mkDevShell hpkgs).overrideAttrs (old: {
+          buildInputs = old.buildInputs ++ [ hpkgs.haskell-debugger ];
+        });
+
       in {
         # Developement shell with only dev tools
-        devShells = {
-          default = mkDevShell pkgs.haskellPackages;
-          shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
-          shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
-          shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
-          shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
-          shell-ghc914 = mkDevShell (pkgs.haskell.packages.ghc914.override {
+        devShells = let
+          ghc914 = pkgs.haskell.packages.ghc914.override {
             overrides = self: super:
               let
               hlib = pkgs.haskell.lib;
@@ -135,11 +134,23 @@
                     }
                   ))
                   ];
+              haskell-debugger = hlib.appendConfigureFlags (hlib.dontCheck ((self.callHackageDirect { pkg = "haskell-debugger"; ver = "0.14.0.0"; sha256 = "sha256-g3zLEQ76QsA8PqtrtJ+sE6sTzrVMn11t2mKC1Y6x5GI="; } { }).override {
+                hie-bios = hlib.dontCheck (self.callHackageDirect { pkg = "hie-bios"; ver = "0.21.0"; sha256 = "sha256-tR8TFP2kvATLG/mHL0DTCIMnUO9x3Q9q/LJcMIceuLw="; } { });
+                dap = hlib.dontCheck (self.callHackageDirect { pkg = "dap"; ver = "0.7.0.0"; sha256 = "sha256-6KB6jkwVo19qzy1uwXF38RNTCFnGMfz+usc604bW2tU="; } { });
+              })) [ "--ghc-option=-optl-Wl,-u,_bco_args_offset" "--ghc-option=-optl-Wl,-u,_stack_bco_frame_selftest" ];
             } //
           (builtins.listToAttrs (map
             (name:{inherit name; value = hlib.dontCheck(hlib.doJailbreak super.${name});})
             ["clay" "dec" "ghc-lib-parser" "ghc-trace-events" "hie-compat" "lucid" "singleton-bool" "http-lib-api" "http-api-data" "binary-instances" "lukko" "constraints-extras" "tasty-hspec" "tomland" "string-interpolate" "rebase" "dependent-map" "lsp-types" "lsp" "lsp-test" "ghcide" "HTTP" "relude" "generic-lens" "enummapset" "hiedb"]));
-          });
+          };
+        in {
+          default = mkDevShell pkgs.haskellPackages;
+          shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
+          shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
+          shell-ghc910 = mkDevShell pkgs.haskell.packages.ghc910;
+          shell-ghc912 = mkDevShell pkgs.haskell.packages.ghc912;
+          shell-ghc914 = mkDevShell ghc914;
+          debug-shell-ghc914 = mkDebugDevShell ghc914;
         };
 
 

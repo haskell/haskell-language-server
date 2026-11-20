@@ -27,7 +27,7 @@ jobs:
     - uses: ./.github/actions/setup-build
       with:
         # select a stable GHC version
-        ghc: 9.6
+        ghc: "9.10"
         os: ${{ runner.os }}
         shorten-hls: false
 

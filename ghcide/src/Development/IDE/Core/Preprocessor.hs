@@ -186,15 +186,17 @@ runLhs env filename contents = withTempDir $ \dir -> do
     unlit filein fileout = runUnlit logger dflags (args filein fileout)
     args filein fileout = [
                       Option     "-h"
-                    , Option     (escape filename) -- name this file
+                    , Option     (escapeFileName filename) -- name this file
                     , FileOption "" filein       -- input file
                     , FileOption "" fileout ]    -- output file
-    -- taken from ghc's DriverPipeline.hs
-    escape ('\\':cs) = '\\':'\\': escape cs
-    escape ('\"':cs) = '\\':'\"': escape cs
-    escape ('\'':cs) = '\\':'\'': escape cs
-    escape (c:cs)    = c : escape cs
-    escape []        = []
+
+-- taken from ghc's DriverPipeline.hs
+escapeFileName :: FilePath -> String
+escapeFileName ('\\':cs) = '\\':'\\': escapeFileName cs
+escapeFileName ('\"':cs) = '\\':'\"': escapeFileName cs
+escapeFileName ('\'':cs) = '\\':'\'': escapeFileName cs
+escapeFileName (c:cs)    = c : escapeFileName cs
+escapeFileName []        = []
 
 -- | Run CPP on a file
 runCpp :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
@@ -230,9 +232,7 @@ runCpp env0 filename mbContents = withTempDir $ \dir -> do
                     | Just y <- stripPrefix "# " x
                     , "___GHCIDE_MAGIC___" `isInfixOf` y
                     , let num = takeWhile (not . isSpace) y
-                    -- important to use /, and never \ for paths, even on Windows, since then C escapes them
-                    -- and GHC gets all confused
-                        = "# " <> num <> " \"" <> map (\z -> if isPathSeparator z then '/' else z) filename <> "\""
+                        = "# " <> num <> " \"" <> escapeFileName filename <> "\""
                     | otherwise = x
             Util.stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 

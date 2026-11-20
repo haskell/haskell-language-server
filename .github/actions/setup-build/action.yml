@@ -23,7 +23,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: haskell-actions/setup@v2.11
+    - uses: haskell-actions/setup@v2.12
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -47,6 +47,12 @@ runs:
       name: (Linux,macOS) Platform config
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+      shell: bash
+
+    # Workaround for https://github.com/actions/runner-images/issues/14940
+    - name: Use Command Line Tools toolchain on macOS
+      if: inputs.os == 'macOS'
+      run: sudo xcode-select -s /Library/Developer/CommandLineTools
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,

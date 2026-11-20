@@ -534,7 +534,7 @@ initializeTestRecorder envVars = do
 runSessionWithServerInTmpDir :: Pretty b => Config -> PluginTestDescriptor b -> VirtualFileTree -> Session a -> IO a
 runSessionWithServerInTmpDir config plugin tree act =
     runSessionWithTestConfig def
-    {testLspConfig=config, testPluginDescriptor = plugin,  testDirLocation=Right tree}
+    {testLspConfig = config, testPluginDescriptor = plugin, testDirLocation = Right tree}
     (const act)
 
 -- | Like 'withTemporaryDataAndCacheDirectory', but first materialises the given
@@ -773,7 +773,7 @@ data TestConfig b = TestConfig
   , testDisableKick          :: Bool
     -- ^ Whether to disable the kick action
   , testDisableDefaultPlugin :: Bool
-    -- ^ Whether to disable the default plugin comes with ghcide
+    -- ^ Whether to disable the default plugin that comes with ghcide
   , testCheckProject         :: Bool
     -- ^ Whether to typecheck check the project after the session is loaded
   , testPluginDescriptor     :: PluginTestDescriptor b

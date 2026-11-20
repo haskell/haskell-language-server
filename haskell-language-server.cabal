@@ -261,6 +261,7 @@ library hls-cabal-plugin
     Ide.Plugin.Cabal.CabalAdd.Command
     Ide.Plugin.Cabal.CabalAdd.CodeAction
     Ide.Plugin.Cabal.CabalAdd.Types
+    Ide.Plugin.Cabal.CabalAdd.Create
     Ide.Plugin.Cabal.CabalAdd.Rename
     Ide.Plugin.Cabal.Orphans
     Ide.Plugin.Cabal.Outline
@@ -609,7 +610,7 @@ library hls-case-split-plugin
     , syb
     , text
     , transformers
-    , ghc-exactprint        >= 1.14.1.0
+    , ghc-exactprint        >= 1.14.3.0
 
   default-extensions:
     DataKinds
@@ -650,9 +651,12 @@ library hls-rename-plugin
   exposed-modules:
     Ide.Plugin.Rename
     Ide.Plugin.Rename.ModuleName
+    Ide.Plugin.Rename.Module
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
+    , extra ^>=1.8.1
     , aeson
+    , text-rope ^>=0.3
     , containers
     , filepath
     , ghc
@@ -674,6 +678,9 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  other-modules:
+    , RenameFile
+    , Util
   if !flag(rename)
     buildable: False
   type:             exitcode-stdio-1.0
@@ -1535,6 +1542,62 @@ test-suite hls-ormolu-plugin-tests
     , text
 
 -----------------------------
+-- tilia plugin
+-----------------------------
+
+flag tilia
+  description: Enable tilia plugin
+  default:     True
+  manual:      True
+
+common tilia
+  if flag(tilia) && impl(ghc >= 9.14)
+    build-depends: haskell-language-server:hls-tilia-plugin
+    cpp-options: -Dhls_tilia
+
+library hls-tilia-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  exposed-modules:  Ide.Plugin.Tilia
+  hs-source-dirs:   plugins/hls-tilia-plugin/src
+  build-depends:
+    , choice
+    , containers
+    , extra
+    , filepath
+    , ghc
+    , ghcide          == 2.15.0.0
+    , hls-plugin-api  == 2.15.0.0
+    , lsp
+    , mtl
+    , safe-exceptions
+    , text
+    , tilia           ^>=0.1.2
+    , transformers
+
+
+test-suite hls-tilia-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-tilia-plugin/test
+  main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
+  build-depends:
+    , containers
+    , filepath
+    , haskell-language-server:hls-tilia-plugin
+    , hls-plugin-api
+    , hls-test-utils     == 2.15.0.0
+    , lens
+    , lsp-types
+    , text
+
+-----------------------------
 -- stylish-haskell plugin
 -----------------------------
 
@@ -1922,6 +1985,7 @@ library
                   , explicitFields
                   , fourmolu
                   , ormolu
+                  , tilia
                   , stylishHaskell
                   , refactor
                   , overloadedRecordDot
@@ -2042,6 +2106,7 @@ test-suite func-test
     haskell-language-server:haskell-language-server,
 
   build-depends:
+    , haskell-language-server
     , aeson
     , bytestring
     , containers
@@ -2077,9 +2142,9 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(fourmolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
-  if flag(ormolu) && (impl(ghc < 9.14) || flag(ignore-plugins-ghc-bounds))
+  if flag(ormolu)
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test
@@ -2126,7 +2191,7 @@ benchmark benchmark
       , lens
       , lens-aeson
       , shake
-      , shake-bench == 0.2.*
+      , shake-bench == 0.3.*
       , text
       , yaml
 

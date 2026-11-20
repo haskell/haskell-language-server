@@ -47,6 +47,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.cabal.willCreateFilesOn": {
+        "default": true,
+        "description": "Enables cabal on file creation",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.cabal.willRenameFilesOn": {
+        "default": true,
+        "description": "Enables cabal on file rename",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.cabalHaskellIntegration.globalOn": {
         "default": true,
         "description": "Enables cabalHaskellIntegration plugin",
@@ -306,6 +318,12 @@
     "haskell.plugin.rename.renameOn": {
         "default": true,
         "description": "Enables rename rename",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.rename.willRenameFilesOn": {
+        "default": true,
+        "description": "Enables rename on file rename",
         "scope": "resource",
         "type": "boolean"
     },

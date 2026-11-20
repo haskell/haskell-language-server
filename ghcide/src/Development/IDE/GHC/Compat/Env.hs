@@ -57,6 +57,7 @@ module Development.IDE.GHC.Compat.Env (
 
 import           GHC                 (setInteractiveDynFlags)
 
+import           Data.List           (foldl')
 import           GHC.Driver.Backend  as Backend
 import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
 import qualified GHC.Driver.Env      as Env
@@ -104,7 +105,23 @@ hscHomeUnit =
 -- (HscInterpreted) which implies LinkInMemory
 -- HscInterpreted
 setBytecodeLinkerOptions :: DynFlags -> DynFlags
-setBytecodeLinkerOptions df = df {
+setBytecodeLinkerOptions df =
+#if !MIN_VERSION_ghc(9,14,0)
+  let
+    setInterpreterWays :: DynFlags -> DynFlags
+    setInterpreterWays df
+      | gopt Opt_ExternalInterpreter df = df
+      | targetWays_ df == hostFullWays = df
+      | otherwise =
+          let platform = targetPlatform df
+              df1 = setWays hostFullWays df
+              df2 = foldl' gopt_set df1 $
+                concatMap (wayGeneralFlags platform) hostFullWays
+          in foldl' gopt_unset df2 $
+              concatMap (wayUnsetGeneralFlags platform) hostFullWays
+  in setInterpreterWays $
+#endif
+  df {
     ghcLink   = LinkInMemory
   , backend = noBackend
   , ghcMode = CompManager

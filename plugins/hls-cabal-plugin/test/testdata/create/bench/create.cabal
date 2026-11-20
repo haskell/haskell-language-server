@@ -1,0 +1,10 @@
+cabal-version: 3.4
+name: create
+version: 0.1.0.0
+build-type: Simple
+
+benchmark bench
+  other-modules: Exe
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  build-depends: base

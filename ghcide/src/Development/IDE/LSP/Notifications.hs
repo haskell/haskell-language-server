@@ -98,6 +98,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificat
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
+          atomically $ deletePositionMapping ide (toNormalizedUri _uri)
           whenUriFile _uri $ \file -> do
               let msg = "Closed text document: " <> getUri _uri
               -- A file that was only ever open in the editor stops existing

@@ -53,7 +53,7 @@ library
     , primitive
     , safe-exceptions
     , string-interpolate      >= 0.3.1
-    , tasty
+    , tasty                   >= 1.5.4
     , tasty-expected-failure
     , tasty-golden
     , tasty-hunit

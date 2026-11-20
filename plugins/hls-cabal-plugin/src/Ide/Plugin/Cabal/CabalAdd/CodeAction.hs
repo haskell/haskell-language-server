@@ -69,18 +69,20 @@ collectModuleInsertionOptions ::
   ExceptT PluginError m [J.CodeAction]
 collectModuleInsertionOptions _ plId txtDocIdentifier diag cabalFilePath gpd haskellFilePathURI = do
   haskellFilePath <- uriToFilePathE haskellFilePathURI
-  let configs = concatMap (mkModuleInsertionConfig txtDocIdentifier cabalFilePath haskellFilePath) (makeStanzaItems gpd)
+  let configs = concatMap (mkModuleInsertionConfig txtDocIdentifier cabalFilePath haskellFilePath) (mkStanzaItems gpd)
   pure $ map (mkCodeActionForModulePath plId diag) configs
+
+{- | generates stanza items given a generic package descriptions.
+-}
+mkStanzaItems :: GenericPackageDescription -> [StanzaItem]
+mkStanzaItems gpd =
+  mainLibItem pd
+    ++ libItems pd
+    ++ executableItems pd
+    ++ testSuiteItems pd
+    ++ benchmarkItems pd
  where
-  makeStanzaItems :: GenericPackageDescription -> [StanzaItem]
-  makeStanzaItems gpd =
-    mainLibItem pd
-      ++ libItems pd
-      ++ executableItems pd
-      ++ testSuiteItems pd
-      ++ benchmarkItems pd
-   where
-    pd = flattenPackageDescription gpd
+  pd = flattenPackageDescription gpd
 
 {- | Takes a buildInfo of a cabal file component as defined in the generic package description,
   and translates it to filepaths of the component's hsSourceDirs,

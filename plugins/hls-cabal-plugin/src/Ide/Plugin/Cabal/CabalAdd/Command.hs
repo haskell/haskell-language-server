@@ -12,6 +12,7 @@ module Ide.Plugin.Cabal.CabalAdd.Command (
   cabalAddModuleCommandId,
   addDependencyCommand,
   addModuleCommand,
+  getModuleEdit,
   Log,
 )
 where
