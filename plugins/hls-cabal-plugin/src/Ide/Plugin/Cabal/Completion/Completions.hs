@@ -33,8 +33,9 @@ contextToCompleter :: Context -> Completer
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
   snippetCompleter
-    <> ( constantCompleter $
-           Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
+    <> ( weightedConstantCompleter
+            (Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap)
+            (cabalVersionKeywordWeight <> cabalKeywordWeights <> stanzaWeights)
        )
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
@@ -45,12 +46,14 @@ contextToCompleter (TopLevel, KeyWord kw) =
 -- if we are in a stanza and not in a keyword context,
 -- we can write any of the stanza's keywords or a stanza declaration
 contextToCompleter (Stanza s _, None) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s stanzaKeywordMapMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
-    Just l  -> constantCompleter $ Map.keys l
+    Just l  -> case Map.lookup s stanzaKeywordWeights of
+      Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
+      Just w  -> weightedConstantCompleter (Map.keys l) w
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
 contextToCompleter (Stanza s _, KeyWord kw) =
-  case Map.lookup s stanzaKeywordMap of
+  case Map.lookup s stanzaKeywordMapMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
