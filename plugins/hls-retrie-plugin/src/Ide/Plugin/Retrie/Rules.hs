@@ -5,7 +5,6 @@ module Ide.Plugin.Retrie.Rules
   ( GetFixedParsedModule(..)
   , getFixedParsedModuleRule
   , fixityEnvFor
-  , fixAnns
   ) where
 
 import           Control.DeepSeq

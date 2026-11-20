@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Ide.Plugin.Retrie.Log
   ( Log(..)
@@ -8,12 +7,10 @@ module Ide.Plugin.Retrie.Log
 import           Development.IDE
 
 data Log
-  = LogParsingModule FilePath
-  | forall a. Pretty a => LogResolve a
+  = forall a. Pretty a => LogResolve a
   | forall a. Pretty a => LogShake a
 
 instance Pretty Log where
   pretty = \case
-    LogParsingModule fp -> "Parsing module:" <+> pretty fp
-    LogResolve l        -> pretty l
-    LogShake l          -> pretty l
+    LogResolve l -> pretty l
+    LogShake l   -> pretty l

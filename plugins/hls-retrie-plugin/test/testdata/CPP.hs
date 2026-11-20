@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module CPP where
 
--- allow rewrites into cpp branches
+-- only the active cpp branch is rewritten
 e :: Int -> Int
 e x = x + 1
 

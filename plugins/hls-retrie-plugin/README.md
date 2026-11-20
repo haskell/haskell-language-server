@@ -22,7 +22,7 @@ The following transformations are currently provided:
 
 ### Currently unsupported scenarios
 * Definitions with several clauses, guards or a record wildcard construction: the inline is refused rather than spliced from one right-hand side
-* We do not emit changes for non-active CPP branches
+* We do not emit changes for non-active CPP branches. Retrie does provide support for this, but it is not used due to accuracy and performance reasons.
 * Visible type application
 * Recursive functions
 * Functions that reference a type variable in the expression
@@ -30,7 +30,6 @@ The following transformations are currently provided:
 * Type constraints solved by the expressions signature are not propagated to the inlining site
 * Duplication of arguments (inlining could cause an argument to be evaluated multiple times)
 * Capture avoidance outside of the substitution (if a binder somewhere on the path to the splice point captures a free variable in the template, we reject the inline). When tested on real code this case happens so infrequently that it’s not worth the extra effort to support.
-* Rewrites into CPP modules have incorrect indentation (see https://github.com/xich/retrie/issues/24)
 
 ## Inlining
 

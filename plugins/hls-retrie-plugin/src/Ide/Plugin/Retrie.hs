@@ -16,8 +16,7 @@ module Ide.Plugin.Retrie
   ) where
 
 import           Control.Concurrent.STM               (readTVarIO)
-import           Control.Exception.Safe               (SomeException, catch,
-                                                       throwIO, try)
+import           Control.Exception.Safe               (throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (filterM, forM, when)
 import           Control.Monad.Error.Class            (MonadError (throwError))
@@ -29,7 +28,6 @@ import           Control.Monad.Trans.Maybe            (MaybeT, hoistMaybe,
 import           Data.Aeson                           (FromJSON (..),
                                                        ToJSON (..))
 import           Data.Bifunctor                       (second)
-import qualified Data.ByteString                      as BS
 import           Data.Data
 import           Data.Either                          (partitionEithers)
 import           Data.Foldable                        (toList)
@@ -39,8 +37,6 @@ import           Data.List.Extra                      (sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust)
 import qualified Data.Text                            as T
-import qualified Data.Text.Encoding                   as T
-import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.Actions         (lookupMod)
@@ -51,25 +47,20 @@ import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras,
                                                        hiedbWriter,
                                                        toKnownFiles, withHieDb)
 #if MIN_VERSION_ghc(9,9,0)
-import           Development.IDE.GHC.Compat           hiding (assert,
-                                                       parseModule, try)
+import           Development.IDE.GHC.Compat           hiding (assert, try)
 #else
-import           Development.IDE.GHC.Compat           hiding (parseModule, try)
+import           Development.IDE.GHC.Compat           hiding (try)
 #endif
 import           Control.Monad.IO.Unlift              (askRunInIO)
-import           Development.IDE.GHC.Compat.Util      hiding (catch, toList,
-                                                       try)
+import           Development.IDE.GHC.Compat.Util      hiding (toList, try)
 import           Development.IDE.GHC.ExactPrint       (TransformT)
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
-import           GHC                                  (parseModule)
-import qualified GHC.Data.EnumSet                     as EnumSet
 import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
                                                        ContextInfo (RecField, ValBind),
                                                        identInfo)
-import qualified GHC.LanguageExtensions.Type          as LangExt
 import           GHC.Parser.Annotation                (LocatedN)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE)
@@ -93,9 +84,8 @@ import           Retrie                               (Annotated (astA),
                                                        topDown)
 import           Retrie.Context
 import           Retrie.CPP                           (CPP (NoCPP),
-                                                       addImportsCPP, parseCPP,
-                                                       printCPP)
-import           Retrie.ExactPrint                    (AnnotatedImports, fix,
+                                                       addImportsCPP, printCPP)
+import           Retrie.ExactPrint                    (AnnotatedImports,
                                                        transformA)
 import           Retrie.Expr                          (mkLocatedHsVar)
 import           Retrie.Fixity                        (FixityEnv)
@@ -103,8 +93,7 @@ import           Retrie.Monad                         (Retrie, getGroundTerms,
                                                        runRetrie)
 import           Retrie.Options                       (defaultOptions,
                                                        getTargetFiles)
-import           Retrie.Replace                       (Change (..),
-                                                       Replacement (..))
+import           Retrie.Replace                       (Change (..))
 import           Retrie.Rewrites
 import           Retrie.Rewrites.Function             (matchToRewrites)
 import           Retrie.Substitution                  (HoleVal (HoleExpr),
@@ -628,7 +617,6 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
 data CallRetrieError
   = CallRetrieInternalError String NormalizedFilePath
   | NoParse NormalizedFilePath
-  | GHCParseError NormalizedFilePath String
   | NoTypeCheck NormalizedFilePath
   | CannotImport NormalizedFilePath String
   deriving (Eq)
@@ -636,7 +624,6 @@ data CallRetrieError
 instance Show CallRetrieError where
   show (CallRetrieInternalError msg f) = "Error rewriting " <> fileNameFromNFP f <> ": " <> msg
   show (NoParse f) = "Cannot parse " <> fileNameFromNFP f
-  show (GHCParseError f m) = "Cannot parse " <> fileNameFromNFP f <> ": " <> m
   show (NoTypeCheck f) = "File does not typecheck " <> fileNameFromNFP f
   show (CannotImport f m) = "Cannot add import to " <> fileNameFromNFP f <> ": " <> m
 
@@ -708,21 +695,23 @@ rewriteModule
   -> Retrie ()
   -> NormalizedFilePath
   -> IO (Either CallRetrieError [(Uri, TextEdit)])
-rewriteModule recorder progress state defFix buildImports retrie nt = runExceptT $ do
+rewriteModule _ progress state defFix buildImports retrie nt = runExceptT $ do
   lift $ progress $ T.pack $ fileNameFromNFP nt
 
-  targetCheck <- ExceptT $ try $ useOrFail state "retrie.check" NoTypeCheck TypeCheck nt
-  targetFix <- ExceptT $ try $ fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity nt
-  cpp <- ExceptT $ try $
-    getCPPmodule recorder state targetFix nt
+  targetCheck <- ExceptT $ try $
+    useOrFail state "Retrie.check" NoTypeCheck TypeCheck nt
+  targetFix <- ExceptT $ try $
+    fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity nt
+  ast <- ExceptT $ try $ NoCPP <$>
+    useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule nt
 
   imps <- either (throwError . CannotImport nt) pure $ buildImports targetCheck
 
-  (_, cpp', change) <- lift $
-    runRetrie (defFix <> targetFix) retrie cpp
+  (_, ast', change) <- lift $
+    runRetrie (defFix <> targetFix) retrie ast
 
   let uri = filePathToUri $ fromNormalizedFilePath nt
-  return $ asTextEdits uri cpp cpp' $ case change of
+  pure $ asTextEdits uri ast ast' $ case change of
     NoChange               -> NoChange
     Change replacements im -> Change replacements (im++[imps])
 
@@ -794,59 +783,16 @@ asTextEdits
   -> [(Uri, TextEdit)]
 asTextEdits _ _ _ NoChange = []
 asTextEdits _ _ _ (Change [] _) = []
-asTextEdits target before after (Change reps imports) =
-  map (target,) (rewriteTextEdits before (addImportsCPP imports after) reps)
+asTextEdits target before after (Change _ imports) =
+  map (target,) (rewriteTextEdits before (addImportsCPP imports after))
 
 -- | Diff the module and turn them into 'TextEdit's.
 rewriteTextEdits
   :: CPP AnnotatedModule
   -> CPP AnnotatedModule
-  -> [Replacement]
   -> [TextEdit]
-rewriteTextEdits before after reps =
+rewriteTextEdits before after =
   -- exact print the module before and after the ast edits
   makeDiffTextEdit
     (T.pack $ printCPP [] before)
-    (T.pack $ printCPP reps after)
-
--------------------------------------------------------------------------------
-
--- | Parsed source of a file, reassociated with the given fixities.
-getCPPmodule
-  :: Recorder (WithPriority Log)
-  -> IdeState
-  -> FixityEnv
-  -> NormalizedFilePath
-  -> IO (CPP AnnotatedModule)
-getCPPmodule recorder state fixities nt = do
-  let parseWith contents = do
-        session <- hscEnv <$>
-          useOrFail state "Retrie.GhcSessionDeps" (CallRetrieInternalError "no session") GhcSessionDeps nt
-        modSummary <- msrModSummary <$>
-          useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
-        let ms' =
-              modSummary
-                { ms_hspp_buf =
-                    Just (stringToStringBuffer contents)
-                  -- keep comments, as GetParsedModuleWithComments does
-                , ms_hspp_opts =
-                    ms_hspp_opts modSummary
-                      `gopt_set` Opt_KeepRawTokenStream
-                      `gopt_unset` Opt_Haddock
-                }
-        logWith recorder Info $ LogParsingModule $ fromNormalizedFilePath nt
-        parsed <- evalGhcEnv session (parseModule ms')
-            `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
-        transformA (fixAnns parsed) (fix fixities)
-
-  contents <- do
-    mbContentsVFS <-
-      runAction "Retrie.GetFileContents" state $ getFileContents nt
-    case mbContentsVFS of
-      Just contents -> return $ Rope.toText contents
-      Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
-  pm <- useOrFail state "Retrie.GetParsedModuleWithComments" NoParse GetParsedModuleWithComments nt
-  let extensions = extensionFlags (ms_hspp_opts (pm_mod_summary pm))
-  if LangExt.Cpp `EnumSet.member` extensions
-    then parseCPP parseWith contents
-    else NoCPP <$> useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule nt
+    (T.pack $ printCPP [] after)
