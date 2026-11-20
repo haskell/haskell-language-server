@@ -77,7 +77,9 @@ type Context = (StanzaContext, FieldContext)
 -- | Context inside a cabal file.
 --  Used to decide which keywords to suggest.
 data StanzaContext
-  = -- | Top level context in a cabal file such as 'author'
+  = -- | First line in a cabal file. Only cabal-version is valid here
+    FirstLine
+  | -- | Top level context in a cabal file such as 'author'
     TopLevel
   | -- | Nested context in a cabal file, such as 'library'.
     --
@@ -88,6 +90,7 @@ data StanzaContext
   deriving (Eq, Show, Read)
 
 instance Pretty StanzaContext where
+    pretty FirstLine     = "FirstLine"
     pretty TopLevel      = "TopLevel"
     pretty (Stanza t ms) = "Stanza" <+> pretty t <+> (maybe mempty pretty ms)
 
