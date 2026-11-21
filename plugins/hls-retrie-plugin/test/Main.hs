@@ -94,7 +94,7 @@ inlineThisTests =
       , testInline "single clause pattern" "Pattern" 5 4
       , testInline "rename let binding" "Capture" 7 6
       , testInline "comment in an argument" "CommentArg" 7 6
-      , testInline "comment in an argument, CPP module" "CommentArgCpp" 9 6
+      , testInline "comment in an argument with cpp" "CommentArgCpp" 9 6
       ]
     , testGroup "refused"
       [ testRefused "multi clause" "MultiClause" 7 4 notSelectable
@@ -103,6 +103,8 @@ inlineThisTests =
       , testRefused "multi clause partial" "MultiClausePartial" 8 8 notSelectable
       , testRefused "record wildcard construction" "WildcardCon" 10 4 notSelectable
       , testRefused "recursive where binder" "WhereBinderRec" 5 4 "definition is recursive"
+      , testRefused "rewrite spanning a cpp directive" "CppStraddle" 9 6
+          "must not span a CPP directive"
       ]
     , expectFail $ testGroup "dispatch"
       [ testInline "dispatch multi clause" "MultiClause" 7 4
