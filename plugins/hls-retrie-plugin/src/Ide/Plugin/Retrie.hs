@@ -33,15 +33,18 @@ import           Data.Either                          (partitionEithers)
 import           Data.Foldable                        (toList)
 import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
+import qualified Data.IntSet                          as IntSet
 import           Data.List.Extra                      (sortOn)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, isJust)
 import qualified Data.Text                            as T
+import qualified Data.Text.Encoding                   as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Rules           (getSourceFileSource)
 import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras, knownTargetsVar),
                                                        getShakeExtras,
                                                        hiedbWriter,
@@ -61,6 +64,7 @@ import           GHC.Generics                         (Generic)
 import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
                                                        ContextInfo (RecField, ValBind),
                                                        identInfo)
+import qualified GHC.LanguageExtensions.Type          as LangExt
 import           GHC.Parser.Annotation                (LocatedN)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE)
@@ -83,8 +87,8 @@ import           Retrie                               (Annotated (astA),
                                                        applyWithUpdateAndStrategy,
                                                        topDown)
 import           Retrie.Context
-import           Retrie.CPP                           (CPP (NoCPP),
-                                                       addImportsCPP, printCPP)
+import           Retrie.CPP                           (CPP (..), addImportsCPP,
+                                                       printCPP)
 import           Retrie.ExactPrint                    (AnnotatedImports,
                                                        transformA)
 import           Retrie.Expr                          (mkLocatedHsVar)
@@ -93,7 +97,8 @@ import           Retrie.Monad                         (Retrie, getGroundTerms,
                                                        runRetrie)
 import           Retrie.Options                       (defaultOptions,
                                                        getTargetFiles)
-import           Retrie.Replace                       (Change (..))
+import           Retrie.Replace                       (Change (..),
+                                                       Replacement (..))
 import           Retrie.Rewrites
 import           Retrie.Rewrites.Function             (matchToRewrites)
 import           Retrie.Substitution                  (HoleVal (HoleExpr),
@@ -685,6 +690,9 @@ callRetrie recorder progress state spec origin site = do
 
   return (errors, editParams)
 
+isCPP :: T.Text -> Bool
+isCPP = T.isPrefixOf "#"
+
 -- | Runs the rewrites over a single target module.
 rewriteModule
   :: Recorder (WithPriority Log)
@@ -704,16 +712,35 @@ rewriteModule _ progress state defFix buildImports retrie nt = runExceptT $ do
     fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity nt
   ast <- ExceptT $ try $ NoCPP <$>
     useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule nt
+  lines <- lift $ cppLines state (tmrModSummary targetCheck) nt
 
   imps <- either (throwError . CannotImport nt) pure $ buildImports targetCheck
 
   (_, ast', change) <- lift $
     runRetrie (defFix <> targetFix) retrie ast
 
+  when (changeHitsCPP lines change) $ throwError $
+    CallRetrieInternalError "the left-hand-side of a rewrite must not span a CPP directive" nt
+
   let uri = filePathToUri $ fromNormalizedFilePath nt
   pure $ asTextEdits uri ast ast' $ case change of
     NoChange               -> NoChange
     Change replacements im -> Change replacements (im++[imps])
+
+-- does anything in this Change hit one of the given lines
+changeHitsCPP :: IntSet.IntSet -> Change -> Bool
+changeHitsCPP _ NoChange = False
+changeHitsCPP lines (Change replacements _) =
+  any (replHitsCPP lines) replacements
+
+-- does this replacement hit one of the given lines
+replHitsCPP :: IntSet.IntSet -> Replacement -> Bool
+replHitsCPP lines Replacement{replLocation}
+  | RealSrcSpan sp _ <- replLocation
+  , rs <- srcSpanStartLine sp
+  , re <- srcSpanEndLine sp
+  = not $ IntSet.fromList [rs..re] `IntSet.disjoint` lines
+replHitsCPP _ _ = error "replacement isn't a RealSrcSpan"
 
 -- | Request a rule result and map failure to a custom exception type.
 useOrFail
@@ -796,3 +823,16 @@ rewriteTextEdits before after =
   makeDiffTextEdit
     (T.pack $ printCPP [] before)
     (T.pack $ printCPP [] after)
+
+-- | The set of source lines that contain CPP directives.
+cppLines :: IdeState -> ModSummary -> NormalizedFilePath -> IO (IntSet.IntSet)
+cppLines state ms nt
+  | xopt LangExt.Cpp (ms_hspp_opts ms) = do
+    source <- T.decodeUtf8 <$>
+      runAction "Retrie.getSourceFileSource" state (getSourceFileSource nt)
+    -- determine which line numbers contain CPP directives
+    let
+      lines = zip [1..] (T.lines source)
+      cppLines = fst <$> filter (isCPP . snd) lines
+    pure $ IntSet.fromList cppLines
+  | otherwise = pure IntSet.empty

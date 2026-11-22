@@ -730,6 +730,7 @@ library hls-retrie-plugin
     , deepseq
     , extra
     , ghc
+    , ghc-boot-th
     , ghc-exactprint
     , ghcide                == 2.15.0.0
     , hashable
