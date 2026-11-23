@@ -754,6 +754,7 @@ useOrFail
 useOrFail state lbl mkException rule f =
   runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) pure
 
+-- | Parse 'RewriteSpec' into 'Rewrite's. Throws a 'CallRetrieError' on failure.
 parseSpecs
   :: IdeState
   -> NormalizedFilePath
