@@ -36,7 +36,7 @@ jobs:
           enable-stack: false
       - run: cabal update
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: cabal-audit-${{ runner.os }}-${{ env.CABAL_AUDIT_REV }}
