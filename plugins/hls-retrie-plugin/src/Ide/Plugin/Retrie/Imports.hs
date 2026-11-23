@@ -194,7 +194,7 @@ provenanceOf gre exports mod name = do
   let bundled = Map.fromList
         [ (n, p) | a@(AvailTC p _ _) <- exports, n <- availNames a, n /= p ]
   -- is the name defined in this module?
-  if gre_lcl gre
+  if isLocalGRE gre
     then Just $
       -- check whether the defining module exports this name
       if name `elemNameSet` (availsToNameSet exports)
