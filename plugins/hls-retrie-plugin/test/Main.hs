@@ -1,39 +1,21 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PartialTypeSignatures    #-}
 
 module Main (main) where
 
-import qualified Data.Map                          as M
-import           Data.Text                         (Text)
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import qualified Development.IDE.GHC.ExactPrint    as ExactPrint
-import qualified Development.IDE.Plugin.CodeAction as Refactor
-import           Ide.Logger
-import           Ide.Plugin.Config
-import qualified Ide.Plugin.Retrie                 as Retrie
+import           Data.Text         (Text)
+import qualified Data.Text         as T
+import qualified Data.Text.IO      as T
+import           Ide.Plugin.Retrie
 import           System.FilePath
 import           Test.Hls
-
-data LogWrap
-    = RetrieLog Retrie.Log
-    | ExactPrintLog ExactPrint.Log
-
-instance Pretty LogWrap where
-    pretty = \case
-        RetrieLog msg -> pretty msg
-        ExactPrintLog msg -> pretty msg
 
 main :: IO ()
 main = defaultTestRunner tests
 
-retriePlugin :: PluginTestDescriptor LogWrap
-retriePlugin =  mkPluginTestDescriptor (Retrie.descriptor . cmapWithPrio RetrieLog) "retrie"
-
-refactorPlugin :: PluginTestDescriptor LogWrap
-refactorPlugin = mkPluginTestDescriptor (Refactor.iePluginDescriptor  . cmapWithPrio ExactPrintLog) "refactor"
+retriePlugin :: PluginTestDescriptor Log
+retriePlugin = mkPluginTestDescriptor descriptor "retrie"
 
 tests :: TestTree
 tests =
@@ -154,11 +136,11 @@ unfoldTests =
 -- | The "Unfold e" action on the definition in CrossFileDef.hs.
 unfoldE :: TextDocumentIdentifier -> Session CodeAction
 unfoldE defDoc = do
-    let p = Position 5 0
-    actions <- getCodeActions defDoc $ Range p p
-    liftIO $ case [ca | InR ca@CodeAction{_title = "Unfold e"} <- actions] of
-        [ca] -> pure ca
-        cas  -> assertFailure $ "One Unfold e action expected, got " <> show (length cas)
+  let p = Position 5 0
+  actions <- getCodeActions defDoc $ Range p p
+  liftIO $ case [ca | InR ca@CodeAction{_title = "Unfold e"} <- actions] of
+    [ca] -> pure ca
+    cas  -> assertFailure $ "One Unfold e action expected, got " <> show (length cas)
 
 foldTests :: TestTree
 foldTests =
@@ -168,11 +150,11 @@ foldTests =
 
 testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
 testProvider title file line row expected = testCase title $ runWithRetrie $ do
-    adoc <- openDoc (file <.> "hs") "haskell"
-    _ <- waitForTypecheck adoc
-    let position = Position line row
-    codeActions <- getCodeActions adoc $ Range position position
-    liftIO $ map codeActionTitle codeActions @?= map Just expected
+  adoc <- openDoc (file <.> "hs") "haskell"
+  _ <- waitForTypecheck adoc
+  let position = Position line row
+  codeActions <- getCodeActions adoc $ Range position position
+  liftIO $ map codeActionTitle codeActions @?= map Just expected
 
 testFold :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testFold = testResolve $ titleStartsWith "Fold"
@@ -187,15 +169,15 @@ testInline = testResolve $ titleStartsWith "Inline"
 -- refusal message.
 testRefused :: TestName -> FilePath -> UInt -> UInt -> Text -> TestTree
 testRefused title file row col message = testCase title $ runWithRetrie $ do
-    adoc <- openDoc (file <.> "hs") "haskell"
-    _ <- waitForTypecheck adoc
-    ca <- codeActionAt (titleStartsWith "Inline") adoc (Position row col)
-    TResponseMessage{_result} <- request SMethod_CodeActionResolve ca
-    liftIO $ case _result of
-        Left TResponseError{_message} ->
-            assertBool ("Unexpected refusal: " <> T.unpack _message) $
-              message `T.isInfixOf` _message
-        Right _ -> assertFailure "Expected the inline to be refused"
+  adoc <- openDoc (file <.> "hs") "haskell"
+  _ <- waitForTypecheck adoc
+  ca <- codeActionAt (titleStartsWith "Inline") adoc (Position row col)
+  TResponseMessage{_result} <- request SMethod_CodeActionResolve ca
+  liftIO $ case _result of
+    Left TResponseError{_message} ->
+      assertBool ("Unexpected refusal: " <> T.unpack _message) $
+        message `T.isInfixOf` _message
+    Right _ -> assertFailure "Expected the inline to be refused"
 
 -- | The refusal for a definition whose clause cannot be chosen statically.
 notSelectable :: Text
@@ -206,18 +188,19 @@ clash :: Text -> Text
 clash rdr = "spelling " <> rdr <> " is already bound to a different name in the target"
 
 testResolve :: (Command |? CodeAction -> Bool) -> TestName -> FilePath -> UInt -> UInt -> TestTree
-testResolve keep title file row col = goldenWithRetrie title file $ \adoc -> do
+testResolve keep title file row col =
+  goldenWithRetrie title file $ \ adoc -> do
     _ <- waitForTypecheck adoc
     resolveAndExecuteCodeAction =<< codeActionAt keep adoc (Position row col)
 
 -- | The one code action at the position that @keep@ accepts.
 codeActionAt :: (Command |? CodeAction -> Bool) -> TextDocumentIdentifier -> Position -> Session CodeAction
 codeActionAt keep adoc p = do
-    codeActions <- getCodeActions adoc $ Range p p
-    case filter keep codeActions of
-        [InR ca] -> pure ca
-        cas -> liftIO . assertFailure $
-          "One code action expected, got " <> show (map codeActionTitle cas)
+  codeActions <- getCodeActions adoc $ Range p p
+  case filter keep codeActions of
+    [InR ca] -> pure ca
+    cas -> liftIO . assertFailure $
+      "One code action expected, got " <> show (map codeActionTitle cas)
 
 titleStartsWith :: Text -> Command |? CodeAction -> Bool
 titleStartsWith prefix = maybe False (prefix `T.isPrefixOf`) . codeActionTitle
@@ -228,19 +211,15 @@ codeActionTitle _                         = Nothing
 
 goldenWithRetrie :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRetrie title path act =
-    goldenWithHaskellAndCaps (def { plugins = M.singleton "retrie" def }) codeActionResolveCaps testPlugins title testDataDir path "expected" "hs" act
+  goldenWithHaskellAndCaps def codeActionResolveCaps retriePlugin title testDataDir path "expected" "hs" act
 
 runWithRetrie :: Session a -> IO a
-runWithRetrie = runSessionWithTestConfig def
+runWithRetrie =
+  runSessionWithTestConfig def
     { testDirLocation = Left testDataDir
     , testConfigCaps = codeActionResolveCaps
-    , testPluginDescriptor = testPlugins
+    , testPluginDescriptor = retriePlugin
     } . const
-
-testPlugins :: PluginTestDescriptor LogWrap
-testPlugins =
-    retriePlugin <>
-    refactorPlugin  -- needed for the GetAnnotatedParsedSource rule
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-retrie-plugin" </> "test" </> "testdata"

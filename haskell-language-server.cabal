@@ -735,7 +735,6 @@ library hls-retrie-plugin
     , ghcide                == 2.15.0.0
     , hashable
     , hls-plugin-api        == 2.15.0.0
-    , haskell-language-server:hls-refactor-plugin
     , haskell-language-server:hls-exactprint-utils
     , lens
     , lsp
@@ -764,7 +763,7 @@ test-suite hls-retrie-plugin-tests
     , containers
     , filepath
     , hls-plugin-api
-    , haskell-language-server:{hls-refactor-plugin, hls-retrie-plugin}
+    , haskell-language-server:hls-retrie-plugin
     , hls-test-utils             == 2.15.0.0
     , text
 

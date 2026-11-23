@@ -56,7 +56,6 @@ import           Development.IDE.GHC.Compat           hiding (try)
 #endif
 import           Control.Monad.IO.Unlift              (askRunInIO)
 import           Development.IDE.GHC.Compat.Util      hiding (toList, try)
-import           Development.IDE.GHC.ExactPrint       (TransformT)
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
@@ -90,7 +89,7 @@ import           Retrie.Context
 import           Retrie.CPP                           (CPP (..), addImportsCPP,
                                                        printCPP)
 import           Retrie.ExactPrint                    (AnnotatedImports,
-                                                       transformA)
+                                                       TransformT, transformA)
 import           Retrie.Expr                          (mkLocatedHsVar)
 import           Retrie.Fixity                        (FixityEnv)
 import           Retrie.Monad                         (Retrie, getGroundTerms,
