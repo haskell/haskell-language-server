@@ -30,7 +30,7 @@ import           Data.Aeson                           (FromJSON (..),
 import           Data.Bifunctor                       (second)
 import           Data.Data
 import           Data.Either                          (partitionEithers)
-import           Data.Foldable                        (toList)
+import           Data.Foldable                        (for_, toList)
 import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
 import qualified Data.IntSet                          as IntSet
@@ -183,12 +183,10 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         spec
         nfp
         site
-    when ((not . null) errors) $
+    for_ errors $ \ err -> do
+      logWith recorder Info $ LogResolve $ show err
       lift $ pluginSendNotification SMethod_WindowShowMessage $
-        ShowMessageParams MessageType_Warning $
-        T.unlines $
-          "Found errors during rewrite:" :
-          [" - " <> T.pack (show e) | e <- errors]
+        ShowMessageParams MessageType_Warning $ T.pack $ show err
     pure $ ca & L.edit ?~ edits
 
 -- | The code action resolve handler for the "Inline" action. This differs from
