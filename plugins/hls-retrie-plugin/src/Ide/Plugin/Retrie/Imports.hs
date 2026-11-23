@@ -206,7 +206,9 @@ provenanceOf gre exports mod name = do
       -- the name is imported into the defining module
       case map greImportModule (gre_imp gre) of
         m : _ -> Just $ Importable m (memberForm gre)
-        []    -> Nothing -- is this possible?
+        -- unreachable: the name is either local or it has an import
+        -- (see Note [GlobalRdrElt provenance])
+        []    -> Nothing
 
 memberForm :: GlobalRdrElt -> MemberForm
 memberForm gre = case gre_par gre of
