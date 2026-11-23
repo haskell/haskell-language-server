@@ -190,7 +190,7 @@ resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = 
         T.unlines $
           "Found errors during rewrite:" :
           [" - " <> T.pack (show e) | e <- errors]
-    return $ ca & L.edit ?~ edits
+    pure $ ca & L.edit ?~ edits
 
 -- | The code action resolve handler for the "Inline" action. This differs from
 -- the other code actions as it doesn't map directly to a retrie command.
@@ -407,7 +407,7 @@ provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _)
         [ mkCodeAction title CodeActionKind_RefactorInline (ResolveInlineThis params)
         | (title, params) <- inlineSuggestions
         ]
-  return $ InL [InR c | c <- retrieActions ++ inlineActions]
+  pure $ InL [InR c | c <- retrieActions ++ inlineActions]
 
 -- | Creates a 'CodeAction' for the client to display.
 mkCodeAction :: T.Text -> CodeActionKind -> RetrieResolveData -> CodeAction
@@ -455,7 +455,7 @@ getBinds nfp = do
             , L _ decl <- bagToList bagBinds
 #endif
             ]
-      return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+      pure (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
 -- | Suggest code actions for top-level bindings.
 suggestBindRewrites
@@ -494,7 +494,7 @@ suggestBindInlines
   -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
 suggestBindInlines uri binds range hie lookupMod = do
     identifiers <- definedIdentifiers
-    return $ map (\(name, siteLoc, srcLoc) ->
+    pure $ map (\(name, siteLoc, srcLoc) ->
         let
             title = "Inline " <> printedName
             printedName = printOutputable name
@@ -546,7 +546,7 @@ suggestBindInlines uri binds range hie lookupMod = do
               , range `isSubrangeOf` siteRange -> do
                     srcLocations <- nameToLocation withHieDb lookupModule name
                     equations <- filterM (equationBound name) (fromMaybe [] srcLocations)
-                    return $ Set.fromList (map (nameOccName name, siteLoc,) equations)
+                    pure $ Set.fromList (map (nameOccName name, siteLoc,) equations)
             _ -> pure mempty
 
 -- | Whether name is defined by a regular ValBind (i.e. it's not a class
@@ -688,7 +688,7 @@ callRetrie recorder progress state spec origin site = do
       editParams =
         WorkspaceEdit (Just $ asEditMap $ concat replacements) Nothing Nothing
 
-  return (errors, editParams)
+  pure (errors, editParams)
 
 isCPP :: T.Text -> Bool
 isCPP = T.isPrefixOf "#"
@@ -752,7 +752,7 @@ useOrFail
   -> NormalizedFilePath
   -> IO (RuleResult r)
 useOrFail state lbl mkException rule f =
-  runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) return
+  runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) pure
 
 parseSpecs
   :: IdeState
@@ -767,7 +767,7 @@ parseSpecs state origin originParsedModule originFixities specs = do
     useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
   parseRewriteSpecs
     libdir
-    (\_f -> return $ NoCPP originParsedModule)
+    (\_f -> pure $ NoCPP originParsedModule)
     originFixities
     specs
 
@@ -793,7 +793,7 @@ constructInlineFromIdentifer imports originParsedModule originSpan =
     case findBinder (definedAt originSpan) m of
       Just (fun_id, fun_matches) ->
         constructFromFunMatches imports fun_id fun_matches
-      Nothing -> return $ error "could not find source code to inline"
+      Nothing -> pure $ error "could not find source code to inline"
 
 -- | Group 'TextEdit's by file.
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
