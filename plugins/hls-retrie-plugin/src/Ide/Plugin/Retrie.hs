@@ -231,7 +231,10 @@ resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $
 
     -- convert the changes into a WorkspaceEdit
     edits <- case result of
-      Left err -> throwError $ PluginInternalError $ T.pack $ show err
+      Left err -> do
+        lift $ pluginSendNotification SMethod_WindowShowMessage $
+          ShowMessageParams MessageType_Warning $ T.pack $ show err
+        throwError $ PluginInvalidUserState $ T.pack $ show err
       Right edits ->
         pure $ WorkspaceEdit (Just $ asEditMap edits) Nothing Nothing
 
