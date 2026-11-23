@@ -760,9 +760,7 @@ test-suite hls-retrie-plugin-tests
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
   build-depends:
-    , containers
     , filepath
-    , hls-plugin-api
     , haskell-language-server:hls-retrie-plugin
     , hls-test-utils             == 2.15.0.0
     , text
