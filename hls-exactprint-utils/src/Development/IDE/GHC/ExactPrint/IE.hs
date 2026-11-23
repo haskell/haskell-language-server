@@ -22,6 +22,8 @@ import           Language.Haskell.GHC.ExactPrint           (addComma,
                                                             setEntryDP)
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC                                       (EpToken (..))
+#elif MIN_VERSION_ghc(9,9,0)
+import           GHC                                       (AddEpAnn (..))
 #else
 import           GHC                                       (AddEpAnn (..),
                                                             addAnns,
