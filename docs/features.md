@@ -263,6 +263,14 @@ Code action kind: `refactor.inline`
 
 Replaces every usage of a function with it's body.
 
+### Apply rule forwards/backwards
+
+Provided by: `hls-retrie-plugin`
+
+Code action kind: `refactor`
+
+Rewrites occurrences of the rules LHS with it's RHS.
+
 ### Insert contents of Template Haskell splice
 
 Provided by: `hls-splice-plugin`
