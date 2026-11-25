@@ -109,6 +109,13 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os: ${{ runner.os }}
 
+      - name: Restore the build directory
+        uses: actions/cache/restore@v6
+        with:
+          path: b
+          key: build-dir-${{ env.DEPS_KEY }}-${{ github.sha }}
+          restore-keys: build-dir-${{ env.DEPS_KEY }}-
+
       - name: Build
         # --semaphore (GHC -jsem) needs GHC >= 9.8, so skip it on 9.6.
         run: cabal build --max-backjumps 10000 ${CABAL_ARGS} --jobs ${{ matrix.ghc != '9.6' && '--semaphore' || '' }} all

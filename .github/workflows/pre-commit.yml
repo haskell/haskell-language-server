@@ -40,19 +40,6 @@ jobs:
       run: |
         echo $(which stylish-haskell)
 
-    - name: Compiled deps cache
-      id: stylish-haskell-compiled-cache
-      uses: actions/cache@v6
-      env:
-        cache-name: stylish-haskell-compiled-cache
-      with:
-        path: ${{ env.CABAL_PKGS_DIR }}
-        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-        restore-keys: |
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
-              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
-
     - uses: actions/setup-python@v3
     - uses: pre-commit/action@v3.0.1
       with:

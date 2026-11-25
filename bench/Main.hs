@@ -61,11 +61,12 @@ import           Development.Shake           (Action,
                                               CmdOption (Cwd, StdinBS),
                                               RuleResult, Rules,
                                               ShakeOptions (shakeChange, shakeThreads),
-                                              actionBracket, addOracle,
-                                              askOracle, command, command_,
-                                              getDirectoryFiles, liftIO, need,
-                                              newCache, shakeArgsWith,
-                                              shakeOptions, versioned, want)
+                                              StdoutTrim (..), actionBracket,
+                                              addOracle, askOracle, command,
+                                              command_, getDirectoryFiles,
+                                              liftIO, need, newCache,
+                                              shakeArgsWith, shakeOptions,
+                                              versioned, want)
 import           Development.Shake.Classes
 import           Experiments.Types           (Example (exampleName),
                                               exampleToOptions)
@@ -205,15 +206,16 @@ buildHls Cabal root out = actionBracket
         removeFile projectLocal
         when projectLocalExists $
           renameFile (projectLocal <.> "restore-after-benchmark") projectLocal
-    ) $ \_ -> command_ [Cwd root] "cabal"
-        ["install"
-        ,"haskell-language-server:exe:haskell-language-server"
-        ,"--installdir=" ++ out
-        ,"--install-method=copy"
-        ,"--overwrite-policy=always"
-        ]
+    ) $ \_ -> do
+        command_ [Cwd root] "cabal" ["build", builddir, target]
+        StdoutTrim bin <- command [Cwd root] "cabal" ["list-bin", builddir, target]
+        liftIO $ copyFile bin (root </> out </> binaryName)
     where
         projectLocal = root </> "cabal.project.local"
+        target = "haskell-language-server:exe:haskell-language-server"
+        -- The extra ghc-options would otherwise make later builds in the
+        -- default builddir, such as CI's `cabal bench`, recompile the package
+        builddir = "--builddir=dist-newstyle/bench"
 
 buildHls Stack root out =
     command_ [Cwd root] "stack"
