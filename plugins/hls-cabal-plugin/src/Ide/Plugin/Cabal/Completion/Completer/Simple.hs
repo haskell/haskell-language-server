@@ -90,7 +90,7 @@ weightedConstantCompleter completions weights _ cData = do
               Fuzzy.simpleFilter' Fuzzy.defChunkSize Fuzzy.defMaxResults prefix completions customMatch
           else topTenByWeight
       range = completionRange prefInfo
-  pure $ map (mkSimpleCompletionItem range) scored
+  pure $ mkSortedSimpleCompletionItems range scored
   where
     prefInfo = cabalPrefixInfo cData
     prefix = completionPrefix prefInfo
@@ -141,6 +141,43 @@ mkDefaultCompletionItem label =
       Compls._command = Nothing,
       Compls._data_ = Nothing
     }
+
+
+mkDefautlSortTextCompletionItem :: T.Text -> T.Text -> LSP.CompletionItem
+mkDefautlSortTextCompletionItem sortText label =
+  LSP.CompletionItem
+    { Compls._label = label,
+      Compls._labelDetails = Nothing,
+      Compls._kind = Just LSP.CompletionItemKind_Keyword,
+      Compls._tags = Nothing,
+      Compls._detail = Nothing,
+      Compls._documentation = Nothing,
+      Compls._deprecated = Nothing,
+      Compls._preselect = Nothing,
+      Compls._sortText = Just sortText,
+      Compls._filterText = Nothing,
+      Compls._insertText = Nothing,
+      Compls._insertTextFormat = Nothing,
+      Compls._insertTextMode = Nothing,
+      Compls._textEdit = Nothing,
+      Compls._textEditText = Nothing,
+      Compls._additionalTextEdits = Nothing,
+      Compls._commitCharacters = Nothing,
+      Compls._command = Nothing,
+      Compls._data_ = Nothing
+    }
+
+
+-- | Behaves like @map mkSimpleCompletionItem@ but encodes the order of of @[Text]@
+-- into the @_sortText@ fields of each @CompletionItem@
+mkSortedSimpleCompletionItems :: LSP.Range -> [T.Text] -> [LSP.CompletionItem]
+mkSortedSimpleCompletionItems range txt = go range txt 0
+  where
+  go :: LSP.Range -> [T.Text] -> Int -> [LSP.CompletionItem]
+  go _ [] _ = []
+  go range (t:ts) counter = let n = show counter in
+    (mkDefautlSortTextCompletionItem (T.pack $ (replicate (6 - length n) '0' ++ (show counter))) t
+      & JL.textEdit ?~ LSP.InL (LSP.TextEdit range t)) : go range ts (counter + 1)
 
 -- | Returns a CompletionItem with the given starting position
 --  and text to be inserted, where the displayed text is the same as the
