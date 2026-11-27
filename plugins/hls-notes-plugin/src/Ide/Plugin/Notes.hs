@@ -113,9 +113,10 @@ getNote nfp state (Position l c) = do
     -- Clients can ask about a line the file doesn't have, such as the empty
     -- line after the final newline, where the cursor rests at the end of the
     -- buffer. There is no note reference there, so this is not an error.
-    pure $ case lineAt (fromIntegral l) contents of
-        Nothing   -> Nothing
-        Just line -> listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
+    -- lineAt drops the empty line after the final newline, so treat a missing
+    -- line as empty.
+    let line = fromMaybe "" $ lineAt (fromIntegral l) contents
+    pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
   where
     atPos c arr = case arr A.! 0 of
         -- We check if the line we are currently at contains a note
