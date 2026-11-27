@@ -125,6 +125,9 @@
         "pragmas-disable": {
             "globalOn": true
         },
+        "pragmas-hover": {
+            "globalOn": true
+        },
         "pragmas-suggest": {
             "globalOn": true
         },
