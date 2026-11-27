@@ -110,9 +110,6 @@ getNote nfp state (Position l c) = do
     contents <-
         err "Error getting file contents"
         =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
-    -- Clients can ask about a line the file doesn't have, such as the empty
-    -- line after the final newline, where the cursor rests at the end of the
-    -- buffer. There is no note reference there, so this is not an error.
     -- lineAt drops the empty line after the final newline, so treat a missing
     -- line as empty.
     let line = fromMaybe "" $ lineAt (fromIntegral l) contents
