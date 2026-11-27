@@ -651,9 +651,12 @@ library hls-rename-plugin
   exposed-modules:
     Ide.Plugin.Rename
     Ide.Plugin.Rename.ModuleName
+    Ide.Plugin.Rename.Module
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
+    , extra ^>=1.8.1
     , aeson
+    , text-rope ^>=0.3
     , containers
     , filepath
     , ghc
@@ -675,6 +678,9 @@ library hls-rename-plugin
 
 test-suite hls-rename-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
+  other-modules:
+    , RenameFile
+    , Util
   if !flag(rename)
     buildable: False
   type:             exitcode-stdio-1.0
@@ -689,6 +695,74 @@ test-suite hls-rename-plugin-tests
     , hls-test-utils             == 2.15.0.0
     , lens
     , lsp-types
+    , text
+
+-----------------------------
+-- retrie plugin
+-----------------------------
+
+flag retrie
+  description: Enable retrie plugin
+  default:     True
+  manual:      True
+
+common retrie
+  if flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds))
+    build-depends: haskell-language-server:hls-retrie-plugin
+    cpp-options: -Dhls_retrie
+
+library hls-retrie-plugin
+  import:           defaults, pedantic, warnings
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
+    buildable: False
+  exposed-modules:  Ide.Plugin.Retrie
+  other-modules:
+    Ide.Plugin.Retrie.Orphans,
+    Ide.Plugin.Retrie.Utils,
+    Ide.Plugin.Retrie.Log,
+    Ide.Plugin.Retrie.Rules,
+    Ide.Plugin.Retrie.Imports
+  hs-source-dirs:   plugins/hls-retrie-plugin/src
+  build-depends:
+    , filepath
+    , aeson
+    , containers
+    , deepseq
+    , extra
+    , ghc
+    , ghc-boot-th
+    , ghc-exactprint
+    , ghcide                == 2.15.0.0
+    , hashable
+    , hls-plugin-api        == 2.15.0.0
+    , haskell-language-server:hls-exactprint-utils
+    , lens
+    , lsp
+    , lsp-types
+    , mtl
+    , retrie                >=2.0.0
+    , safe-exceptions
+    , stm
+    , syb
+    , text
+    , transformers
+    , unliftio-core
+    , unordered-containers
+
+  default-extensions:
+    DataKinds
+
+test-suite hls-retrie-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !(flag(retrie) && (!impl(ghc ==9.10.*) || flag(ignore-plugins-ghc-bounds)))
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-retrie-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , filepath
+    , haskell-language-server:hls-retrie-plugin
+    , hls-test-utils             == 2.15.0.0
     , text
 
 -----------------------------
@@ -1299,10 +1373,7 @@ library hls-explicit-fixity-plugin
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
     , containers
-    , deepseq
-    , extra
     , ghcide                == 2.15.0.0
-    , hashable
     , hls-plugin-api        == 2.15.0.0
     , lsp                   >=2.8
     , text
@@ -1533,6 +1604,62 @@ test-suite hls-ormolu-plugin-tests
     , lens
     , lsp-types
     , ormolu
+    , text
+
+-----------------------------
+-- tilia plugin
+-----------------------------
+
+flag tilia
+  description: Enable tilia plugin
+  default:     True
+  manual:      True
+
+common tilia
+  if flag(tilia) && impl(ghc >= 9.14)
+    build-depends: haskell-language-server:hls-tilia-plugin
+    cpp-options: -Dhls_tilia
+
+library hls-tilia-plugin
+  import:           defaults, pedantic, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  exposed-modules:  Ide.Plugin.Tilia
+  hs-source-dirs:   plugins/hls-tilia-plugin/src
+  build-depends:
+    , choice
+    , containers
+    , extra
+    , filepath
+    , ghc
+    , ghcide          == 2.15.0.0
+    , hls-plugin-api  == 2.15.0.0
+    , lsp
+    , mtl
+    , safe-exceptions
+    , text
+    , tilia           ^>=0.1.2
+    , transformers
+
+
+test-suite hls-tilia-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  if !flag(tilia) || impl(ghc < 9.14)
+    buildable: False
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-tilia-plugin/test
+  main-is:          Main.hs
+  -- Work around https://gitlab.haskell.org/ghc/ghc/-/issues/24648
+  if os(darwin)
+    ghc-options: -optl-Wl,-ld_classic
+  build-depends:
+    , containers
+    , filepath
+    , haskell-language-server:hls-tilia-plugin
+    , hls-plugin-api
+    , hls-test-utils     == 2.15.0.0
+    , lens
+    , lsp-types
     , text
 
 -----------------------------
@@ -1823,6 +1950,7 @@ library hls-exactprint-utils
   exposed-modules:
     Development.IDE.GHC.ExactPrint.Annotation
     Development.IDE.GHC.ExactPrint.CPP
+    Development.IDE.GHC.ExactPrint.IE
   hs-source-dirs:     hls-exactprint-utils/src
   build-depends:
     , ghc
@@ -1912,6 +2040,7 @@ library
                   , importLens
                   , caseSplit
                   , rename
+                  , retrie
                   , hlint
                   , stan
                   , signatureHelp
@@ -1925,6 +2054,7 @@ library
                   , explicitFields
                   , fourmolu
                   , ormolu
+                  , tilia
                   , stylishHaskell
                   , refactor
                   , overloadedRecordDot

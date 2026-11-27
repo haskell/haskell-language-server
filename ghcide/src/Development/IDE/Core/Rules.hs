@@ -136,6 +136,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
 import           Development.IDE.Spans.Documentation
+import           Development.IDE.Spans.Fixity
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics            as Diag
 import           Development.IDE.Types.HscEnvEq
@@ -199,6 +200,8 @@ import           System.FilePath                              (dropExtension,
                                                                splitDirectories,
                                                                takeExtension,
                                                                takeFileName)
+import qualified Data.Set                                     as S
+import           Data.Either                                  (isRight)
 
 data Log
   = LogShake Shake.Log
@@ -599,6 +602,20 @@ getDocMapRule recorder =
 -- | Persistent rule to ensure that hover doesn't block on startup
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty mempty, idDelta, Nothing)
+
+getFixityRule :: Recorder (WithPriority Log) -> Rules ()
+getFixityRule recorder =
+    define (cmapWithPrio LogShake recorder) $ \GetFixity nfp -> do
+        HAR{refMap} <- use_ GetHieAst nfp
+        env <- hscEnv <$> use_ GhcSessionDeps nfp -- deps necessary so that we can consult already loaded in ifaces instead of loading in duplicates
+        tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
+        fs <- lookupFixities env tcGblEnv (S.mapMonotonic (\(Right n) -> n) $ S.filter isRight $ M.keysSet refMap)
+        pure ([], Just (FixityMap fs))
+
+
+-- | Persistent rule to ensure that hover doesn't block on startup
+persistentFixityRule :: Rules ()
+persistentFixityRule = addPersistentRule GetFixity $ \_ -> pure $ Just (FixityMap M.empty, idDelta, Nothing)
 
 readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk recorder file = do
@@ -1441,6 +1458,7 @@ mainRule recorder RulesConfig{..} = do
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder
+    getFixityRule recorder
     loadGhcSession recorder def{fullModuleGraph}
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
@@ -1467,6 +1485,7 @@ mainRule recorder RulesConfig{..} = do
     getImportMapRule recorder
     persistentHieFileRule recorder
     persistentDocMapRule
+    persistentFixityRule
     persistentImportMapRule
     getLinkableRule recorder
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModuleGraphTransDepsFingerprints file -> do

@@ -60,6 +60,7 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.GHC.ExactPrint                    as E
 import           Development.IDE.GHC.Util                          (printOutputable,
+                                                                    printOutputableQualified,
                                                                     printRdrName)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -1275,29 +1276,54 @@ suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
                Just [_, _, _, _, fieldName, _, _] -> Just fieldName
                _                                  -> Nothing
 
--- | Suggests a constraint for a declaration for which a constraint is missing.
-suggestConstraint :: ParsedSource -> FileDiagnostic -> [(T.Text, Rewrite)]
-suggestConstraint ps fd
-  | Just missingConstraint <- structuredMissingConstraint
-  =
-#if MIN_VERSION_ghc(9,9,0)
-    let parsedSource = ps in
+-- | 'PrintUnqualified' that renders each name the way the user would write it in
+-- this module: imported names (qualified or not) get GHC's scope-aware rendering,
+-- so a class only reachable through a qualified import keeps its qualifier (#5085).
+-- Names not imported at all fall back to the bare 'OccName', deferring the import
+-- to the import plugin (#4810).
+scopeAwarePprCtx :: HscEnv -> TcGblEnv -> PrintUnqualified
+scopeAwarePprCtx hscEnv tcg = defaultCtx {queryQualifyName = go}
+  where
+    rdrEnv = tcg_rdr_env tcg
+    defaultCtx = mkPrintUnqualifiedDefault hscEnv rdrEnv
+    inScope = S.fromList
+      [ (mdl, occName nm)
+      | GRE nm _ _ _ <- globalRdrEnvElts rdrEnv
+      , Just mdl <- [nameModule_maybe nm]
+      ]
+#if MIN_VERSION_ghc(9,13,0)
+    -- GHC 9.13 (dev cycle of 9.14) added a user-qualifier hint parameter.
+    go mdl hint occ
+      | S.member (mdl, occ) inScope = queryQualifyName defaultCtx mdl hint occ
+      | otherwise                   = NameUnqual
 #else
-    let parsedSource = makeDeltaAst ps in
+    go mdl occ
+      | S.member (mdl, occ) inScope = queryQualifyName defaultCtx mdl occ
+      | otherwise                   = NameUnqual
 #endif
-    -- The error site sits in exactly one of the two, so at most one fires.
-       suggestFunctionConstraint parsedSource diag missingConstraint
-    ++ suggestInstanceConstraint parsedSource diag missingConstraint
-  | otherwise = []
-    where
-      diag = fdLspDiagnostic fd
 
-      -- The missing constraint, taken from GHC's structured solver report.
-      structuredMissingConstraint =
-        fmap printOutputable $
-          fd ^? fdStructuredMessageL
-            . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
-            . _TcRnSolverReport . _1 . reportContentL . _CouldNotDeducePred
+-- | Suggests a constraint for a declaration for which a constraint is missing.
+suggestConstraint
+  :: Maybe HscEnv -> Maybe TcModuleResult -> ParsedSource -> FileDiagnostic
+  -> [(T.Text, Rewrite)]
+suggestConstraint (Just hscEnv) (Just tmr) ps fd =
+  case printOutputableQualified pprCtx <$> fd ^? fdStructuredMessageL
+        . _SomeStructuredMessage . msgEnvelopeErrorL . _TcRnMessage
+        . _TcRnSolverReport . _1 . reportContentL . _CouldNotDeducePred of
+    Nothing -> []
+    Just mc ->
+#if MIN_VERSION_ghc(9,9,0)
+      let parsedSource = ps in
+#else
+      let parsedSource = makeDeltaAst ps in
+#endif
+      -- The error site sits in exactly one of the two, so at most one fires.
+      suggestFunctionConstraint parsedSource diag mc
+        ++ suggestInstanceConstraint parsedSource diag mc
+  where
+    pprCtx = scopeAwarePprCtx hscEnv (tmrTypechecked tmr)
+    diag = fdLspDiagnostic fd
+suggestConstraint _ _ _ _ = []
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]

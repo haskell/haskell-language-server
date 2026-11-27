@@ -40,7 +40,7 @@ This option obviously would not make sense for language servers for other langua
 
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
 
-- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `ormolu`, `fourmolu`, or `stylish-haskell`.
+- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `ormolu`, `fourmolu`, `stylish-haskell`, or `tilia`.
 - Cabal formatting provider (`haskell.cabalFormattingProvider`, default `cabal-gild`): what formatter to use for cabal files; one of `cabal-gild` or `cabal-fmt`.
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 - Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on initial load. As it is activated by default could drive to bad performance in large projects.
@@ -52,7 +52,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 Plugins have a generic config to control their behaviour. The schema of such config is:
 
 - `haskell.plugin.${pluginName}.globalOn`: usually with default true. Whether the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
-  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `importLens`, `class`, `hlint`, `rename`, `semanticTokens`, `splice`, `stan`, `signatureHelp`.
+  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `importLens`, `class`, `hlint`, `retrie`, `rename`, `semanticTokens`, `splice`, `stan`, `signatureHelp`.
   - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
 - `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled.
   - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.

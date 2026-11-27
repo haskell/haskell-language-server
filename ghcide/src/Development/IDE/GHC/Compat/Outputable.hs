@@ -8,6 +8,8 @@ module Development.IDE.GHC.Compat.Outputable (
     showSDocForUser,
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest, punctuate,
     printSDocQualifiedUnsafe,
+    queryQualifyName,
+    QualifyName(..),
     printWithoutUniques,
     printWithoutUniquesOneLine,
     mkPrintUnqualifiedDefault,

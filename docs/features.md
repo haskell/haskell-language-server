@@ -144,6 +144,7 @@ The default Haskell code formatter is `ormolu`, and the Haskell formatter can be
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
+| Tilia           | `hls-tilia-plugin`           |
 
 ---
 
@@ -245,6 +246,30 @@ Provided by: `hls-class-plugin`
 Code action kind: `quickfix`
 
 Adds placeholders for missing class methods in a class instance definition.
+
+### Fold definition
+
+Provided by: `hls-retrie-plugin`
+
+Code action kind: `refactor.extract`
+
+Replaces any instance of a function's body with a call to that function.
+
+### Unfold definition
+
+Provided by: `hls-retrie-plugin`
+
+Code action kind: `refactor.inline`
+
+Replaces every usage of a function with it's body.
+
+### Apply rule forwards/backwards
+
+Provided by: `hls-retrie-plugin`
+
+Code action kind: `refactor`
+
+Rewrites occurrences of the rules LHS with it's RHS.
 
 ### Insert contents of Template Haskell splice
 

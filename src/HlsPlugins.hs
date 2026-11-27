@@ -43,6 +43,10 @@ import qualified Ide.Plugin.CaseSplit              as CaseSplit
 import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
+#if hls_retrie
+import qualified Ide.Plugin.Retrie                 as Retrie
+#endif
+
 #if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
@@ -125,6 +129,10 @@ import qualified Ide.Plugin.Ormolu                 as Ormolu
 import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
+#if hls_tilia
+import qualified Ide.Plugin.Tilia                  as Tilia
+#endif
+
 #if hls_refactor
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
@@ -180,8 +188,14 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_stylishHaskell
       let pId = "stylish-haskell" in StylishHaskell.descriptor (pluginRecorder pId) pId :
 #endif
+#if hls_tilia
+      let pId = "tilia" in Tilia.descriptor (pluginRecorder pId) pId :
+#endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_retrie
+      let pId = "retrie" in Retrie.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
