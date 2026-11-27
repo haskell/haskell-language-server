@@ -1,0 +1,839 @@
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
+-- | A plugin that uses the retrie library to apply source-to-source
+-- transformations across the workspace.
+module Ide.Plugin.Retrie
+  ( descriptor
+  , Log
+  ) where
+
+import           Control.Concurrent.STM               (readTVarIO)
+import           Control.Exception.Safe               (throwIO, try)
+import           Control.Lens.Operators
+import           Control.Monad                        (filterM, forM, when)
+import           Control.Monad.Error.Class            (MonadError (throwError))
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
+import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
+import           Control.Monad.Trans.Maybe            (MaybeT, hoistMaybe,
+                                                       runMaybeT)
+import           Data.Aeson                           (FromJSON (..),
+                                                       ToJSON (..))
+import           Data.Bifunctor                       (second)
+import           Data.Data
+import           Data.Either                          (partitionEithers)
+import           Data.Foldable                        (for_, toList)
+import           Data.Hashable                        (unhashed)
+import qualified Data.HashSet                         as Set
+import qualified Data.IntSet                          as IntSet
+import           Data.List.Extra                      (sortOn)
+import qualified Data.Map                             as Map
+import           Data.Maybe                           (fromMaybe, isJust)
+import qualified Data.Text                            as T
+import qualified Data.Text.Encoding                   as T
+import           Development.IDE                      hiding (pluginHandlers,
+                                                       pluginRules)
+import           Development.IDE.Core.Actions         (lookupMod)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Rules           (getSourceFileSource)
+import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras, knownTargetsVar),
+                                                       getShakeExtras,
+                                                       hiedbWriter,
+                                                       toKnownFiles, withHieDb)
+#if MIN_VERSION_ghc(9,9,0)
+import           Development.IDE.GHC.Compat           hiding (assert, try)
+#else
+import           Development.IDE.GHC.Compat           hiding (try)
+#endif
+import           Control.Monad.IO.Unlift              (askRunInIO)
+import           Development.IDE.GHC.Compat.Util      hiding (toList, try)
+import           Development.IDE.Spans.AtPoint        (LookupModule,
+                                                       nameToLocation)
+import           Development.IDE.Types.Shake          (WithHieDb)
+import           GHC.Generics                         (Generic)
+import           GHC.Iface.Ext.Types                  (BindType (RegularBind),
+                                                       ContextInfo (RecField, ValBind),
+                                                       identInfo)
+import qualified GHC.LanguageExtensions.Type          as LangExt
+import           GHC.Parser.Annotation                (LocatedN)
+import           Ide.Plugin.Error                     (PluginError (..),
+                                                       getNormalizedFilePathE)
+import           Ide.Plugin.Resolve                   (mkCodeActionWithResolveAndCommand)
+import           Ide.PluginUtils
+import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message        as LSP
+import           Language.LSP.Protocol.Types          as LSP
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable))
+import           System.FilePath                      (takeFileName)
+
+import           Data.Generics                        (GenericQ, everything,
+                                                       extQ, listify, mkQ)
+import           Retrie                               (Annotated (astA),
+                                                       AnnotatedModule, Options,
+                                                       Options_ (..),
+                                                       Verbosity (Loud),
+                                                       applyWithUpdate,
+                                                       applyWithUpdateAndStrategy,
+                                                       topDown)
+import           Retrie.Context
+import           Retrie.CPP                           (CPP (..), addImportsCPP,
+                                                       printCPP)
+import           Retrie.ExactPrint                    (AnnotatedImports,
+                                                       TransformT, transformA)
+import           Retrie.Expr                          (mkLocatedHsVar)
+import           Retrie.Fixity                        (FixityEnv)
+import           Retrie.Monad                         (Retrie, getGroundTerms,
+                                                       runRetrie)
+import           Retrie.Options                       (defaultOptions,
+                                                       getTargetFiles)
+import           Retrie.Replace                       (Change (..),
+                                                       Replacement (..))
+import           Retrie.Rewrites
+import           Retrie.Rewrites.Function             (matchToRewrites)
+import           Retrie.Substitution                  (HoleVal (HoleExpr),
+                                                       foldSubst)
+import           Retrie.Types
+import           Retrie.Universe                      (Universe)
+
+import           Ide.Plugin.Retrie.Imports
+import           Ide.Plugin.Retrie.Log
+import           Ide.Plugin.Retrie.Orphans            ()
+import           Ide.Plugin.Retrie.Rules
+import           Ide.Plugin.Retrie.Utils
+
+
+-- | Optionally restrict rewrites to a single location (i.e. inline this use
+-- site only).
+data SiteRestriction
+  = Everywhere    -- ^ rewrite everywhere
+  | Site Location -- ^ rewrite only here
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+-- | Parameters for the runRetrie rewrite.
+data RunRetrieParams = RunRetrieParams
+  { spec            :: RewriteSpec
+  , originatingFile :: Uri
+  , site            :: SiteRestriction
+  }
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+data RunRetrieInlineThisParams = RunRetrieInlineThisParams
+  { inlineIntoThisLocation :: SiteRestriction
+  , inlineTargetFile       :: Uri
+  , inlineFromThisLocation :: Location
+  , inlineThisDefinition   :: T.Text
+  }
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+-- | Data passed back from the client as part of the resolve stage.
+data RetrieResolveData
+  = ResolveRunRetrie RunRetrieParams
+  | ResolveInlineThis RunRetrieInlineThisParams
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
+  (defaultPluginDescriptor plId "Provides code actions to inline Haskell definitions")
+    { pluginHandlers = handlers
+    , pluginCommands = commands
+    , pluginRules = getFixedParsedModuleRule recorder
+    }
+  where
+    (commands, handlers) =
+      mkCodeActionWithResolveAndCommand
+        (cmapWithPrio LogResolve recorder)
+        plId
+        provider
+        (resolveProvider recorder)
+
+-- | We receive a resolve request when the user has selected a code action in
+-- the UI. The client passes back the 'RetrieResolveData' we attached to the
+-- code action so we can figure out what transformation to apply.
+resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState RetrieResolveData Method_CodeActionResolve
+resolveProvider recorder state _plId ca _uri = \case
+  ResolveRunRetrie params  -> resolveRunRetrie recorder state ca params
+  ResolveInlineThis params -> resolveInlineThis recorder state ca params
+
+-- | The "Run Retrie" actions directly delegate rewrite specs to retrie.
+resolveRunRetrie
+  :: Recorder (WithPriority Log)
+  -> IdeState
+  -> CodeAction
+  -> RunRetrieParams
+  -> ExceptT PluginError (HandlerM Config) CodeAction
+resolveRunRetrie recorder state ca RunRetrieParams{originatingFile = uri, ..} = ExceptT $
+  pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
+    rio <- lift askRunInIO
+    nfp <- getNormalizedFilePathE uri
+    (errors, edits) <- liftIO $
+      callRetrie
+        recorder
+        (rio . progress)
+        state
+        spec
+        nfp
+        site
+    for_ errors $ \ err -> do
+      logWith recorder Info $ LogResolve $ show err
+      lift $ pluginSendNotification SMethod_WindowShowMessage $
+        ShowMessageParams MessageType_Warning $ T.pack $ show err
+    pure $ ca & L.edit ?~ edits
+
+-- | The code action resolve handler for the "Inline" action. This differs from
+-- the other code actions as it doesn't map directly to a retrie command.
+-- The closest rewrite retrie offers in an "Unfold" which is only specified on
+-- top-level bindings. The inline action allows us to target where and let
+-- bindings and specific usage sites (as opposed to all uses).
+resolveInlineThis
+  :: Recorder (WithPriority Log)
+  -> IdeState
+  -> CodeAction
+  -> RunRetrieInlineThisParams
+  -> ExceptT PluginError (HandlerM Config) CodeAction
+resolveInlineThis recorder state ca RunRetrieInlineThisParams{..} = ExceptT $
+  pluginWithIndefiniteProgress (ca ^. L.title) Nothing Cancellable $ \ progress -> runExceptT $ do
+    rio     <- lift askRunInIO
+    defPath <- getNormalizedFilePathE $ inlineFromThisLocation ^. L.uri
+    check   <- runActionE "retrie" state $ useE TypeCheck defPath
+    defFix  <- fixityEnvFor <$> runActionE "retrie" state (useE GetFixity defPath)
+    defPm   <- runActionE "retrie" state $ useE GetFixedParsedModule defPath
+    let defSpan = getLocationSpan inlineFromThisLocation
+
+    -- find the definition, check it and build the retrie rewrites
+    b@(name, matches) <- maybe (throwError PluginStaleResolve) pure $
+      findBinder (definedAt defSpan) (tmrRenamed check)
+    checkBinder inlineIntoThisLocation b
+
+    rewrites <- buildInlineRewrites defPm defSpan inlineIntoThisLocation name
+
+    -- rewrite a single module
+    target <- getNormalizedFilePathE inlineTargetFile
+    let buildImports tct = renderImports <$> extractInlineImports check tct matches
+    result <- liftIO $
+      rewriteModule
+        recorder
+        (rio . progress)
+        state
+        defFix
+        buildImports
+        rewrites
+        target
+
+    -- convert the changes into a WorkspaceEdit
+    edits <- case result of
+      Left err -> do
+        lift $ pluginSendNotification SMethod_WindowShowMessage $
+          ShowMessageParams MessageType_Warning $ T.pack $ show err
+        throwError $ PluginInvalidUserState $ T.pack $ show err
+      Right edits ->
+        pure $ WorkspaceEdit (Just $ asEditMap edits) Nothing Nothing
+
+    pure $ ca & L.edit ?~ edits
+
+-- | Refuse definitions we cannot inline.
+checkBinder
+  :: Monad m
+  => SiteRestriction
+  -> (LIdP GhcRn, MatchGroup GhcRn (LHsExpr GhcRn))
+  -> ExceptT PluginError m ()
+checkBinder siteRestriction (name, matches) = do
+  when (siteRestriction == Everywhere && referencesName (unLoc name) matches) $
+    throwError $ PluginInternalError $ "definition is recursive"
+  -- TODO(simon): Generate a case dispatch if we can't statically determine
+  -- the clause.
+  when (not $ triviallySelectable matches) $
+    throwError $ PluginInternalError $
+      "definition has several clauses, guards or a record wildcard"
+
+-- | Build rewrites to inline a definition, optionally restricted to a single
+-- site.
+buildInlineRewrites
+  :: MonadIO m
+  => AnnotatedModule
+  -> RealSrcSpan
+  -> SiteRestriction
+  -> LIdP GhcRn
+  -> m (Retrie ())
+buildInlineRewrites defParsed defSpan siteRestriction name = do
+  inlineRewrite <- liftIO $
+    constructInlineFromIdentifer mempty defParsed defSpan
+  let
+    siteSp = siteToSpan siteRestriction
+    rewrites = maybe inlineRewrite (\s -> map (headAt s) inlineRewrite) siteSp
+    inline
+      | isExternalName (unLoc name) =
+          applyAt siteSp updateContext rewrites
+      | otherwise = applyLocal siteSp defSpan rewrites
+  pure inline
+
+-- | Whether a definition's body uses the name it defines.
+referencesName :: Name -> MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+referencesName name = everything (||) (False `mkQ` uses)
+  where
+    uses :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
+    uses = everything (||) (False `mkQ` (== name))
+
+-- | Whether the clause can be determined statically. If there are multiple
+-- clauses or the clauses have guards then we cannot easily determine which
+-- clause should be used in the rewrite.
+triviallySelectable :: MatchGroup GhcRn (LHsExpr GhcRn) -> Bool
+triviallySelectable mg = case unLoc (mg_alts mg) of
+  [L _ m] -> unguarded (m_grhss m) && (null . listify wildcardCon) m
+  _       -> False
+  where
+    unguarded :: GRHSs GhcRn (LHsExpr GhcRn) -> Bool
+    unguarded g = case toList (grhssGRHSs g) of
+      [L _ (GRHS _ [] _)] -> True
+      _                   -> False
+
+    wildcardCon :: HsRecFields GhcRn (LHsExpr GhcRn) -> Bool
+    wildcardCon = isJust . recDotDot
+
+-- | Only install rewrites when the target subtree has been reached.
+applyLocal :: Maybe RealSrcSpan -> RealSrcSpan -> [Rewrite Universe] -> Retrie ()
+applyLocal site defSpan rewrites = applyAt site updater moduleRewrites
+  where
+    -- retrie will exit early if there are no rewrites, so just stub them out
+    -- at the top level.
+    moduleRewrites = map (setRewriteTransformer $ \_ _ -> pure NoMatch) rewrites
+
+    updater :: ContextUpdater
+    updater c i x = do
+        c' <- updateContext c i x
+        pure $ if bindsDefinition i x then install c' else c'
+
+    -- attach the rewrites at this subtree
+    install c = c
+      { ctxtRewriter =
+          foldMap (mkLocalRewriter (ctxtInScope c)) rewrites <> ctxtRewriter c }
+
+    -- does this node bind the target definition for it's ith child?
+    bindsDefinition :: Int -> GenericQ Bool
+    bindsDefinition i = ownBinds `extQ` stmts `extQ` guards
+      where
+        stmts :: [ExprLStmt GhcPs] -> Bool
+        stmts (L _ s : _) = ownBinds s
+        stmts []          = False
+
+        guards :: GRHS GhcPs (LHsExpr GhcPs) -> Bool
+        guards (GRHS _ gs _) = i == body && any (ownBinds . unLoc) gs
+          where body = 2 -- after the extension field and the guard list
+
+    ownBinds :: GenericQ Bool
+    ownBinds = or . gmapQ (False `mkQ` definesIt)
+
+    definesIt :: HsLocalBinds GhcPs -> Bool
+    definesIt (HsValBinds _ (ValBinds _ binds _)) =
+        or [ sp == defSpan
+           | L _ FunBind{fun_id} <- toList binds
+           , RealSrcSpan sp _ <- [getLocA fun_id] ]
+    definesIt _ = False
+
+applyAt :: Maybe RealSrcSpan -> ContextUpdater -> [Rewrite Universe] -> Retrie ()
+applyAt (Just site) update = applyWithUpdate (atSite site update)
+applyAt Nothing update     = applyWithUpdateAndStrategy update topDown
+
+-- | In the case of nested matches, such as @f (f x)@, the cursor on the inner
+-- @f@ matches both the inner and outer applications. If a match occurs within
+-- an argument hole then map it to 'NoMatch' so the traversal decends into the
+-- inner match.
+headAt :: RealSrcSpan -> Rewrite Universe -> Rewrite Universe
+headAt site q = q { qResult = second (\transform c -> fmap refuse . transform c) (qResult q) }
+  where
+    refuse (MatchResult sub _)
+      | foldSubst (\(_, v) found -> found || holds v) False sub = NoMatch
+    refuse m = m
+
+    holds (HoleExpr e) = RealSrcSpan site Nothing `isSubspanOf` getLocA (astA e)
+    holds _            = False
+
+-- | Drop rewriters outside of the target span.
+atSite :: RealSrcSpan -> ContextUpdater -> ContextUpdater
+atSite site update c i x = narrow <$> update c i x
+  where
+    narrow c'
+      | gmapQi i holdsSite x = c'
+      | otherwise = c' { ctxtRewriter = mempty }
+
+    -- anything but an expression can still lead to the site
+    holdsSite :: GenericQ Bool
+    holdsSite = True `mkQ` inExpr
+
+    inExpr :: LHsExpr GhcPs -> Bool
+    inExpr e = RealSrcSpan site Nothing `isSubspanOf` getLocA e
+
+-------------------------------------------------------------------------------
+
+provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
+provider state _plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
+  nfp <- getNormalizedFilePathE uri
+
+  (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+    <- runActionE "retrie" state $
+        getBinds nfp
+
+  extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "retrie.shakeExtras" state getShakeExtras
+
+  range <- fromCurrentRangeE posMapping range
+  let pos = range ^. L.start
+  let rewrites =
+        concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
+          ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
+          ++ [ r
+             | TyClGroup {group_tyclds} <- hs_tyclds
+             , L (locA -> l) g <- group_tyclds
+             , pos `isInsideSrcSpan` l
+             , r <- suggestTypeRewrites uri ms_mod g
+             ]
+
+  let retrieActions =
+        [ mkCodeAction title kind (ResolveRunRetrie params)
+        | (title, kind, params) <- rewrites
+        ]
+
+  inlineSuggestions <- liftIO $ runIdeAction "retrie.bindInlines" extras $
+    suggestBindInlines uri topLevelBinds range withHieDb (lookupMod hiedbWriter)
+  let inlineActions =
+        [ mkCodeAction title CodeActionKind_RefactorInline (ResolveInlineThis params)
+        | (title, params) <- inlineSuggestions
+        ]
+  pure $ InL [InR c | c <- retrieActions ++ inlineActions]
+
+-- | Creates a 'CodeAction' for the client to display.
+mkCodeAction :: T.Text -> CodeActionKind -> RetrieResolveData -> CodeAction
+mkCodeAction title kind resolveData =
+  CodeAction
+    { _title       = title
+    , _kind        = Just kind
+    , _diagnostics = Nothing
+    , _isPreferred = Nothing
+    , _disabled    = Nothing
+    , _edit        = Nothing
+    , _command     = Nothing
+    , _data_       = Just (toJSON resolveData)
+    }
+
+getBinds :: NormalizedFilePath -> ExceptT PluginError Action
+  ( ModSummary
+  , [HsBindLR GhcRn GhcRn]
+  , PositionMapping
+  , [LRuleDecls GhcRn]
+  , [TyClGroup GhcRn]
+  )
+getBinds nfp = do
+  (tm, posMapping) <- useWithStaleE TypeCheck nfp
+  -- we use the typechecked source instead of the parsed source
+  -- to be able to extract module names from the Ids,
+  -- so that we can include adding the required imports in the retrie command
+  let rn = tmrRenamed tm
+  case rn of
+#if MIN_VERSION_ghc(9,9,0)
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _, _) -> do
+#else
+    (HsGroup{hs_valds, hs_ruleds, hs_tyclds}, _, _, _) -> do
+#endif
+      topLevelBinds <- case hs_valds of
+        ValBinds{} -> throwError $ PluginInternalError "getBinds: ValBinds not supported"
+        XValBindsLR (NValBinds binds _sigs :: NHsValBindsLR GhcRn) ->
+          pure
+            [ decl
+#if MIN_VERSION_ghc(9,11,0)
+            | (_, listBinds) <- binds
+            , L _ decl <- listBinds
+#else
+            | (_, bagBinds) <- binds
+            , L _ decl <- bagToList bagBinds
+#endif
+            ]
+      pure (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+
+-- | Suggest code actions for top-level bindings.
+suggestBindRewrites
+  :: Uri
+  -> Position
+  -> Module
+  -> HsBindLR GhcRn GhcRn
+  -> [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName, fun_matches}
+  | pos `isInsideSrcSpan` l'
+  , triviallySelectable fun_matches =
+    let pprNameText = printOutputable rdrName
+        pprName = T.unpack pprNameText
+        unfoldRewrite =
+            let spec = Unfold (qualify ms_mod pprName)
+                description = "Unfold " <> pprNameText
+                site = Everywhere
+            in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
+        foldRewrite =
+          let spec = Fold (qualify ms_mod pprName)
+              description = "Fold " <> pprNameText
+              site = Everywhere
+           in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
+     in [unfoldRewrite, foldRewrite]
+suggestBindRewrites _ _ _ _ = []
+
+-- | Suggestions for the "inline this" feature. Surface suggestions on where
+-- and let binders to inline every occurrence and on use sites to inline that
+-- specific usage.
+suggestBindInlines
+  :: Uri
+  -> [HsBindLR GhcRn GhcRn]
+  -> Range
+  -> WithHieDb
+  -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
+  -> IdeAction [(T.Text, RunRetrieInlineThisParams)]
+suggestBindInlines uri binds range hie lookupMod = do
+    identifiers <- definedIdentifiers
+    pure $ map (\(name, siteLoc, srcLoc) ->
+        let
+            title = "Inline " <> printedName
+            printedName = printOutputable name
+            -- On a use-site only inline that specific use. On the binder
+            -- itself, inline every use.
+            site = if siteLoc == srcLoc then Everywhere else Site siteLoc
+            params =
+              RunRetrieInlineThisParams
+                { inlineIntoThisLocation = site
+                , inlineTargetFile = uri
+                , inlineFromThisLocation = srcLoc
+                , inlineThisDefinition= printedName
+                }
+        in (title, params)
+        )
+        (Set.toList identifiers)
+    where
+      definedIdentifiers =
+        -- we search for candidates to inline in RHSs only, skipping LHSs
+        everything (<>) (pure mempty `mkQ` getGRHSIdentifierDetails hie lookupMod) binds
+
+      getGRHSIdentifierDetails ::
+        WithHieDb
+        -> (FilePath -> ModuleName -> Unit -> Bool -> MaybeT IdeAction Uri)
+        -> GRHSs GhcRn (LHsExpr GhcRn)
+        -> IdeAction (Set.HashSet (OccName, Location, Location))
+      getGRHSIdentifierDetails a b it@GRHSs{} =
+        -- we only select candidates for which we have source code
+        everything (<>) (pure mempty `mkQ` getDefinedIdentifierDetailsViaHieDb a b `extQ` getLocalBinderDetails) it
+
+      -- a local binder is its own definition: inline it into every use
+      getLocalBinderDetails :: HsBindLR GhcRn GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
+      getLocalBinderDetails FunBind{fun_id}
+        | Just defLoc <- srcSpanToLocation (getLocA fun_id)
+        , range `isSubrangeOf` (defLoc ^. L.range) =
+            pure $ Set.singleton (nameOccName (unLoc fun_id), defLoc, defLoc)
+      getLocalBinderDetails _ = pure mempty
+
+#if MIN_VERSION_ghc(9,13,0)
+      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> LIdOccP GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
+#else
+      getDefinedIdentifierDetailsViaHieDb :: WithHieDb -> LookupModule IdeAction -> LIdP GhcRn -> IdeAction (Set.HashSet (OccName, Location, Location))
+#endif
+      getDefinedIdentifierDetailsViaHieDb withHieDb lookupModule lname
+        | name <- getName (unLoc lname) =
+        case srcSpanToLocation (getLocA lname) of
+            Just siteLoc
+              | siteRange <- siteLoc ^. L.range
+              , range `isSubrangeOf` siteRange -> do
+                    srcLocations <- nameToLocation withHieDb lookupModule name
+                    equations <- filterM (equationBound name) (fromMaybe [] srcLocations)
+                    pure $ Set.fromList (map (nameOccName name, siteLoc,) equations)
+            _ -> pure mempty
+
+-- | Whether name is defined by a regular ValBind (i.e. it's not a class
+-- method, field, constructor, pattern synonym, etc).
+equationBound :: Name -> Location -> IdeAction Bool
+equationBound name loc = fmap (fromMaybe False) $ runMaybeT $ do
+    defFile <- hoistMaybe $
+      uriToNormalizedFilePath $ toNormalizedUri $ loc ^. L.uri
+    (HAR{refMap}, _) <- useWithStaleFastMT GetHieAst defFile
+    -- occurrences of the name in the defining module
+    let occs = Map.findWithDefault [] (Right name) refMap
+    pure $ any (equation . identInfo . snd) occs
+  where
+    -- a record field's selector is also a RegularBind
+    equation info = any isEquation info && not (any isField info)
+    isEquation (ValBind RegularBind _ _) = True
+    isEquation _                         = False
+    isField RecField{} = True
+    isField _          = False
+
+-- | Suggest code actions for type declarations.
+suggestTypeRewrites ::
+  Uri ->
+  Module ->
+  TyClDecl GhcRn ->
+  [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
+    let pprNameText = printOutputable (unLocA tcdLName)
+        pprName = T.unpack pprNameText
+        unfoldRewrite =
+            let spec = TypeForward (qualify ms_mod pprName)
+                description = "Unfold " <> pprNameText
+                site = Everywhere
+           in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
+        foldRewrite =
+          let spec = TypeBackward (qualify ms_mod pprName)
+              description = "Fold " <> pprNameText
+              site = Everywhere
+           in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
+     in [unfoldRewrite, foldRewrite]
+suggestTypeRewrites _ _ _ = []
+
+-- | Suggest code actions for rule declarations.
+suggestRuleRewrites
+  :: Uri
+  -> Position
+  -> Module
+  -> LRuleDecls GhcRn
+  -> [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
+  concat
+    [ [forwardRewrite ruleName, backwardsRewrite ruleName]
+    | L (locA -> l) r  <- rds_rules
+    , pos `isInsideSrcSpan` l
+    , let HsRule {rd_name = L _ rn} = r
+    , let ruleName = unpackFS rn
+    ]
+  where
+    forwardRewrite ruleName =
+      let spec = RuleForward (qualify ms_mod ruleName)
+          description = "Apply rule " <> T.pack ruleName <> " forward"
+          site = Everywhere
+      in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
+    backwardsRewrite ruleName =
+      let spec = RuleBackward (qualify ms_mod ruleName)
+          description = "Apply rule " <> T.pack ruleName <> " backwards"
+          site = Everywhere
+        in ( description, CodeActionKind_Refactor, RunRetrieParams {..} )
+
+-------------------------------------------------------------------------------
+-- Retrie driving code
+
+data CallRetrieError
+  = CallRetrieInternalError String NormalizedFilePath
+  | NoParse NormalizedFilePath
+  | NoTypeCheck NormalizedFilePath
+  | CannotImport NormalizedFilePath String
+  deriving (Eq)
+
+instance Show CallRetrieError where
+  show (CallRetrieInternalError msg f) = "Error rewriting " <> fileNameFromNFP f <> ": " <> msg
+  show (NoParse f) = "Cannot parse " <> fileNameFromNFP f
+  show (NoTypeCheck f) = "File does not typecheck " <> fileNameFromNFP f
+  show (CannotImport f m) = "Cannot add import to " <> fileNameFromNFP f <> ": " <> m
+
+instance Exception CallRetrieError
+
+fileNameFromNFP :: NormalizedFilePath -> String
+fileNameFromNFP = takeFileName . fromNormalizedFilePath
+
+-- | Lists all files affected by the rewrites.
+getTargets :: SiteRestriction -> Retrie a -> Set.HashSet NormalizedFilePath -> IO [NormalizedFilePath]
+getTargets (Site loc) _ _ = pure [getLocationNfp loc]
+getTargets _ retrie knownFiles = map toNormalizedFilePath' <$>
+  getTargetFiles retrieOptions (getGroundTerms retrie)
+    where
+      -- TODO cover all workspaceFolders
+      target = "."
+
+      retrieOptions :: Retrie.Options
+      retrieOptions = (defaultOptions target)
+        { Retrie.verbosity = Loud
+        , Retrie.targetFiles = map fromNormalizedFilePath $
+            Set.toList knownFiles
+        }
+
+siteToSpan :: SiteRestriction -> Maybe RealSrcSpan
+siteToSpan site = case site of
+  Everywhere -> Nothing
+  Site loc   -> Just $ getLocationSpan loc
+
+callRetrie
+  :: Recorder (WithPriority Log)
+  -> (T.Text -> IO ())
+  -> IdeState
+  -> RewriteSpec
+  -> NormalizedFilePath
+  -> SiteRestriction
+  -> IO ([CallRetrieError], WorkspaceEdit)
+callRetrie recorder progress state spec origin site = do
+  check  <- useOrFail state "retrie.check" NoTypeCheck TypeCheck origin
+  defFix <- fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity origin
+  defPm  <- useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule origin
+
+  rewrites <- parseSpecs state origin defPm defFix [spec]
+
+  -- restrict rewrites to a specific location
+  let retrie = applyAt (siteToSpan site) updateContext rewrites
+  let buildImports tct = extractImports check tct spec
+
+  knownFiles <- toKnownFiles . unhashed <$> liftIO (readTVarIO (knownTargetsVar $ shakeExtras state))
+  targets <- getTargets site retrie knownFiles
+
+  results <- forM targets $
+    rewriteModule recorder progress state defFix buildImports retrie
+
+  let (errors :: [CallRetrieError], replacements) = partitionEithers results
+      editParams :: WorkspaceEdit
+      editParams =
+        WorkspaceEdit (Just $ asEditMap $ concat replacements) Nothing Nothing
+
+  pure (errors, editParams)
+
+isCPP :: T.Text -> Bool
+isCPP = T.isPrefixOf "#"
+
+-- | Runs the rewrites over a single target module.
+rewriteModule
+  :: Recorder (WithPriority Log)
+  -> (T.Text -> IO ())
+  -> IdeState
+  -> FixityEnv
+  -> (TcModuleResult -> Either String AnnotatedImports)
+  -> Retrie ()
+  -> NormalizedFilePath
+  -> IO (Either CallRetrieError [(Uri, TextEdit)])
+rewriteModule _ progress state defFix buildImports retrie nt = runExceptT $ do
+  lift $ progress $ T.pack $ fileNameFromNFP nt
+
+  targetCheck <- ExceptT $ try $
+    useOrFail state "Retrie.check" NoTypeCheck TypeCheck nt
+  targetFix <- ExceptT $ try $
+    fixityEnvFor <$> useOrFail state "Retrie.GetFixity" NoTypeCheck GetFixity nt
+  ast <- ExceptT $ try $ NoCPP <$>
+    useOrFail state "Retrie.GetFixedParsedModule" NoParse GetFixedParsedModule nt
+  lines <- lift $ cppLines state (tmrModSummary targetCheck) nt
+
+  imps <- either (throwError . CannotImport nt) pure $ buildImports targetCheck
+
+  (_, ast', change) <- lift $
+    runRetrie (defFix <> targetFix) retrie ast
+
+  when (changeHitsCPP lines change) $ throwError $
+    CallRetrieInternalError "the left-hand-side of a rewrite must not span a CPP directive" nt
+
+  let uri = filePathToUri $ fromNormalizedFilePath nt
+  pure $ asTextEdits uri ast ast' $ case change of
+    NoChange               -> NoChange
+    Change replacements im -> Change replacements (im++[imps])
+
+-- does anything in this Change hit one of the given lines
+changeHitsCPP :: IntSet.IntSet -> Change -> Bool
+changeHitsCPP _ NoChange = False
+changeHitsCPP lines (Change replacements _) =
+  any (replHitsCPP lines) replacements
+
+-- does this replacement hit one of the given lines
+replHitsCPP :: IntSet.IntSet -> Replacement -> Bool
+replHitsCPP lines Replacement{replLocation}
+  | RealSrcSpan sp _ <- replLocation
+  , rs <- srcSpanStartLine sp
+  , re <- srcSpanEndLine sp
+  = not $ IntSet.fromList [rs..re] `IntSet.disjoint` lines
+replHitsCPP _ _ = error "replacement isn't a RealSrcSpan"
+
+-- | Request a rule result and map failure to a custom exception type.
+useOrFail
+  :: IdeRule r v
+  => IdeState
+  -> String
+  -> (NormalizedFilePath -> CallRetrieError)
+  -> r
+  -> NormalizedFilePath
+  -> IO (RuleResult r)
+useOrFail state lbl mkException rule f =
+  runAction lbl state (use rule f) >>= maybe (liftIO $ throwIO $ mkException f) pure
+
+-- | Parse 'RewriteSpec' into 'Rewrite's. Throws a 'CallRetrieError' on failure.
+parseSpecs
+  :: IdeState
+  -> NormalizedFilePath
+  -> AnnotatedModule
+  -> FixityEnv
+  -> [RewriteSpec]
+  -> IO [Rewrite Universe]
+parseSpecs state origin originParsedModule originFixities specs = do
+  -- retrie needs the libdir for `parseRewriteSpecs`
+  libdir <- topDir . ms_hspp_opts . msrModSummary <$>
+    useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
+  parseRewriteSpecs
+    libdir
+    (\_f -> pure $ NoCPP originParsedModule)
+    originFixities
+    specs
+
+constructFromFunMatches
+  :: Annotated [LocatedA (ImportDecl GhcPs)]
+  -> LocatedN RdrName
+  -> MatchGroup GhcPs (LocatedA (HsExpr GhcPs))
+  -> TransformT IO [Rewrite Universe]
+constructFromFunMatches imps fun_id fun_matches = do
+  fe <- mkLocatedHsVar fun_id
+  rewrites <- concat <$>
+    forM (unLoc $ mg_alts fun_matches) (matchToRewrites fe imps LeftToRight)
+  pure $ toURewrite <$> rewrites
+
+constructInlineFromIdentifer
+  :: Data a
+  => AnnotatedImports
+  -> Annotated (GenLocated l a)
+  -> RealSrcSpan
+  -> IO [Rewrite Universe]
+constructInlineFromIdentifer imports originParsedModule originSpan =
+  fmap astA $ transformA originParsedModule $ \(L _ m) ->
+    case findBinder (definedAt originSpan) m of
+      Just (fun_id, fun_matches) ->
+        constructFromFunMatches imports fun_id fun_matches
+      Nothing -> pure $ error "could not find source code to inline"
+
+-- | Group 'TextEdit's by file.
+asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
+asEditMap =
+  Map.map (sortOn (^. L.range . L.start))
+    . Map.fromListWith (++)
+    . map (second pure)
+
+asTextEdits
+  :: Uri
+  -> CPP AnnotatedModule
+  -> CPP AnnotatedModule
+  -> Change
+  -> [(Uri, TextEdit)]
+asTextEdits _ _ _ NoChange = []
+asTextEdits _ _ _ (Change [] _) = []
+asTextEdits target before after (Change _ imports) =
+  map (target,) (rewriteTextEdits before (addImportsCPP imports after))
+
+-- | Diff the module and turn them into 'TextEdit's.
+rewriteTextEdits
+  :: CPP AnnotatedModule
+  -> CPP AnnotatedModule
+  -> [TextEdit]
+rewriteTextEdits before after =
+  -- exact print the module before and after the ast edits
+  makeDiffTextEdit
+    (T.pack $ printCPP [] before)
+    (T.pack $ printCPP [] after)
+
+-- | The set of source lines that contain CPP directives.
+cppLines :: IdeState -> ModSummary -> NormalizedFilePath -> IO (IntSet.IntSet)
+cppLines state ms nt
+  | xopt LangExt.Cpp (ms_hspp_opts ms) = do
+    source <- T.decodeUtf8 <$>
+      runAction "Retrie.getSourceFileSource" state (getSourceFileSource nt)
+    -- determine which line numbers contain CPP directives
+    let
+      lines = zip [1..] (T.lines source)
+      cppLines = fst <$> filter (isCPP . snd) lines
+    pure $ IntSet.fromList cppLines
+  | otherwise = pure IntSet.empty

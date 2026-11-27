@@ -139,6 +139,9 @@
             "renameOn": true,
             "willRenameFilesOn": true
         },
+        "retrie": {
+            "globalOn": true
+        },
         "semanticTokens": {
             "config": {
                 "classMethodToken": "method",
