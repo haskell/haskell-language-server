@@ -17,6 +17,24 @@
         "scope": "resource",
         "type": "string"
     },
+    "haskell.plugin.cabal-project.completionOn": {
+        "default": true,
+        "description": "Enables cabal-project completions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.cabal-project.diagnosticsOn": {
+        "default": true,
+        "description": "Enables cabal-project diagnostics",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.cabal-project.semanticTokensOn": {
+        "default": true,
+        "description": "Enables cabal-project semantic tokens",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.cabal.codeActionsOn": {
         "default": true,
         "description": "Enables cabal code actions",
