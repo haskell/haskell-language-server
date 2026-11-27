@@ -1,8 +1,10 @@
 module Main (main) where
 
-import           Data.List        (sort)
-import           Ide.Plugin.Notes (Log, descriptor)
-import           System.FilePath  ((</>))
+import           Data.List         (sort)
+import qualified Data.Map          as M
+import           Ide.Plugin.Config (Config (..), PluginConfig (..))
+import           Ide.Plugin.Notes  (Log, descriptor)
+import           System.FilePath   ((</>))
 import           Test.Hls
 
 plugin :: PluginTestDescriptor Log
@@ -158,4 +160,21 @@ hoverNoteTests = testGroup "Hover Notes"
               (Just (Range (Position 5 61) (Position 5 88)))
 
         liftIO $ hover @?= expected
+
+  , testCase "hover line after final newline" $ runSessionWithTestConfig def
+        { testLspConfig = notesHoverOnly
+        , testPluginDescriptor = plugin
+        , testDirLocation = Left testDataDir
+        } $ \_dir -> do
+        -- HoverNote.hs ends with a newline, so line 28 is the empty line after
+        -- it. getHover fails the test if the server answers with an error.
+        doc <- openDoc "HoverNote.hs" "haskell"
+        waitForKickDone
+        hover <- getHover doc (Position 28 0)
+        liftIO $ hover @?= Nothing
   ]
+  where
+    -- ghcide's own hover answers successfully at every position, which would
+    -- hide an error from the notes plugin, so switch it off.
+    notesHoverOnly = def
+        { plugins = M.singleton "ghcide-hover-and-symbols" def { plcHoverOn = False } }

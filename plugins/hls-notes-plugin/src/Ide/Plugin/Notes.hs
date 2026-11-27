@@ -110,7 +110,9 @@ getNote nfp state (Position l c) = do
     contents <-
         err "Error getting file contents"
         =<< liftIO (runAction "notes.getfileContents" state (getFileContents nfp))
-    line <- err "Line not found in file" (lineAt (fromIntegral l) contents)
+    -- lineAt drops the empty line after the final newline, so treat a missing
+    -- line as empty.
+    let line = fromMaybe "" $ lineAt (fromIntegral l) contents
     pure $ listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
   where
     atPos c arr = case arr A.! 0 of
