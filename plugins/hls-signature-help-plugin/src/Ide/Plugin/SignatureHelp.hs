@@ -4,6 +4,7 @@
 
 module Ide.Plugin.SignatureHelp (descriptor) where
 
+import           Control.Applicative
 import           Control.Arrow                        ((>>>))
 import           Control.Monad.Trans.Except           (ExceptT (ExceptT))
 import           Data.Bifunctor                       (bimap)
@@ -29,6 +30,7 @@ import           Development.IDE.Core.PluginUtils     (runIdeActionE,
 import           Development.IDE.Core.PositionMapping (fromCurrentPosition)
 import           Development.IDE.GHC.Compat           (FastStringCompat, Name,
                                                        RealSrcSpan,
+                                                       generatedNodeInfo,
                                                        getSourceNodeIds,
                                                        isAnnotationInNodeInfo,
                                                        mkRealSrcLoc,
@@ -48,6 +50,7 @@ import           GHC.Iface.Ext.Types                  (ContextInfo (Use),
                                                        HieAST (nodeChildren, nodeSpan),
                                                        HieASTs (getAsts),
                                                        IdentifierDetails (identInfo, identType),
+                                                       NodeInfo (nodeIdentifiers),
                                                        nodeType)
 import           GHC.Iface.Ext.Utils                  (smallestContainingSatisfying)
 import           GHC.Types.Name.Env                   (lookupNameEnv)
@@ -294,12 +297,23 @@ getNodeNameAndTypes hieKind hieAst =
         case extractName identifier of
           Nothing -> Nothing
           Just name ->
-            let mTypeOfName = identType identifierDetails
+            let mTypeOfName = identType identifierDetails <|> do
+                                nodeInfo <- generatedNodeInfo hieAst
+                                details <- M.lookup identifier (nodeIdentifiers nodeInfo)
+                                identType details
+                -- types from the source NodeInfo
                 typesOfNode = case sourceNodeInfo hieAst of
                   Nothing       -> []
                   Just nodeInfo -> nodeType nodeInfo
+                -- fall back to generated NodeInfo when source has no types
+                typesOfGeneratedNode = case generatedNodeInfo hieAst of
+                  Nothing       -> []
+                  Just nodeInfo -> nodeType nodeInfo
                 allTypes = case mTypeOfName of
-                  Nothing -> typesOfNode
+                  Nothing ->
+                    case typesOfNode of
+                      [] -> typesOfGeneratedNode
+                      ts -> ts
                   -- (the last?) one type of 'typesOfNode' may (always?) be the same as 'typeOfName'
                   -- To avoid generating two identical signature helps, we do a filtering here
                   -- This is similar to 'dropEnd1' in Development.IDE.Spans.AtPoint.atPoint
