@@ -36,6 +36,10 @@ import           GHC.Generics
 import           GHC.Types.PkgQual
 import           GHC.Unit
 
+#if MIN_VERSION_ghc(9,14,1)
+import qualified GHC.Types.Unique.Set              as UniqSet
+#endif
+
 
 #if MIN_VERSION_ghc(9,11,0)
 import           GHC.Driver.DynFlags               (ReexportedModule (..),
@@ -129,7 +133,11 @@ data UnitVisibility = UnitVisibility
   { uvReexports :: Map ModuleName ModuleName
     -- ^ The name we import it under, and the name it has in the unit it is
     -- reexported from
+#if MIN_VERSION_ghc(9,14,1)
+  , uvHidden    :: UniqSet.UniqSet ModuleName
+#else
   , uvHidden    :: S.Set ModuleName
+#endif
   }
 
 -- | What a home unit exposes, from its flags.
@@ -167,7 +175,7 @@ locateModuleFile ModuleToFilenames{moduleMap} modName = go
       , Just realName <- Map.lookup modName (uvReexports vis)
       = LocateFoundReexport uid realName
       | Just vis <- mbVisibility
-      , modName `S.member` uvHidden vis
+      , modName `UniqSet.elementOfUniqSet` uvHidden vis
       = go units
       | Just file <- lookup uid providers
       = LocateFoundFile uid file
@@ -229,12 +237,16 @@ locateModule moduleMaps env unit_visibility modName mbPkgName isSource = do
     -- several provide the module.
     -- The current unit's own reexports and hidden modules do not apply to it,
     -- which also stops the reexport search from looping.
+
+    -- TODO: here we convert a set into a list and then do n lookup (in
+    -- log(k), hence nlog(k).). However we may be able to do something smarter with
+    -- "restrictKeys" which runs in nlog(n/k + 1).
     searchUnits = (homeUnitId_ dflags, Nothing) :
-      [ (uid, Map.lookup uid unit_visibility) | uid <- hpt_deps ]
+      [ (uid, Map.lookup uid unit_visibility) | uid <- S.toList hpt_deps ]
 
     ue = hsc_unit_env env
     units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
-    hpt_deps :: [UnitId]
+    hpt_deps :: S.Set UnitId
     hpt_deps = homeUnitDepends units
 
     toModLocation uid file = liftIO $ do
@@ -265,7 +277,7 @@ notFoundErr env modName reason =
         LookupMultiple rs -> FoundMultiple rs
         LookupHidden pkg_hiddens mod_hiddens ->
           notFound
-             { fr_pkgs_hidden = map (moduleUnit . fst) pkg_hiddens
+             { fr_pkgs_hidden = pkg_hiddens
              , fr_mods_hidden = map (moduleUnit . fst) mod_hiddens
              }
         LookupUnusable unusable ->
